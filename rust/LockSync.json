@@ -2,10 +2,10 @@
     "name": "LockSync",
     "description": "Automatically authorize on all code locks that have the same code as the Tool Cupboard.",
     "author": "Jake Rich",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/locksync.2738",
+    "url": "https:\/\/oxidemod.org\/plugins\/locksync.2738",
     "games": [
         "rust"
     ],

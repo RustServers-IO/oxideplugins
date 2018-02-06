@@ -1,0 +1,19 @@
+{
+    "name": "DiscordReport",
+    "description": "Send reports from players in-game to a Discord server",
+    "author": "",
+    "version": "0.8.0",
+    "configuration": false,
+    "require": {
+        "Discord": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/discordreport.2323",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -1,14 +1,14 @@
 {
     "name": "Survey Info",
     "description": "Displays results from Survey Charges in chat with a % score.",
-    "author": "",
+    "author": "Diesel 42o",
     "version": "0.1.6",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "GatherManager": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/survey-info.2463",
+    "url": "https:\/\/oxidemod.org\/plugins\/survey-info.2463",
     "games": [
         "rust"
     ],

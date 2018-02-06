@@ -3,13 +3,13 @@
     "description": "Making voting super easy and smooth!",
     "author": "Exel80",
     "version": "2.0.32",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "DiscordMessages": "*",
         "HelpText": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/easyvote.2102",
+    "url": "https:\/\/oxidemod.org\/plugins\/easyvote.2102",
     "games": [
         "rust"
     ],

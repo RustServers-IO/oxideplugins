@@ -3,9 +3,9 @@
     "description": "Allows you to put multiple cupboards. Radius for the next Cupboard can be set in the config",
     "author": "",
     "version": "0.0.6",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/multicupboard.2244",
+    "url": "https:\/\/oxidemod.org\/plugins\/multicupboard.2244",
     "games": [
         "rust"
     ],

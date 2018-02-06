@@ -1,0 +1,16 @@
+{
+    "name": "Autokick",
+    "description": "Autokick help you change your server to \"maintenance break\" mode, if you need it!",
+    "author": "Exel80",
+    "version": "1.2.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/autokick.2138",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

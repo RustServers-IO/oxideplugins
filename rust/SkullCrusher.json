@@ -3,13 +3,13 @@
     "description": "Add some extra features to the crushing of human skulls",
     "author": "redBDGR",
     "version": "1.0.5",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Economics": "*",
         "ServerRewards": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/skullcrusher.2412",
+    "url": "https:\/\/oxidemod.org\/plugins\/skullcrusher.2412",
     "games": [
         "rust"
     ],

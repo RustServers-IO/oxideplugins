@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Ragnarok", "Drefetr et Shmitt", "0.7.9", ResourceId = 1985)]
+    [Info("Ragnarok", "Drefetr et Shmitt", "0.7.10", ResourceId = 1985)]
     [Description("A constant barrage of meteors and crappy weather")]
 
     class Ragnarok : RustPlugin
@@ -100,8 +100,8 @@ namespace Oxide.Plugins
             spawnResourceNodePercent = Convert.ToSingle(Config["SpawnResourceNodePercent"]);
 
             // Ensure shitty weather; clouds & fog.
-            ConsoleSystem.Run.Server.Normal("weather.clouds 1");
-            ConsoleSystem.Run.Server.Normal("weather.fog 1");
+            ConsoleSystem.Run(ConsoleSystem.Option.Server, "weather.clouds 1");
+            ConsoleSystem.Run(ConsoleSystem.Option.Server, "weather.fog 1");
         }
 
         /**

@@ -6,7 +6,7 @@
     "configuration": false,
     "require": {},
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/rust-io-template.845",
+    "url": "https:\/\/oxidemod.org\/plugins\/rust-io-template.845",
     "games": [
         "rust"
     ],

@@ -3,12 +3,12 @@
     "description": "Shows custom messages to players on respawn",
     "author": "Kappasaurus",
     "version": "2.1",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "PopupNotifications": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/respawn-messages.1996",
+    "url": "https:\/\/oxidemod.org\/plugins\/respawn-messages.1996",
     "games": [
         "rust"
     ],

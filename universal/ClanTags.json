@@ -1,0 +1,22 @@
+{
+    "name": "Clan Tags",
+    "description": "Added support for Clan Tags in BetterChat",
+    "author": "",
+    "version": "0.8",
+    "configuration": false,
+    "suggest": {
+        "Clans": "*"
+    },
+    "require": {
+        "BetterChat": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/clan-tags.2450",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

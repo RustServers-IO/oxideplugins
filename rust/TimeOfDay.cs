@@ -4,10 +4,11 @@ using System;
 using System.Text;
 using System.Collections.Generic;
 using System.Globalization;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("TimeOfDay", "Fujikura", "2.2.1", ResourceId = 1355)]
+    [Info("TimeOfDay", "Fujikura", "2.3.2", ResourceId = 1355)]
     [Description("Does alter day and night duration.")]
     public class TimeOfDay : RustPlugin
     {
@@ -27,6 +28,7 @@ namespace Oxide.Plugins
 		bool setPresetDate;
 		bool freezeDate;
 		bool autoSkipNight;
+		bool autoSkipDay;
 		bool logAutoSkipConsole;
 		bool freezeTimeOnload;
 		float timeToFreeze;
@@ -58,6 +60,7 @@ namespace Oxide.Plugins
 			authLevelCmds = Convert.ToInt32(GetConfig("Settings", "authLevelCmds", 1));
 			authLevelFreeze = Convert.ToInt32(GetConfig("Settings", "authLevelFreeze", 2));
 			autoSkipNight = Convert.ToBoolean(GetConfig("Settings", "autoSkipNight", false));
+			autoSkipDay = Convert.ToBoolean(GetConfig("Settings", "autoSkipDay", false));
 			logAutoSkipConsole = Convert.ToBoolean(GetConfig("Settings", "logAutoSkipConsole", true));
 			
 			presetDay =  Convert.ToInt32(GetConfig("DatePreset", "presetDay", 1));
@@ -168,9 +171,18 @@ namespace Oxide.Plugins
         void OnSunrise()
         {
 			if (!Initialized) return;
+			if (autoSkipDay && !autoSkipNight)
+			{
+				TOD_Sky.Instance.Cycle.Hour = TOD_Sky.Instance.SunsetTime;
+				if (logAutoSkipConsole)
+					Puts("Daytime autoskipped");
+				OnSunset();
+				return;
+			}
 			timeComponent.DayLengthInMinutes = dayLength * (24.0f / (TOD_Sky.Instance.SunsetTime - TOD_Sky.Instance.SunriseTime));
+			if (!activatedDay)
+				Interface.CallHook("OnTimeSunrise");
 			activatedDay = true;
-			Interface.CallHook("OnTimeSunrise");
         }
 
         void OnSunset()
@@ -185,8 +197,9 @@ namespace Oxide.Plugins
 				return;
 			}
 			timeComponent.DayLengthInMinutes = nightLength * (24.0f / (24.0f - (TOD_Sky.Instance.SunsetTime - TOD_Sky.Instance.SunriseTime)));
+			if (activatedDay)
+				Interface.CallHook("OnTimeSunset");
 			activatedDay = false;
-			Interface.CallHook("OnTimeSunset");
         }
 		
 		[ConsoleCommand("tod.daylength")]
@@ -274,8 +287,8 @@ namespace Oxide.Plugins
 				SendReply(arg, $"Night is already active");
 				return;
 			}
-			TOD_Sky.Instance.Cycle.Hour = TOD_Sky.Instance.SunsetTime;
 			OnSunset();
+			TOD_Sky.Instance.Cycle.Hour = TOD_Sky.Instance.SunsetTime;
 			SendReply(arg, $"Current daytime skipped");
 		}
 
@@ -289,8 +302,8 @@ namespace Oxide.Plugins
 				SendReply(arg, $"Day is already active");
 				return;
 			}
-			TOD_Sky.Instance.Cycle.Hour = TOD_Sky.Instance.SunriseTime;
 			OnSunrise();
+			TOD_Sky.Instance.Cycle.Hour = TOD_Sky.Instance.SunriseTime;
 			SendReply(arg, $"Current nighttime skipped");
 		}			
 

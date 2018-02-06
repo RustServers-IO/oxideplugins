@@ -1,0 +1,16 @@
+{
+    "name": "SkipNightVote",
+    "description": "Allow users to vote to skip night time",
+    "author": "k1lly0u",
+    "version": "0.1.4",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/skipnightvote.2058",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

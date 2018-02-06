@@ -1,11 +1,11 @@
 {
-    "name": "No Weapon Drop",
+    "name": "NoWeaponDrop",
     "description": "Prevents dropping of active weapon when players start to die",
     "author": "Fujikura",
     "version": "1.0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/no-weapon-drop.1960",
+    "url": "https:\/\/oxidemod.org\/plugins\/noweapondrop.1960",
     "games": [
         "rust"
     ],

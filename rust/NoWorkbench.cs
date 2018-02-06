@@ -1,13 +1,15 @@
 ﻿using Newtonsoft.Json;
 using System.Reflection;
+using System.Linq;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NoWorkbench", "k1lly0u", "0.1.41", ResourceId = 2645)]
+    [Info("NoWorkbench", "k1lly0u", "0.1.43", ResourceId = 2645)]
     class NoWorkbench : RustPlugin
     {
-        TriggerBase triggerBase;
+        private TriggerBase triggerBase;
+        private int[] defaultBlueprints;
 
         #region Oxide Hooks       
         private void OnServerInitialized()
@@ -16,23 +18,28 @@ namespace Oxide.Plugins
 
             triggerBase = new GameObject().AddComponent<TriggerBase>();
 
+            defaultBlueprints = ItemManager.bpList.Where(x => x.defaultBlueprint).Select(y => y.targetItem.itemid).ToArray();
+
             foreach (BasePlayer player in BasePlayer.activePlayerList)
                 OnPlayerInit(player);
         }
 
         private void OnPlayerInit(BasePlayer player)
         {
-            if (player == null)
+            if (player.HasPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot))
+            {
+                timer.In(1, () => OnPlayerInit(player));
                 return;
+            }
 
             player.ClientRPCPlayer(null, player, "craftMode", 1);
             player.EnterTrigger(triggerBase);
-            
-            if (configData.NoBlueprints)
-                player.blueprints.UnlockAll();
+
+            if (configData.NoBlueprints)            
+                player.blueprints.UnlockAll();             
         }
 
-        void OnEntityLeave(TriggerBase trigger, BaseEntity entity)
+        private void OnEntityLeave(TriggerBase trigger, BaseEntity entity)
         {            
             BasePlayer player = entity.ToPlayer();
 
@@ -44,11 +51,14 @@ namespace Oxide.Plugins
         {
             if (blueprints == null || definition == null)
                 return false;
-
+            
             if (skinId != 0 && !blueprints.steamInventory.HasItem(skinId))
                 return false;
 
-            if (!blueprints.IsParentUnlocked(definition))
+            if (defaultBlueprints.Contains(definition.itemid))
+                return true;
+
+            if (!blueprints.IsUnlocked(definition))
                 return false;
 
             if (blueprints.HasUnlocked(definition))
@@ -77,36 +87,40 @@ namespace Oxide.Plugins
                     typeof(BasePlayer).GetField("nextCheckTime", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(player, Time.realtimeSinceStartup + Random.Range(0.4f, 0.5f));                
             }
         }
-
+       
         private void Unload()
         {
             if (triggerBase != null)
                 UnityEngine.Object.Destroy(triggerBase);
         }
         #endregion
-
+       
         #region Config        
         private ConfigData configData;
-        class ConfigData
+        private class ConfigData
         {
             [JsonProperty(PropertyName = "Disable the need for blueprints")]
             public bool NoBlueprints { get; set; }            
         }
+
         private void LoadVariables()
         {
             LoadConfigVariables();
             SaveConfig();
         }
+
         protected override void LoadDefaultConfig()
         {
-            var config = new ConfigData
+            ConfigData config = new ConfigData
             {
                 NoBlueprints = false
             };
             SaveConfig(config);
         }
+
         private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
-        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+
+        private void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
         #endregion
     }
 }

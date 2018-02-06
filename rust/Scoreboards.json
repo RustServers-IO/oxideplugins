@@ -3,9 +3,9 @@
     "description": "Provides a simple scoreboard API system",
     "author": "LaserHydra",
     "version": "1.0.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/scoreboards-api.2054",
+    "url": "https:\/\/oxidemod.org\/plugins\/scoreboards-api.2054",
     "games": [
         "rust"
     ],

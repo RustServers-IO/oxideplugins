@@ -5,7 +5,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("KarmaKills", "Ryan", "1.0.0")]
+    [Info("KarmaKills", "Ryan", "1.0.2")]
     [Description("Rewards players on karma on kill, or takes karma away from them")]
     class KarmaKills : RustPlugin
     {
@@ -369,8 +369,11 @@ namespace Oxide.Plugins
             if (info == null || entity == null) return;
 
             var player = info.Initiator?.ToPlayer();
+            var attacker = info.Initiator?.ToPlayer();
 
             if (player == null) return;
+            if (attacker != null && attacker.userID == player.userID)
+                return;
 
             if (entity.ToPlayer() != null)
             {
@@ -433,7 +436,7 @@ namespace Oxide.Plugins
                         Lang("Add_AnimalKill", player.UserIDString, configFile.AnimalKills.AddKarma.Amount,
                             GetAnimalName(entity.name)));
                 }
-                else
+                if(configFile.AnimalKills.RemoveKarma.Enabled)
                 {
                     KarmaSystem?.Call("RemoveKarma", covalence.Players.FindPlayerById(player.UserIDString),
                         configFile.AnimalKills.RemoveKarma.Amount);

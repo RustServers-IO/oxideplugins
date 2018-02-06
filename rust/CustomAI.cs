@@ -12,7 +12,7 @@ using Rust;
 using System.Collections;
 using Newtonsoft.Json;
 namespace Oxide.Plugins {
-    [Info("CustomAI", "serezhadelaet", "1.1.7", ResourceId = 2621)]
+    [Info("CustomAI", "serezhadelaet", "1.1.9", ResourceId = 2621)]
     [Description("CustomAI ;)")]
     class CustomAI : RustPlugin {
         #endregion
@@ -142,7 +142,8 @@ namespace Oxide.Plugins {
             private AType originalType;
             private AIState state;
             private BaseEntity target;
-            float updateRate = UnityEngine.Random.Range(0.25f, 0.35f);
+            float updateRate = UnityEngine.Random.Range(0.07f, 0.075f);
+            float rateScale = 0.21f;
             float nextUpdate;
             AnimalConfig animalConfig;
             float nextWalkTime = Time.realtimeSinceStartup;
@@ -245,7 +246,7 @@ namespace Oxide.Plugins {
                 int rotate = 0;
                 Move:
                 Quaternion rotation = Quaternion.Euler(GetRotationToTarget(targetPosition).eulerAngles + new Vector3(0, rotate * 10f, 0));
-                Vector3 position = GetGround(npc.ServerPosition + (rotation * Vector3.forward) * animalConfig.speed);
+                Vector3 position = GetGround(npc.ServerPosition + (rotation * Vector3.forward) * animalConfig.speed * rateScale);
                 if (position != Vector3.zero && !IsNearBuilding(position) && position.y > 0f && position.y - npc.ServerPosition.y <= 2f && Vector3.Distance(entity.transform.position, targetPosition) > 1f) {
                     npc.ServerPosition = position;
                     npc.ServerRotation = rotation;
@@ -268,7 +269,7 @@ namespace Oxide.Plugins {
                     wasDamaged = false;
                 }
                 Quaternion rotation = Quaternion.Euler(npc.ServerRotation.eulerAngles + new Vector3(0, UnityEngine.Random.Range(moveAttempt * 10f * -1, moveAttempt * 10f), 0));
-                Vector3 position = GetGround(npc.ServerPosition + ((rotation * Vector3.forward) * (state == AIState.Scared ? animalConfig.boostSpeed : animalConfig.speed)));
+                Vector3 position = GetGround(npc.ServerPosition + ((rotation * Vector3.forward) * (state == AIState.Scared ? animalConfig.boostSpeed * rateScale : animalConfig.speed * rateScale)));
                 if (position != Vector3.zero && !IsNearBuilding(position) && position.y > 0f && position.y - npc.ServerPosition.y <= 2f) {
                     if (!CanWalk()) return;
                     if (UnityEngine.Random.Range(0, 100) == 1 && state != AIState.Scared)
@@ -509,7 +510,7 @@ namespace Oxide.Plugins {
             InitializeConfig();
             ConVar.AI.think = false;
             if (config.RemoveAllScientists)
-                Scientist.Population = 0;
+                Rust.Ai.SquadManager.squad_disable = true;
         }
         void OnServerInitialized() {
             permission.RegisterPermission(ignorePermission, this);

@@ -3,9 +3,9 @@
     "description": "Allows you to accept donations for items automatically",
     "author": "",
     "version": "1.0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/gpay-auto-donation-system.2386",
+    "url": "https:\/\/oxidemod.org\/plugins\/gpay-auto-donation-system.2386",
     "games": [
         "rust"
     ],

@@ -3,12 +3,12 @@
     "description": "Announces to all players when the server saves.",
     "author": "Ryan",
     "version": "1.0.3",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "GUIAnnouncements": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/saveannouncer.2342",
+    "url": "https:\/\/oxidemod.org\/plugins\/saveannouncer.2342",
     "games": [
         "rust"
     ],

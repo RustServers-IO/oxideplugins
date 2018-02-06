@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Gain access to any locked object with permissions",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/masterkey.1151",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -3,9 +3,9 @@
     "description": "Provides a data file of item names for translation",
     "author": "Ryan",
     "version": "1.0.0",
-    "configuration": true,
-    "language": "cs\r\n",
-    "url": "http:\/\/oxidemod.org\/plugins\/itemtranslations.2578",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/itemtranslations.2578",
     "games": [
         "rust"
     ],

@@ -1,20 +1,18 @@
 ﻿using System;
-using System.Text;
-using System.Reflection;
-using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
+using System.Text;
 using Oxide.Core.Plugins;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ExternalWallStack", "Dyceman - Deadlaugh (Dan)", "1.0.0", ResourceId = 0)]
+    [Info("ExternalWallStack", "Dyceman - Deadlaugh (Dan)", "1.0.1", ResourceId = 2190)]
     [Description("Allows the players to stack high external walls on top of each other.")]
 
     class ExternalWallStack : RustPlugin
     {
-
         #region Custom Functions
+
         /*
          * Name: HasRunPermission
          * Parameters: BasePlayer player, string cmdPermission
@@ -30,7 +28,6 @@ namespace Oxide.Plugins
             // return true or false (return true if the user has the permission or is an owner of the server) (return false if the user doesn't have the permission or isn't an owner of the server).
             return permission.UserHasPermission(player.userID.ToString(), cmdPermission) || player.net?.connection?.authLevel == 2;
         }
-
 
         /*
          * Name: CreateStackWall
@@ -78,7 +75,6 @@ namespace Oxide.Plugins
             // Loop until the value of index is greater than the value of amount plus one.
             for (int index = 1; index < amount + 1; index++)
             {
-
                 // Create an high external wall.
                 BaseEntity wall = GameManager.server.CreateEntity(entity.PrefabName, entity.transform.position + new Vector3(0f, 5.5f * (float)index, 0f), entity.transform.rotation, true);
                 // Activate the high external wall game object.
@@ -86,7 +82,9 @@ namespace Oxide.Plugins
                 // Spawn the high external wall game object.
                 wall.Spawn();
                 // Notify the server of the placement and rotation changes of the high external wall.
-                wall.TransformChanged();
+                wall.InvalidateNetworkCache();
+                wall.UpdateNetworkGroup();
+                wall.OnPositionalNetworkUpdate();
 
                 // Get the BaseCombatEntity component of the high external wall.
                 BaseCombatEntity combatEntity = wall.GetComponentInParent<BaseCombatEntity>();
@@ -115,7 +113,6 @@ namespace Oxide.Plugins
             return links;
         }
 
-
         /*
          * Name: GetConfig
          * Parameters: string name, T value
@@ -123,9 +120,11 @@ namespace Oxide.Plugins
          * Description: Obtains a configuration by the name.
          */
         T GetConfig<T>(string name, T value) => Config[name] == null ? value : (T)Convert.ChangeType(Config[name], typeof(T));
+
         #endregion
 
         #region MonoBehavior
+
         class ExternalWallLink
         {
             // Create an empty GameObject.
@@ -201,6 +200,7 @@ namespace Oxide.Plugins
                     this.links.Add(linkEntity);
             }
         }
+
         #endregion
 
         #region Initialization
@@ -218,7 +218,6 @@ namespace Oxide.Plugins
         List<BaseEntity> removingEntity = new List<BaseEntity>();
         // Create empty list of player user id(s).
         HashSet<ulong> playerToggleCommand = new HashSet<ulong>();
-
 
         /*
          * Name: LoadDefaultConfig
@@ -306,6 +305,7 @@ namespace Oxide.Plugins
                 // Remove the player's user id from the list of player user id(s).
                 this.playerToggleCommand.Remove(player.userID);
         }
+
         #endregion
 
         #region Hooks
@@ -343,7 +343,7 @@ namespace Oxide.Plugins
                 externalLinks = this.CreateStackWall(this.configStackHeight, baseEntity, player);
 
                 // If the list of ExternalWallLink(s) is not empty.
-                if(externalLinks.Count > 0)
+                if (externalLinks.Count > 0)
                 {
                     // Create a new ExternalWallLink for the game object and store it in the variable initialExternalLink.
                     ExternalWallLink initialExternalLink = new ExternalWallLink(gameObject);
@@ -374,7 +374,7 @@ namespace Oxide.Plugins
                         }
                     }
                 }
-                
+
             }
 
             // Set the value of the variable baseEntity to null.
@@ -446,7 +446,7 @@ namespace Oxide.Plugins
                         // Kill the BaseEntity.
                         linkEntity.Kill(BaseNetworkable.DestroyMode.Gib);
                     }
-                    
+
                 }
             }
         }
@@ -496,12 +496,13 @@ namespace Oxide.Plugins
                     controllerLink.entityLinks().RemoveWhere(link => link.entity() == null || link.entity().gameObject == entity.gameObject);
                 }
             }
-                
+
         }
 
         #endregion
 
         #region Chat Commands
+
         /*
          * Name: cmdWStack
          * Parameters: BasePlayer player, string command, string[] args
@@ -529,7 +530,7 @@ namespace Oxide.Plugins
             if (this.playerToggleCommand.Contains(player.userID) == true)
             {
                 //  Notify the player that they have High External Wall stacking OFF.
-                PrintToChat(player, new StringBuilder(this.pluginName).AppendFormat(lang.GetMessage("CommandToggle", this, null), "#CC0000","OFF").ToString());
+                PrintToChat(player, new StringBuilder(this.pluginName).AppendFormat(lang.GetMessage("CommandToggle", this, null), "#CC0000", "OFF").ToString());
 
                 // Remove the player's user id from the list of player user id(s).
                 this.playerToggleCommand.Remove(player.userID);
@@ -542,9 +543,9 @@ namespace Oxide.Plugins
             this.playerToggleCommand.Add(player.userID);
 
             //  Notify the player that they have High External Wall stacking ON.
-            PrintToChat(player, new StringBuilder(this.pluginName).AppendFormat(lang.GetMessage("CommandToggle", this, null), "#2C6700","ON").ToString());
+            PrintToChat(player, new StringBuilder(this.pluginName).AppendFormat(lang.GetMessage("CommandToggle", this, null), "#2C6700", "ON").ToString());
         }
-        #endregion
 
+        #endregion
     }
 }

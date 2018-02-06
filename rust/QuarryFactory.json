@@ -3,9 +3,9 @@
     "description": "Spawn items inside the quarry when it gathers resources",
     "author": "",
     "version": "1.0.3",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/quarry-factory.1376",
+    "url": "https:\/\/oxidemod.org\/plugins\/quarry-factory.1376",
     "games": [
         "rust"
     ],

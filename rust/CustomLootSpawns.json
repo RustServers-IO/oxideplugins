@@ -3,9 +3,9 @@
     "description": "Create additional custom spawn points for loot boxes of your choosing",
     "author": "k1lly0u",
     "version": "0.2.6",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/customlootspawns.1655",
+    "url": "https:\/\/oxidemod.org\/plugins\/customlootspawns.1655",
     "games": [
         "rust"
     ],

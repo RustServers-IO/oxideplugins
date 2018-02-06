@@ -1,9 +1,9 @@
 {
-    "name": "Magic Area",
+    "name": "MagicArea",
     "description": "PvP\/PvE areas and developer API",
     "author": "Wulf",
     "version": "0.2.1",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Kits": "*"
     },
@@ -11,7 +11,7 @@
         "MagicTeleportation": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/magic-area.1551",
+    "url": "https:\/\/oxidemod.org\/plugins\/magicarea.1551",
     "games": [
         "rust"
     ],

@@ -1,0 +1,19 @@
+{
+    "name": "Private Messages",
+    "description": "This plugin allows you to send private messages to players.",
+    "author": "PaiN",
+    "version": "0.4.0",
+    "configuration": false,
+    "suggest": {
+        "UFilter": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/private-messages.2046",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

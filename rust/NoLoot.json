@@ -1,11 +1,11 @@
 {
-    "name": "No Loot",
+    "name": "NoLoot",
     "description": "Removes all loot containers and prevents them from spawning",
     "author": "Wulf",
     "version": "1.0.0",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/no-loot.1488",
+    "url": "https:\/\/oxidemod.org\/plugins\/noloot.1488",
     "games": [
         "rust"
     ],

@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Modify or disable player metabolism stats and rates",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/metabolism.680",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

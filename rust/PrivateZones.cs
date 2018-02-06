@@ -6,23 +6,18 @@ using Oxide.Core.Configuration;
 
 namespace Oxide.Plugins
 {
-    [Info("PrivateZones", "k1lly0u", "0.1.3", ResourceId = 1703)]
+    [Info("PrivateZones", "k1lly0u", "0.1.4", ResourceId = 1703)]
     class PrivateZones : RustPlugin
     {
-        [PluginReference]
-        Plugin ZoneManager;
-		
-		[PluginReference]
-		Plugin PopupNotifications;
-
-        private bool Changed;
-
+        #region Fields
         ZoneDataStorage data;
         private DynamicConfigFile ZoneData;
 
-        private static LayerMask GROUND_MASKS = LayerMask.GetMask("Terrain", "World", "Construction");
+        [PluginReference] Plugin ZoneManager;		
+		[PluginReference] Plugin PopupNotifications;
+        #endregion
 
-        #region oxide hooks
+        #region Oxide Hooks
         void Loaded()
         {
             permission.RegisterPermission("privatezones.admin", this);
@@ -32,86 +27,73 @@ namespace Oxide.Plugins
         void OnServerInitialized()
         {
             LoadData();
-            InitPerms();
-        }
-        void InitPerms()
-        {
             foreach (var entry in data.zones)
-            {
                 permission.RegisterPermission(entry.Value, this);
-            }
-        }
-        void Unload()
-        {
-            SaveData();
-        }
+        }       
+        void Unload() => SaveData();
+        
         #endregion
 
-        #region functions
-        private void TPPlayer(BasePlayer player, Vector3 pos)
-        {
-            player.MovePosition(pos);
-            player.ClientRPCPlayer(null, player, "ForcePositionTo", player.transform.position);
-            player.TransformChanged();
-            player.SendNetworkUpdateImmediate();
-        }
-        private Vector3 CalculateOutsidePos(BasePlayer player, string zoneID)
+        #region Functions       
+        private void EjectPlayer(BasePlayer player, string zoneId)
         {
             float distance = 0;
-			Vector3 zonePos = (Vector3) ZoneManager?.Call("GetZoneLocation", new object[] { zoneID });
-			object zoneRadius = ZoneManager?.Call("GetZoneRadius", new object[] { zoneID });
-            Vector3 zoneSize = (Vector3) ZoneManager?.Call("GetZoneSize", new object[] { zoneID });
-			var playerPos = player.transform.position;
-            var cachedDirection = playerPos - zonePos;
-			if (zoneSize != Vector3.zero)
-                distance = zoneSize.x > zoneSize.z ? zoneSize.x : zoneSize.z;
-            else
-				distance = (float)zoneRadius;
-			
-			var newPos = zonePos + (cachedDirection / cachedDirection.magnitude * (distance + 2f));
-            newPos.y = TerrainMeta.HeightMap.GetHeight(newPos);
-            return newPos;
+            object success = ZoneManager?.Call("GetZoneLocation", zoneId);
+            if (success is Vector3)
+            {
+                Vector3 position = (Vector3)success;
+                success = ZoneManager?.Call("GetZoneSize", zoneId);
+                if (success is Vector3 && (Vector3)success != Vector3.zero)
+                {
+                    Vector3 size = (Vector3)success;
+                    distance = size.x > size.z ? size.x : size.z;
+                }
+                else success = ZoneManager?.Call("GetZoneRadius", zoneId);
+                if (success is float && (float)success != 0)
+                    distance = (float)success;
+
+                Vector3 newPosition = position + (player.transform.position - position).normalized * (distance + 10f);
+                newPosition = CalculateGroundPos(newPosition);
+
+                player.MovePosition(newPosition);
+                player.ClientRPCPlayer(null, player, "ForcePositionTo", player.transform.position);
+                player.SendNetworkUpdateImmediate();
+            }            
         }
-        static Vector3 CalculateGroundPos(Vector3 sourcePos) // credit Wulf & Nogrod
+        private Vector3 CalculateGroundPos(Vector3 sourcePos)
         {
             RaycastHit hitInfo;
-
-            if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo, GROUND_MASKS))
-            {
-                sourcePos.y = hitInfo.point.y;
-            }
+            if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo, LayerMask.GetMask("Terrain", "World", "Construction")))            
+                sourcePos.y = hitInfo.point.y;            
             sourcePos.y = Mathf.Max(sourcePos.y, TerrainMeta.HeightMap.GetHeight(sourcePos));
             return sourcePos;
         }
 
         #endregion
-        #region zonemanager hooks
-        //////////////////////////////////////////////////////////////////////////////////////
-        // ZoneManager Hooks /////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-               
-        void OnEnterZone(string ZoneID, BasePlayer player)
+
+        #region Zone Management
+       
+        void OnEnterZone(string zoneID, BasePlayer player)
         {            
-            if (player == null || string.IsNullOrEmpty(ZoneID)) return;
+            if (player == null || string.IsNullOrEmpty(zoneID)) return;
             if (player.IsSleeping()) return; 
-            if (data.zones.ContainsKey(ZoneID))
+            if (data.zones.ContainsKey(zoneID))
             {
-                string perm = data.zones[ZoneID];
-                if (permission.UserHasPermission(player.userID.ToString(), perm) || isAuth(player)) return;                
+                string perm = data.zones[zoneID];
+                if (permission.UserHasPermission(player.userID.ToString(), perm) || IsAuth(player)) return;                
 				if (PopupNotifications)
                     PopupNotifications?.Call("CreatePopupNotification", lang.GetMessage("noPerms", this, player.UserIDString), player);
                 else SendMsg(player, lang.GetMessage("noPerms", this, player.UserIDString));
-                Vector3 newPos = CalculateOutsidePos(player, ZoneID);
-                TPPlayer(player, newPos);
+                EjectPlayer(player, zoneID);                
             }
         }
         #endregion
 
-        #region chat commands
+        #region Commands
         [ChatCommand("pz")]
         private void cmdPZ(BasePlayer player, string command, string[] args)
         {
-            if (!hasPermission(player)) return;
+            if (!HasPermission(player)) return;
             if (args == null || args.Length == 0)
             {
                 SendReply(player, lang.GetMessage("synAdd", this, player.UserIDString));
@@ -126,7 +108,7 @@ namespace Oxide.Plugins
                     {
                         object zoneid = ZoneManager.Call("CheckZoneID", new object[] { args[1] });
 
-                        if (zoneid is string && (string)zoneid != "")
+                        if (zoneid is string && !string.IsNullOrEmpty((string)zoneid))
                         {
                             string perm = args[2].ToLower();
                             if (!perm.StartsWith("privatezones."))
@@ -168,29 +150,12 @@ namespace Oxide.Plugins
                     return;
             }
         }
-        bool isAuth(BasePlayer player)
-        {
-            if (player.net.connection != null)
-                if (player.net.connection.authLevel != 2) return false;
-            return true;
-        }
-        bool hasPermission(BasePlayer player)
-        {
-            if (isAuth(player)) return true;
-            else if (permission.UserHasPermission(player.userID.ToString(), "privatezones.admin")) return true;
-            return false;
-        }
+        bool IsAuth(BasePlayer player) => player?.net?.connection?.authLevel == 2;      
+        bool HasPermission(BasePlayer player) => IsAuth(player) || permission.UserHasPermission(player.userID.ToString(), "privatezones.admin");       
         #endregion
 
-        #region data
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Data Management ///////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-
-        void SaveData()
-        {
-            ZoneData.WriteObject(data);
-        }
+        #region Data management      
+        void SaveData() => ZoneData.WriteObject(data);        
         void LoadData()
         {
             try
@@ -208,11 +173,9 @@ namespace Oxide.Plugins
             public ZoneDataStorage() { }
         }
         #endregion
-        #region messages
-        private void SendMsg(BasePlayer player, string msg)
-        {
-            SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("MsgColor", this, player.UserIDString) + msg + "</color>");
-        }
+
+        #region Localization
+        private void SendMsg(BasePlayer player, string msg) => SendReply(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("MsgColor", this, player.UserIDString) + msg + "</color>");        
         private Dictionary<string, string> messages = new Dictionary<string, string>()
         {
             {"title", "<color=#afff00>PrivateZones:</color> " },
@@ -224,7 +187,7 @@ namespace Oxide.Plugins
             {"synAdd", "/pz add <zoneid> <permission>" },
             {"synRem", "/pz remove <zoneid>" },
             {"synList", "/pz list" },
-            {"noPerms", "You don't have permission to enter this zone, bought a HL Pass or become a VIP." },
+            {"noPerms", "You don't have permission to enter this zone" },
             {"MsgColor", "<color=#d3d3d3>" }
         };
         #endregion

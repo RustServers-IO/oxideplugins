@@ -1,14 +1,14 @@
 {
     "name": "BotSpawn",
     "description": "Spawns new AI bots around monuments, supply drops, and custom locations.",
-    "author": "=BBUK= Steenamaroo",
-    "version": "1.4.3",
-    "configuration": true,
+    "author": "Steenamaroo",
+    "version": "1.4.5",
+    "configuration": false,
     "suggest": {
         "Kits": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/botspawn.2580",
+    "url": "https:\/\/oxidemod.org\/plugins\/botspawn.2580",
     "games": [
         "rust"
     ],

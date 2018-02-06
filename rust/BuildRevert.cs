@@ -6,12 +6,11 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("BuildRevert", "nivex", "1.0.3", ResourceId = 2465)]
+    [Info("BuildRevert", "nivex", "1.0.4", ResourceId = 2465)]
     [Description("Prevent building in blocked area.")]
     public class BuildRevert : RustPlugin
     {
         Dictionary<string, bool> constructions = new Dictionary<string, bool>();
-        readonly int layerMask = LayerMask.GetMask("Trigger", "Prevent Building", "Deployed");
         readonly Vector3 upOffset = new Vector3(0f, 0.6f, 0f);
 
         void OnServerInitialized() => LoadVariables();
@@ -21,39 +20,23 @@ namespace Oxide.Plugins
         bool canBuild(Planner plan)
         {
             var player = plan.GetOwnerPlayer();
-            bool _canBuild = true;
 
             if (!player || (!string.IsNullOrEmpty(permName) && permission.UserHasPermission(player.UserIDString, permName)))
-                return _canBuild;
+                return true;
 
-            BuildingPrivlidge priv = null;
-            var colliders = Pool.GetList<Collider>();
             var position = player.transform.position;
             var buildPos = position + (player.eyes.BodyForward() * 4f);
             var up = buildPos + Vector3.up + upOffset;
 
             buildPos.y = Mathf.Max(position.y, up.y);
-            Vis.Colliders(buildPos, 1.875f, colliders, layerMask, QueryTriggerInteraction.Collide);
 
-            foreach(var collider in colliders)
-            {
-                var p = collider.GetComponentInParent<BuildingPrivlidge>();
-
-                if (p != null && p.IsOlderThan(priv))
-                {
-                    priv = p;
-                }
-            }
-            
-            Pool.FreeList<Collider>(ref colliders);
-
-            if (priv != null && !priv.authorizedPlayers.Any(x => x.userid == player.userID))
+            if (player.IsBuildingBlocked(new OBB(buildPos, default(Quaternion), default(Bounds))))
             {
                 player.ChatMessage(msg("Building is blocked!", player.UserIDString));
-                _canBuild = false;
+                return false;
             }
 
-            return _canBuild;
+            return true;
         }
                 
         #region Config

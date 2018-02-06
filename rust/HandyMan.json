@@ -2,13 +2,13 @@
     "name": "HandyMan",
     "description": "AOE repair.",
     "author": "nivex",
-    "version": "1.1.1",
-    "configuration": true,
+    "version": "1.2.0",
+    "configuration": false,
     "suggest": {
         "NoEscape": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/handyman.1737",
+    "url": "https:\/\/oxidemod.org\/plugins\/handyman.1737",
     "games": [
         "rust"
     ],

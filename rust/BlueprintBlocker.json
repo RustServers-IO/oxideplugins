@@ -3,9 +3,9 @@
     "description": "Allows you to block certain blueprints from being learned",
     "author": "DylanSMR",
     "version": "1.0.5",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/blueprintblocker.1840",
+    "url": "https:\/\/oxidemod.org\/plugins\/blueprintblocker.1840",
     "games": [
         "rust"
     ],

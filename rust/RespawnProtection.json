@@ -3,12 +3,12 @@
     "description": "Protect fresh respawned players",
     "author": "sami37",
     "version": "1.2.5",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Economics": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/respawn-protection.2551",
+    "url": "https:\/\/oxidemod.org\/plugins\/respawn-protection.2551",
     "games": [
         "rust"
     ],

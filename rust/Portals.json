@@ -3,9 +3,9 @@
     "description": "Create portals allowing players to walk through to another location",
     "author": "LaserHydra",
     "version": "2.0.5",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/portals.1234",
+    "url": "https:\/\/oxidemod.org\/plugins\/portals.1234",
     "games": [
         "rust"
     ],

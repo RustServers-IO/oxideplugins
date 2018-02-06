@@ -3,9 +3,9 @@
     "description": "Automatically set a users XP level on join if it is lower then default or custom permission level",
     "author": "k1lly0u",
     "version": "0.1.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/instantxp.2017",
+    "url": "https:\/\/oxidemod.org\/plugins\/instantxp.2017",
     "games": [
         "rust"
     ],

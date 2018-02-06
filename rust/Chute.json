@@ -3,12 +3,12 @@
     "description": "Allowed Authorized Players to Parchute",
     "author": "Colon Blow",
     "version": "1.0.6",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "FauxAdmin": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/chute.2279",
+    "url": "https:\/\/oxidemod.org\/plugins\/chute.2279",
     "games": [
         "rust"
     ],

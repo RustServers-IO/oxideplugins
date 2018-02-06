@@ -1,0 +1,16 @@
+{
+    "name": "Name Manager",
+    "description": "Manage names on your server",
+    "author": "Ankawi",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/name-manager.2056",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

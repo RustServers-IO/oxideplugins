@@ -3,9 +3,9 @@
     "description": "Notice players anonymously",
     "author": "LaserHydra",
     "version": "1.0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/notice.1193",
+    "url": "https:\/\/oxidemod.org\/plugins\/notice.1193",
     "games": [
         "rust"
     ],

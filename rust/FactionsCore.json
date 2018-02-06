@@ -3,7 +3,7 @@
     "description": "A Faction\/Team System. Revamp from original Factions.",
     "author": "Absolut",
     "version": "1.0.4",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "EventManager": "*",
         "ZoneManager": "*",
@@ -14,7 +14,7 @@
         "ImageLibrary": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/factionscore.2399",
+    "url": "https:\/\/oxidemod.org\/plugins\/factionscore.2399",
     "games": [
         "rust"
     ],

@@ -1,11 +1,11 @@
 {
     "name": "Magic Tools",
     "description": "Automatic smelting of mined resources",
-    "author": "",
+    "author": "bazuka5801",
     "version": "1.0.0",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/magic-tools.2428",
+    "url": "https:\/\/oxidemod.org\/plugins\/magic-tools.2428",
     "games": [
         "rust"
     ],

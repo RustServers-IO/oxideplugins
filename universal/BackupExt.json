@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Backup extension with customizable number of retention folders",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/backupextended.2137",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

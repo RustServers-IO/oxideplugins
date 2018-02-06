@@ -2,10 +2,10 @@
     "name": "Easy Airdrop",
     "description": "Call airdrops using simple commands",
     "author": "LaserHydra",
-    "version": "3.2.3",
-    "configuration": true,
+    "version": "3.2.5",
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/easy-airdrop.860",
+    "url": "https:\/\/oxidemod.org\/plugins\/easy-airdrop.860",
     "games": [
         "rust"
     ],

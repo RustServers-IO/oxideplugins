@@ -5,7 +5,7 @@
     "version": "0.1.1",
     "configuration": false,
     "language": "lua",
-    "url": "http:\/\/oxidemod.org\/plugins\/online-log.690",
+    "url": "https:\/\/oxidemod.org\/plugins\/online-log.690",
     "games": [
         "rust"
     ],

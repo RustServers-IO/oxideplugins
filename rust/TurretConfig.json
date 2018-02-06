@@ -3,9 +3,9 @@
     "description": "Customized turrets",
     "author": "Calytic",
     "version": "2.0.4",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/turretconfig.1418",
+    "url": "https:\/\/oxidemod.org\/plugins\/turretconfig.1418",
     "games": [
         "rust"
     ],

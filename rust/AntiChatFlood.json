@@ -3,9 +3,9 @@
     "description": "Prevents chat flood and warns players",
     "author": "DylanSMR",
     "version": "1.0.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/antichatflood.1759",
+    "url": "https:\/\/oxidemod.org\/plugins\/antichatflood.1759",
     "games": [
         "rust"
     ],

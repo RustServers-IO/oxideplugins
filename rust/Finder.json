@@ -2,11 +2,11 @@
     "name": "Finder",
     "description": "Find Players, SleepingBags, Buildings, Items, and teleport to them",
     "author": "Reneb",
-    "version": "3.0.3",
+    "version": "3.0.4",
     "configuration": false,
     "suggest": {},
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/finder.692",
+    "url": "https:\/\/oxidemod.org\/plugins\/finder.692",
     "games": [
         "rust"
     ],

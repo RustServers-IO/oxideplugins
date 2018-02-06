@@ -3,12 +3,12 @@
     "description": "Monthly check highest voter and reward him",
     "author": "Exel80",
     "version": "1.0.2",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "EasyVote": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/easyvote-highestvoter.2671",
+    "url": "https:\/\/oxidemod.org\/plugins\/easyvote-highestvoter.2671",
     "games": [
         "rust"
     ],

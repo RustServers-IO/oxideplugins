@@ -6,7 +6,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("FireArrows", "Colon Blow", "1.2.8", ResourceId = 1574)]
+    [Info("FireArrows", "Colon Blow", "1.2.9", ResourceId = 1574)]
     class FireArrows : RustPlugin
     {
 
@@ -72,6 +72,7 @@ namespace Oxide.Plugins
 	static bool ShowArrowTypeIcon = true;
 	static bool BlockinRestrictedZone = false;
 	static bool UseProt = true;
+	static bool UseBasicArrowsOnly = false;
 	static float DamageFireArrow = 50f;
 	static float DamageFireBall = 200f;
 	static float DamageFireBomb = 500f;
@@ -103,6 +104,7 @@ namespace Oxide.Plugins
         	CheckCfg("Icon - Show Arrow Type", ref ShowArrowTypeIcon);
 		CheckCfg("Restriction - Block usage in Restricted Zone", ref BlockinRestrictedZone);
 		CheckCfg("Damage Protection - Use Entity Protection Values", ref UseProt);
+		CheckCfg("Ammo - Only allow HV and Wooden arrows", ref UseBasicArrowsOnly);
         	CheckCfgFloat("Damage - Fire Arrow", ref DamageFireArrow);
         	CheckCfgFloat("Damage - Fire Ball Arrow", ref DamageFireBall);
         	CheckCfgFloat("Damage - Fire Bomb Arrow", ref DamageFireBomb);
@@ -162,6 +164,7 @@ namespace Oxide.Plugins
        	Dictionary<string, string> messagesFA = new Dictionary<string, string>()
             	{
                 	{"firearrowtxt", "Your Arrows are set for Fire."},
+                	{"firearrowammotype", "You must only use HV or Wooden Arrows."},
 			{"fireballarrowtxt", "Your Arrows are set for FireBall."},
 			{"firebombarrowtxt", "Your Arrows are set for FireBomb."},
                 	{"doesnothavemattxt", "You don't have required materials..."},
@@ -174,19 +177,25 @@ namespace Oxide.Plugins
 ////////Arrow Damage and FX control////////////////////////////////////////////////////////////////////
 
 	void OnPlayerAttack(BasePlayer player, HitInfo hitInfo)
-	{
-		
+	{	
            	if (usingCorrectWeapon(player))
 		{
-				if (Cooldown.ContainsKey(player.userID)) return;
-				if ((FireArrowOn.ContainsKey(player.userID)) || (FireBallOn.ContainsKey(player.userID)) || (FireBombOn.ContainsKey(player.userID)))
+			if (Cooldown.ContainsKey(player.userID)) return;
+			if ((FireArrowOn.ContainsKey(player.userID)) || (FireBallOn.ContainsKey(player.userID)) || (FireBombOn.ContainsKey(player.userID)))
+			{
+				if (hitInfo.ProjectilePrefab.ToString().Contains("arrow_hv") || hitInfo.ProjectilePrefab.ToString().Contains("arrow_wooden"))
 				{
-					if (hitInfo.ProjectilePrefab.ToString().Contains("arrow"))
-					{
-						ArrowFX(player, hitInfo);
-					}
+					ArrowFX(player, hitInfo);
+					return;
 				}
+				if (!UseBasicArrowsOnly && (hitInfo.ProjectilePrefab.ToString().Contains("arrow_fire") || hitInfo.ProjectilePrefab.ToString().Contains("arrow_bone")))
+				{
+					ArrowFX(player, hitInfo);
+					return;
+				}
+				SendReply(player, lang.GetMessage("firearrowammotype", this));
 				return;
+			}
 		}
 	}
 

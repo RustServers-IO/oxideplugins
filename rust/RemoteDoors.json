@@ -3,9 +3,9 @@
     "description": "Switch that allows you to open \/ close doors remotely",
     "author": "Reneb",
     "version": "1.0.8",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/remotedoors.1379",
+    "url": "https:\/\/oxidemod.org\/plugins\/remotedoors.1379",
     "games": [
         "rust"
     ],

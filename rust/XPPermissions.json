@@ -3,9 +3,9 @@
     "description": "Grants player permission on their level up",
     "author": "PaiN",
     "version": "0.3.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/xp-permissions.2024",
+    "url": "https:\/\/oxidemod.org\/plugins\/xp-permissions.2024",
     "games": [
         "rust"
     ],

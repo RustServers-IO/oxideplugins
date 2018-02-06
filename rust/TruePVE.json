@@ -3,12 +3,12 @@
     "description": "Better PVE\/PVP implementation",
     "author": "ignignokt84",
     "version": "0.8.8",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "ZoneManager": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/truepve.1789",
+    "url": "https:\/\/oxidemod.org\/plugins\/truepve.1789",
     "games": [
         "rust"
     ],

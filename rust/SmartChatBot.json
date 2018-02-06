@@ -3,9 +3,9 @@
     "description": "I send chat messages based on some triggers or time",
     "author": "",
     "version": "1.7",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/smart-chat-bot.2435",
+    "url": "https:\/\/oxidemod.org\/plugins\/smart-chat-bot.2435",
     "games": [
         "rust"
     ],

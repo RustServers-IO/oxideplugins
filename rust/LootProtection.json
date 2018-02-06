@@ -3,9 +3,9 @@
     "description": "Protects players with permission from being looted by other players",
     "author": "Wulf",
     "version": "0.5.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/lootprotection.1150",
+    "url": "https:\/\/oxidemod.org\/plugins\/lootprotection.1150",
     "games": [
         "rust"
     ],

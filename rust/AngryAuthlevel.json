@@ -1,11 +1,11 @@
 {
     "name": "AngryAuthlevel",
     "description": "Automatically adds users to their respective auth level when they connect.",
-    "author": "",
+    "author": "Tori1157",
     "version": "1.0.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/angryauthlevel.2641",
+    "url": "https:\/\/oxidemod.org\/plugins\/angryauthlevel.2641",
     "games": [
         "rust"
     ],

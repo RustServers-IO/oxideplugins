@@ -3,10 +3,10 @@
     "description": "Adds the ability to pick locks",
     "author": "Alphawar",
     "version": "0.5.0",
-    "configuration": true,
+    "configuration": false,
     "suggest": {},
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/thiefapi.1503",
+    "url": "https:\/\/oxidemod.org\/plugins\/thiefapi.1503",
     "games": [
         "rust"
     ],

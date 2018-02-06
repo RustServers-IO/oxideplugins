@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Plugin API for translating messages using free or paid translation services",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/babel.1963",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -3,9 +3,9 @@
     "description": "Easily change features about the recycler",
     "author": "redBDGR",
     "version": "1.0.9",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/recyclemanager.2391",
+    "url": "https:\/\/oxidemod.org\/plugins\/recyclemanager.2391",
     "games": [
         "rust"
     ],

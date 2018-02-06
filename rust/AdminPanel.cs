@@ -1,18 +1,18 @@
-﻿using Oxide.Core;
-using Oxide.Core.Plugins;
-using Oxide.Game.Rust.Cui;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using UnityEngine;
 using System.Linq;
+using Oxide.Core;
+using Oxide.Core.Plugins;
+using Oxide.Game.Rust.Cui;
 using Rust;
 using RustNative;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("AdminPanel", "austinv900", "1.2.5", ResourceId = 2034)]
+    [Info("AdminPanel", "austinv900", "1.2.8", ResourceId = 2034)]
     internal class AdminPanel : RustPlugin
     {
         [PluginReference]
@@ -31,57 +31,56 @@ namespace Oxide.Plugins
             return Godmode.Call<bool>("IsGod", UserID);
         }
 
-        private void ToggleGodmode(string UserID)
+        private void ToggleGodmode(BasePlayer player)
         {
             if (Godmode == null)
                 return;
-            if (IsGod(UserID))
-                Godmode.Call("DisableGodmode", covalence.Players.FindPlayer(UserID));
+            if (IsGod(player.UserIDString))
+                Godmode.Call("DisableGodmode", player.IPlayer);
             else
-                Godmode.Call("EnableGodmode", covalence.Players.FindPlayer(UserID));
-
-            AdminGui(BasePlayer.Find(UserID));
+                Godmode.Call("EnableGodmode", player.IPlayer);
+            AdminGui(player);
         }
 
         #endregion GodMode
 
         #region Vanish
 
-        private bool IsInvisable(string UserID)
+        private bool IsInvisable(BasePlayer player)
         {
             if (Vanish == null)
                 return false;
-            return Vanish.Call<bool>("IsInvisible", BasePlayer.Find(UserID));
+            return Vanish.Call<bool>("IsInvisible", player);
         }
 
-        private void ToggleVanish(string UserID)
+        private void ToggleVanish(BasePlayer player)
         {
             if (Vanish == null)
                 return;
-            if (!IsInvisable(UserID))
-                Vanish.Call("Disappear", BasePlayer.Find(UserID));
+            if (!IsInvisable(player))
+                Vanish.Call("Disappear", player);
             else
-                Vanish.Call("Reappear", BasePlayer.Find(UserID));
-            AdminGui(BasePlayer.Find(UserID));
+                Vanish.Call("Reappear", player);
+            AdminGui(player);
         }
 
         #endregion Vanish
 
         #region AdminRadar
 
-        private bool IsRadar(string UserID)
+        private bool IsRadar(string id)
         {
             if (AdminRadar == null)
                 return false;
-            return AdminRadar.Call<bool>("IsRadar", UserID);
+            return AdminRadar.Call<bool>("IsRadar", id);
         }
 
-        private void ToggleRadar(string UserID)
+        private void ToggleRadar(BasePlayer player)
         {
             if (AdminRadar == null)
                 return;
-            AdminRadar.Call("ToggleRadar", BasePlayer.Find(UserID));
-            AdminGui(BasePlayer.Find(UserID));
+            AdminRadar.Call("ToggleRadar", player);
+            AdminGui(player);
         }
 
         #endregion AdminRadar
@@ -91,7 +90,6 @@ namespace Oxide.Plugins
         private void Init()
         {
             LoadDefaultConfig();
-            LoadDefaultMessages();
             permission.RegisterPermission(permAP, this);
             cacheImage();
         }
@@ -115,7 +113,7 @@ namespace Oxide.Plugins
             Config["PanelButtonInactiveColor"] = btnInactColor = GetConfig("PanelButtonInactiveColor", "2.55 0 0 0.3");
             Config["PanelButtonActiveColor"] = btnActColor = GetConfig("PanelButtonActiveColor", "0 2.55 0 0.3");
             Config["AdminPanelToggleMode"] = ToggleMode = GetConfig("AdminPanelToggleMode", false);
-            
+
             SaveConfig();
         }
 
@@ -123,7 +121,7 @@ namespace Oxide.Plugins
 
         #region Localization
 
-        private void LoadDefaultMessages()
+        private new void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -188,7 +186,7 @@ namespace Oxide.Plugins
                     case "action":
                         if (args[1] == "vanish")
                         {
-                            if (Vanish) ToggleVanish(player.UserIDString);
+                            if (Vanish) ToggleVanish(player);
                         }
                         else if (args[1] == "admintp")
                         {
@@ -198,11 +196,11 @@ namespace Oxide.Plugins
                         }
                         else if (args[1] == "radar")
                         {
-                            if (AdminRadar) ToggleRadar(player.UserIDString);
+                            if (AdminRadar) ToggleRadar(player);
                         }
                         else if (args[1] == "god")
                         {
-                            if (Godmode) ToggleGodmode(player.UserIDString);
+                            if (Godmode) ToggleGodmode(player);
                         }
                         break;
 
@@ -323,9 +321,7 @@ namespace Oxide.Plugins
 
                     if (string.IsNullOrEmpty(www.error))
                     {
-                        var stream = new MemoryStream();
-                        stream.Write(www.bytes, 0, www.bytes.Length);
-                        imageFiles.Add(queue.name, FileStorage.server.Store(stream, FileStorage.Type.png, uint.MaxValue).ToString());
+                        imageFiles.Add(queue.name, FileStorage.server.Store(www.bytes, FileStorage.Type.png, uint.MaxValue).ToString());
                     }
                     else
                     {
@@ -368,7 +364,7 @@ namespace Oxide.Plugins
             var BTNColorRadar = btnInactColor;
 
             if (Godmode) { if (IsGod(player.UserIDString)) { BTNColorGod = btnActColor; }; };
-            if (Vanish) { if (IsInvisable(player.UserIDString)) { BTNColorVanish = btnActColor; }; };
+            if (Vanish) { if (IsInvisable(player)) { BTNColorVanish = btnActColor; }; };
             if (AdminRadar) { if (IsRadar(player.UserIDString)) { BTNColorRadar = btnActColor; }; };
 
             var GUIElement = new CuiElementContainer();

@@ -1,0 +1,16 @@
+{
+    "name": "Rename",
+    "description": "Allows players with permission to instantly rename other players or self",
+    "author": "Wulf",
+    "version": "0.3.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/rename.1184",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

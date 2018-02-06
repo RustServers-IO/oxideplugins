@@ -3,13 +3,13 @@
     "description": "Kits",
     "author": "Kappasaurus",
     "version": "3.2.9",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "CopyPaste": "*",
         "ImageLibrary": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/kits.668",
+    "url": "https:\/\/oxidemod.org\/plugins\/kits.668",
     "games": [
         "rust"
     ],

@@ -3,9 +3,9 @@
     "description": "Blocks gather by certain tools.",
     "author": "DylanSMR",
     "version": "1.0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/gather-blocking.2552",
+    "url": "https:\/\/oxidemod.org\/plugins\/gather-blocking.2552",
     "games": [
         "rust"
     ],

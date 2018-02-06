@@ -3,9 +3,9 @@
     "description": "Simple plugin to stop items from losing condition",
     "author": "k1lly0u",
     "version": "0.1.4",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/neverwear.1816",
+    "url": "https:\/\/oxidemod.org\/plugins\/neverwear.1816",
     "games": [
         "rust"
     ],

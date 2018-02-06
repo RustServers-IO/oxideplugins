@@ -3,9 +3,9 @@
     "description": "Set health, cost and protection of constructions",
     "author": "Nogrod",
     "version": "1.0.8",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/constructionconfig.859",
+    "url": "https:\/\/oxidemod.org\/plugins\/constructionconfig.859",
     "games": [
         "rust"
     ],

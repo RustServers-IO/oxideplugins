@@ -2,14 +2,16 @@ using Oxide.Core;
 using System;
 using System.Collections.Generic;
 using Rust;
+using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("WipeProtection", "Slydelix", 1.1, ResourceId = 2722)]
+    [Info("WipeProtection", "Slydelix", 1.2, ResourceId = 2722)]
     class WipeProtection : RustPlugin
     {
-        //TODO (?) BROADCAST WHEN RAID BLOCK IS OVER
-        Dictionary<string, string> raidtools = new Dictionary<string, string>
+        //TODO
+        //nothing?
+        private Dictionary<string, string> raidtools = new Dictionary<string, string>
         {
             {"ammo.rocket.fire", "rocket_fire" },
             {"ammo.rocket.hv", "rocket_hv" },
@@ -21,18 +23,20 @@ namespace Oxide.Plugins
             {"grenade.f1", "grenade.f1.deployed" }
         };
 
-        float wipeprotecctime;
-        bool refund;
+        private float wipeprotecctime;
+        private bool refund, broadcastend, msgadmin;
 
         #region Config
         protected override void LoadDefaultConfig()
         {
             Config["Wipe protection time (hours)"] = wipeprotecctime = GetConfig("Wipe protection time (hours)", 24f);
+            Config["Broadcast to chat when raid block has ended"] = broadcastend = GetConfig("Broadcast to chat when raid block has ended", true);
+            Config["Message admins on connection with info on when the raid block is ending"] = msgadmin = GetConfig("Message admins on connection with info on when the raid block is ending", true);
             Config["Refund explosives"] = refund = GetConfig("Refund explosives", true);
             SaveConfig();
         }
 
-        T GetConfig<T>(string name, T defaultValue)
+        private T GetConfig<T>(string name, T defaultValue)
         {
             if (Config[name] == null) return defaultValue;
             return (T)Convert.ChangeType(Config[name], typeof(T));
@@ -45,9 +49,11 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>()
             {
+                {"adminmsg", "<color=silver>Wipe protection ending at {0} ({1})</color>"},
                 {"console_manual", "Manually setting {0} as wipe time and {1} as time after which raiding is possible"},
                 {"console_auto", "Detected wipe, setting {0} as wipe time and {1} as time after which raiding is possible"},
                 {"console_stopped", "Everything is now raidable"},
+                {"raidprotection_ended", "<size=20>Wipe protection is now over.</size>"},
                 {"dataFileWiped", "Data file successfully wiped"},
                 {"refunded", "Your '{0}' was refunded."},
                 {"wipe_blocked", "This entity cannot be destroyed because all raiding is currently blocked."}
@@ -56,7 +62,7 @@ namespace Oxide.Plugins
 
         #endregion
         #region DataFile
-        class StoredData
+        private class StoredData
         {
             public bool wipeprotection;
             public string lastwipe;
@@ -68,26 +74,29 @@ namespace Oxide.Plugins
             }
         }
 
-        StoredData storedData;
+        private StoredData storedData;
 
         #endregion
         #region Hooks
 
-        void Unload() => SaveFile();
+        private void Unload() => SaveFile();
 
-        void Init()
+        private void Init()
         {
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(this.Name);
             LoadDefaultConfig();
             CheckTime();
         }
 
-        void CheckTime()
+        private void CheckTime()
         {
             timer.Every(30f, () => {
                 if (!storedData.wipeprotection) return;
                 if (DateTime.Now >= Convert.ToDateTime(storedData.RaidStartTime))
                 {
+                    if (broadcastend)
+                        covalence.Server.Broadcast(lang.GetMessage("raidprotection_ended", this, null));
+
                     storedData.wipeprotection = false;
                     SaveFile();
                     return;
@@ -95,10 +104,10 @@ namespace Oxide.Plugins
             });
         }
 
-        void OnNewSave(string filename)
+        private void OnNewSave(string filename)
         {
             DateTime now = DateTime.Now;
-            DateTime rs = Convert.ToDateTime(storedData.lastwipe).AddHours(wipeprotecctime);
+            DateTime rs = now.AddHours(wipeprotecctime);
             storedData.wipeprotection = true;
             storedData.lastwipe = now.ToString();
             storedData.RaidStartTime = rs.ToString();
@@ -106,7 +115,15 @@ namespace Oxide.Plugins
             PrintWarning(lang.GetMessage("console_auto", this, null), now, rs);
         }
 
-        object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
+        private void OnUserConnected(IPlayer player)
+        {
+            if (!player.IsAdmin || !msgadmin) return;
+
+            string remaining = Convert.ToDateTime(storedData.RaidStartTime).Subtract(DateTime.Now).ToShortString();
+            player.Message(lang.GetMessage("adminmsg", this, player.Id), storedData.RaidStartTime, remaining);
+        }
+
+        private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
         {
             if (hitinfo == null || entity == null || hitinfo?.InitiatorPlayer == null || entity.OwnerID == hitinfo?.InitiatorPlayer?.userID || entity?.OwnerID == 0 || hitinfo?.WeaponPrefab?.ShortPrefabName == null) return null;
             if (!(entity is BuildingBlock || entity is Door || entity.PrefabName.Contains("deployable"))) return null;
@@ -139,7 +156,7 @@ namespace Oxide.Plugins
             return false;
         }
 
-        void msgPlayer(BasePlayer attacker, BaseEntity entity)
+        private void msgPlayer(BasePlayer attacker, BaseEntity entity)
         {
             if (WipeProtected())
             {
@@ -148,10 +165,9 @@ namespace Oxide.Plugins
             }
         }
 
-        void Refund(BasePlayer attacker, string name, BaseEntity ent)
+        private void Refund(BasePlayer attacker, string name, BaseEntity ent)
         {
             if (name == "Null") return;
-            //Possibly most f**ked up thing I've ever made
             if (refund)
             {
                 foreach (var entry in raidtools)
@@ -166,16 +182,16 @@ namespace Oxide.Plugins
             }
         }
 
-        void SaveFile() => Interface.Oxide.DataFileSystem.WriteObject(this.Name, storedData);
+        private void SaveFile() => Interface.Oxide.DataFileSystem.WriteObject(this.Name, storedData);
 
         #endregion
         #region Commands
         [ConsoleCommand("wipeprotection.manual")]
-        void wipeStartCmd(ConsoleSystem.Arg arg)
+        private void wipeStartCmd(ConsoleSystem.Arg arg)
         {
             if (arg.Connection != null) return;
             DateTime now = DateTime.Now;
-            DateTime rs = DateTime.Now.AddHours(wipeprotecctime);
+            DateTime rs = now.AddHours(wipeprotecctime);
             storedData.wipeprotection = true;
             storedData.lastwipe = now.ToString();
             storedData.RaidStartTime = rs.ToString();
@@ -186,7 +202,7 @@ namespace Oxide.Plugins
         }
 
         [ConsoleCommand("wipeprotection.stop")]
-        void wipeEndCmd(ConsoleSystem.Arg arg)
+        private void wipeEndCmd(ConsoleSystem.Arg arg)
         {
             if (arg.Connection != null) return;
             storedData.wipeprotection = false;

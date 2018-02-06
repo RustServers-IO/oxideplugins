@@ -3,9 +3,9 @@
     "description": "allows you to broadcast a message to the chat.",
     "author": "LaserHydra",
     "version": "2.1.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/easy-broadcast.863",
+    "url": "https:\/\/oxidemod.org\/plugins\/easy-broadcast.863",
     "games": [
         "rust"
     ],

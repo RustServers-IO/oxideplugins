@@ -11,7 +11,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("SSNNotifier", "Umlaut", "0.0.7")]
+    [Info("SSNNotifier", "Umlaut", "0.0.8")]
     class SSNNotifier : RustPlugin
     {
         // Types defenition
@@ -586,8 +586,8 @@ namespace Oxide.Plugins
                 banItem.reason = reason;
                 banItem.timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                 m_configData.BannedPlayers[userId] = banItem;
-                ConsoleSystem.Run.Server.Quiet(string.Format("banid {0} \"{1}\" \"{2}\"", userId.ToString(), playerName, reason).ToString(), true);
-                ConsoleSystem.Run.Server.Quiet("server.writecfg", true);
+                ConsoleSystem.Run(ConsoleSystem.Option.Server.Quiet(), "banid", userId, playerName, reason);
+                ConsoleSystem.Run(ConsoleSystem.Option.Server.Quiet(), "server.writecfg");
                 SaveConfig();
 
                 string message = m_configData.Messages["player_was_banned"];
@@ -632,8 +632,8 @@ namespace Oxide.Plugins
 
             if (m_configData.BannedPlayers.ContainsKey(userID))
             {
-                ConsoleSystem.Run.Server.Quiet(string.Format("unban {0}", userID.ToString()).ToString(), true);
-                ConsoleSystem.Run.Server.Quiet("server.writecfg", true);
+                ConsoleSystem.Run(ConsoleSystem.Option.Server.Quiet(), "unban", userID);
+                ConsoleSystem.Run(ConsoleSystem.Option.Server.Quiet(), "server.writecfg");
 
                 m_configData.BannedPlayers.Remove(userID);
                 SaveConfig();

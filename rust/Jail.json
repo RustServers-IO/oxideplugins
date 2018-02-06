@@ -3,7 +3,7 @@
     "description": "Send players to jail",
     "author": "k1lly0u",
     "version": "4.0.0",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Kits": "*"
     },
@@ -12,7 +12,7 @@
         "Spawns": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/jail.794",
+    "url": "https:\/\/oxidemod.org\/plugins\/jail.794",
     "games": [
         "rust"
     ],

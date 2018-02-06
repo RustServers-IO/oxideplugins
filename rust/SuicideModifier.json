@@ -3,9 +3,9 @@
     "description": "Adds the ability to change the default suicide cooldown or remove it completely.",
     "author": "Ryan",
     "version": "1.0.3",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/suicidemodifier.2444",
+    "url": "https:\/\/oxidemod.org\/plugins\/suicidemodifier.2444",
     "games": [
         "rust"
     ],

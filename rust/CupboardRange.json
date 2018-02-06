@@ -3,9 +3,9 @@
     "description": "Prohibits construction in the range of the cupboard",
     "author": "",
     "version": "1.0.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/cupboardrange.2574",
+    "url": "https:\/\/oxidemod.org\/plugins\/cupboardrange.2574",
     "games": [
         "rust"
     ],

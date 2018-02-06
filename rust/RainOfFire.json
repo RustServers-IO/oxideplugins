@@ -3,12 +3,12 @@
     "description": "Custom event that adds meteor showers to the game",
     "author": "k1lly0u",
     "version": "0.2.51",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "PopupNotifications": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/rain-of-fire.1249",
+    "url": "https:\/\/oxidemod.org\/plugins\/rain-of-fire.1249",
     "games": [
         "rust"
     ],

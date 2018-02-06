@@ -1,0 +1,16 @@
+{
+    "name": "Dice",
+    "description": "Feeling lucky? Roll dice to get a random number",
+    "author": "Wulf",
+    "version": "0.3.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/dice.655",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

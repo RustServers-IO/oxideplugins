@@ -3,9 +3,9 @@
     "description": "Synchronize xp across servers using MySQL",
     "author": "PaiN",
     "version": "0.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/xpsync.2072",
+    "url": "https:\/\/oxidemod.org\/plugins\/xpsync.2072",
     "games": [
         "rust"
     ],

@@ -1,11 +1,11 @@
 {
-    "name": "Clean Up & Count Inmations",
+    "name": "CleanUp",
     "description": "Clean up : deployables",
-    "author": "Reneb",
+    "author": "Wulf",
     "version": "2.0.2",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/clean-up-count-informations.711",
+    "url": "https:\/\/oxidemod.org\/plugins\/cleanup.711",
     "games": [
         "rust"
     ],

@@ -3,7 +3,7 @@
     "description": "A versitile arena event plugin",
     "author": "k1lly0u",
     "version": "3.0.75",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "ServerRewards": "*",
         "Economics": "*",
@@ -16,7 +16,7 @@
         "Spawns": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/event-manager.740",
+    "url": "https:\/\/oxidemod.org\/plugins\/event-manager.740",
     "games": [
         "rust"
     ],

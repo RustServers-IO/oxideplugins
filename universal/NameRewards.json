@@ -1,0 +1,16 @@
+{
+    "name": "NameRewards",
+    "description": "Assign players a group based on phrases found in their names.",
+    "author": "Kappasaurus",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/namerewards.2201",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -2,10 +2,10 @@
     "name": "CommandRateLimiter",
     "description": "Prevent bind abuse now!",
     "author": "Calytic",
-    "version": "0.1.1",
-    "configuration": true,
+    "version": "1.1.2",
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/commandratelimiter.1812",
+    "url": "https:\/\/oxidemod.org\/plugins\/commandratelimiter.1812",
     "games": [
         "rust"
     ],

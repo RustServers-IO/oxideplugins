@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Allows players with permission to heal themselves or others",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/healer.658",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

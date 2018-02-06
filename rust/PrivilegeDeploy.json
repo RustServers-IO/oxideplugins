@@ -3,9 +3,9 @@
     "description": "Block specific items from being deployed outside of a authorized build radius",
     "author": "k1lly0u",
     "version": "0.1.4",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/privilegedeploy.1800",
+    "url": "https:\/\/oxidemod.org\/plugins\/privilegedeploy.1800",
     "games": [
         "rust"
     ],

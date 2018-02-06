@@ -1,0 +1,16 @@
+{
+    "name": "Warp System",
+    "description": "Create warp points for players to easily teleport to",
+    "author": "PaiN",
+    "version": "1.9.14",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/warp-system.760",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

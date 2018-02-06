@@ -3,7 +3,7 @@
     "description": "GUI Shop based on Economics. Supports NPC",
     "author": "Nogrod",
     "version": "1.4.5",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Kits": "*",
         "HumanNPC": "*"
@@ -12,7 +12,7 @@
         "Economics": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/gui-shop.1319",
+    "url": "https:\/\/oxidemod.org\/plugins\/gui-shop.1319",
     "games": [
         "rust"
     ],

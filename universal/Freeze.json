@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Stops one or more players on command and keeps them from moving",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/freeze.1432",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

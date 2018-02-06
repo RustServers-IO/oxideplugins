@@ -3,9 +3,9 @@
     "description": "Brings the pump jack back into the game",
     "author": "Kaleidos",
     "version": "0.6.5",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/oilcrate.2339",
+    "url": "https:\/\/oxidemod.org\/plugins\/oilcrate.2339",
     "games": [
         "rust"
     ],

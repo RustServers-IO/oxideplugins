@@ -4,8 +4,8 @@
     "author": "Ryan",
     "version": "1.0.1",
     "configuration": false,
-    "language": "cs\r\n",
-    "url": "http:\/\/oxidemod.org\/plugins\/checkpoints.2603",
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/checkpoints.2603",
     "games": [
         "rust"
     ],

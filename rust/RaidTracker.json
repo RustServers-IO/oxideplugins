@@ -3,7 +3,7 @@
     "description": "Log raids in progress by tracking explosions to be later recreated on-screen via drawn methods.",
     "author": "nivex",
     "version": "1.0.0",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Slack": "*",
         "Discord": "*",
@@ -11,7 +11,7 @@
         "PopupNotifications": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/raid-tracker.2458",
+    "url": "https:\/\/oxidemod.org\/plugins\/raid-tracker.2458",
     "games": [
         "rust"
     ],

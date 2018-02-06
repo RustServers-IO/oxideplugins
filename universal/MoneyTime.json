@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Pays players money via Economics for playing on your server",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/moneytime.836",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

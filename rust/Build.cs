@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Build", "Reneb & NoGrod", "1.1.9", ResourceId = 715)]
+    [Info("Build", "Reneb & NoGrod", "1.1.93", ResourceId = 715)]
     class Build : RustPlugin
     {
         class BuildPlayer : MonoBehaviour
@@ -255,9 +255,9 @@ namespace Oxide.Plugins
             animalList = new Dictionary<string, string>();
             foreach (var str in GameManifest.Current.pooledStrings)
             {
-                if (str.str.Contains("autospawn/animals"))
+                if (str.str.Contains("/rust.ai/agents/") && str.str.EndsWith(".prefab"))
                 {
-                    var animalPrefab = str.str.Substring(41);
+                    var animalPrefab = str.str.Substring(str.str.LastIndexOf('/') + 1);
                     animalList.Add(animalPrefab.Remove(animalPrefab.Length - 7), str.str);
                 }
             }
@@ -492,7 +492,7 @@ namespace Oxide.Plugins
                          Puts("================");
                      }*/
                 //Debug.Log(construction.hierachyName + " " + construction.fullName);
-                nameToBlockPrefab.Add(construction.hierachyName, construction.fullName);
+                nameToBlockPrefab[construction.hierachyName] = construction.fullName;
             }
         }
 

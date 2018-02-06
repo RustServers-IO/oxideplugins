@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "configuration": false,
     "language": "lua",
-    "url": "http:\/\/oxidemod.org\/plugins\/simple-compass.719",
+    "url": "https:\/\/oxidemod.org\/plugins\/simple-compass.719",
     "games": [
         "rust"
     ],

@@ -3,7 +3,7 @@
     "description": "This is a fully Customizable UI for Info and Buttons!",
     "author": "Absolut",
     "version": "2.1.4",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Kits": "*"
     },
@@ -11,7 +11,7 @@
         "ImageLibrary": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/universalui.2226",
+    "url": "https:\/\/oxidemod.org\/plugins\/universalui.2226",
     "games": [
         "rust"
     ],

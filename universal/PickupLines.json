@@ -1,0 +1,16 @@
+{
+    "name": "PickupLines",
+    "description": "Send lovely pickup lines to yourself or other players.",
+    "author": "Spicy",
+    "version": "1.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/pickuplines.2095",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

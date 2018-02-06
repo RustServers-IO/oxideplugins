@@ -1,0 +1,20 @@
+{
+    "name": "SlackMutes",
+    "description": "Sends information on Server Mutes to a Slack Channel",
+    "author": "Kinesis",
+    "version": "1.0.1",
+    "configuration": false,
+    "require": {
+        "Slack": "*",
+        "BetterChatMute": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/slackmutes.2364",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

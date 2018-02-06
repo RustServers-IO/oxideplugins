@@ -1,0 +1,19 @@
+{
+    "name": "SlackNotices",
+    "description": "Sends various notices from in-game to a Slack channel",
+    "author": "Wulf",
+    "version": "0.1.2",
+    "configuration": false,
+    "require": {
+        "Slack": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/slacknotices.1957",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

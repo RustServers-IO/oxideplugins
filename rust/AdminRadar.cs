@@ -11,7 +11,7 @@ using System.Reflection;
 
 namespace Oxide.Plugins
 {
-    [Info("AdminRadar", "nivex", "4.1.4", ResourceId = 978)]
+    [Info("AdminRadar", "nivex", "4.2.1", ResourceId = 978)]
     [Description("ESP tool for Admins and Developers.")]
     public class AdminRadar: RustPlugin
     {
@@ -47,7 +47,6 @@ namespace Oxide.Plugins
 
         const float flickerDelay = 0.05f;
 
-        //bool IsRadar(BasePlayer player) => activeRadars.Any(x => x.player == player);
         bool IsRadar(string id) => activeRadars.Any(x => x.player.UserIDString == id);
         static long TimeStamp() => (DateTime.Now.Ticks - DateTime.Parse("01/01/1970 00:00:00").Ticks) / 10000000;
 
@@ -125,10 +124,6 @@ namespace Oxide.Plugins
         }
         
         #region json 
-        readonly string anchorMinTopLeft = "0 0.850";
-        readonly string anchorMaxTopLeft = "0.148 1";
-        readonly string anchorMinBottomRight = "0.667 0.020";
-        readonly string anchorMaxBottomRight = "0.810 0.148";
         // TODO: Remove hardcoded json
         static string uiJson = @"[{
             ""name"": ""{guid}"",
@@ -814,14 +809,14 @@ namespace Oxide.Plugins
                     {
                         foreach (var heli in helisCache)
                         {
-                            if (heli == null)
+                            if (heli == null || heli.transform == null)
                                 continue;
 
                             double currDistance = Math.Floor(Vector3.Distance(heli.transform.position, source.transform.position));
                             string heliHealth = heli.health > 1000 ? Math.Floor(heli.health).ToString("#,##0,K", CultureInfo.InvariantCulture) : Math.Floor(heli.health).ToString();
-                            string info = showHeliRotorHealth ? string.Format("<color=red>{0}</color> (<color=yellow>{1}</color>/<color=yellow>{2}</color>)", heliHealth, Math.Floor(heli.weakspots[0].health), Math.Floor(heli.weakspots[1].health)) : string.Format("<color=red>{0}</color>", heliHealth);
+                            string info = showHeliRotorHealth ? string.Format("<color={0}>{1}</color> (<color=yellow>{2}</color>/<color=yellow>{3}</color>)", healthCC, heliHealth, Math.Floor(heli.weakspots[0].health), Math.Floor(heli.weakspots[1].health)) : string.Format("<color={0}>{1}</color>", healthCC, heliHealth);
                             
-                            if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, heli.transform.position + new Vector3(0f, 2f, 0f), string.Format("<color=magenta>H</color> {0} <color=orange>{1}</color>", info, currDistance));
+                            if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, heli.transform.position + new Vector3(0f, 2f, 0f), string.Format("<color={0}>H</color> {1} <color={2}>{3}</color>", heliCC, info, distCC, currDistance));
                             if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.magenta, heli.transform.position + new Vector3(0f, 1f, 0f), GetScale(currDistance));                            
                         }
                     }
@@ -834,19 +829,19 @@ namespace Oxide.Plugins
                     {
                         foreach (var bradley in bradleyCache)
                         {
-                            if (bradley == null)
+                            if (bradley == null || bradley.transform == null)
                                 continue;
 
                             double currDistance = Math.Floor(Vector3.Distance(bradley.transform.position, source.transform.position));
-                            string info = string.Format("<color=red>{0}</color>", bradley.health > 1000 ? Math.Floor(bradley.health).ToString("#,##0,K", CultureInfo.InvariantCulture) : Math.Floor(bradley.health).ToString());
+                            string info = string.Format("<color={0}>{1}</color>", healthCC, bradley.health > 1000 ? Math.Floor(bradley.health).ToString("#,##0,K", CultureInfo.InvariantCulture) : Math.Floor(bradley.health).ToString());
 
-                            if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, bradley.transform.position + new Vector3(0f, 2f, 0f), string.Format("<color=magenta>B</color> {0} <color=orange>{1}</color>", info, currDistance));
+                            if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, bradley.transform.position + new Vector3(0f, 2f, 0f), string.Format("<color={0}>B</color> {1} <color={2}>{3}</color>", bradleyCC, info, distCC, currDistance));
                             if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.magenta, bradley.transform.position + new Vector3(0f, 1f, 0f), GetScale(currDistance));
                         }
                     }
 
                     error = "ACTIVE";
-                    foreach (var target in BasePlayer.activePlayerList.Where(target => target.IsConnected)) // was a prior bug so we'll be prepared if it happens again
+                    foreach (var target in BasePlayer.activePlayerList.Where(target => target != null && target.transform != null && target.IsConnected))
                     {
                         double currDistance = Math.Floor(Vector3.Distance(target.transform.position, source.transform.position));
 
@@ -877,7 +872,7 @@ namespace Oxide.Plugins
 
                             if (storedData.Visions.Contains(player.UserIDString)) DrawVision(player, target, invokeTime);
                             if (drawArrows) player.SendConsoleCommand("ddraw.arrow", invokeTime + flickerDelay, Color.red, target.transform.position + new Vector3(0f, target.transform.position.y + 10), target.transform.position, 1);
-                            if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, target.IsAlive() ? Color.white : Color.red, target.transform.position + new Vector3(0f, 2f, 0f), string.Format("{0} <color=red>{1}</color> <color=orange>{2}</color> {3}", target.displayName ?? target.userID.ToString(), Math.Floor(target.health), currDistance, extText));
+                            if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, target.transform.position + new Vector3(0f, 2f, 0f), string.Format("<color={0}>{1}</color> <color={2}>{3}</color> <color={4}>{5}</color> {6}", target.IsAlive() ? activeCC : activeDeadCC, target.displayName ?? target.userID.ToString(), healthCC, Math.Floor(target.health), distCC, currDistance, extText));
                             if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.red, target.transform.position + new Vector3(0f, 1f, 0f), target.GetHeight(target.modelState.ducked));
                         }
                         else if (drawX)
@@ -941,7 +936,7 @@ namespace Oxide.Plugins
 
                             if (currDistance < tcDistance && currDistance < maxDistance)
                             {
-                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.black, tc.Key + new Vector3(0f, 0.5f, 0f), string.Format("TC <color=orange>{0}</color>", currDistance));
+                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, tc.Key + new Vector3(0f, 0.5f, 0f), string.Format("<color={0}>TC</color> <color={1}>{2}</color>", tcCC, distCC, currDistance));
                                 if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.black, tc.Key + new Vector3(0f, 0.5f, 0f), tc.Value.Size);
                                 if (objectsLimit > 0 && ++drawnObjects[player.userID] > objectsLimit) return;
                             }
@@ -977,7 +972,7 @@ namespace Oxide.Plugins
                                             continue;
 
                                         if (backpack.inventory?.itemList != null) contents = string.Format("({0}) ", backpackContentAmount > 0 && backpack.inventory.itemList.Count > 0 ? string.Join(", ", backpack.inventory.itemList.Take(backpackContentAmount).Select(item => string.Format("{0} ({1})", item.info.displayName.translated.ToLower(), item.amount)).ToArray()) : backpack.inventory.itemList.Count().ToString());
-                                        if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.red, entry.Key + new Vector3(0f, 0.5f, 0f), string.Format("{0} <color=silver>{1}</color><color=orange>{2}</color>", string.IsNullOrEmpty(backpack._playerName) ? ins.msg("backpack", player.UserIDString) : backpack._playerName, contents, currDistance));
+                                        if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, entry.Key + new Vector3(0f, 0.5f, 0f), string.Format("<color={0}>{1}</color> <color={0}>{2}</color><color={3}>{4}</color>", backpackCC, string.IsNullOrEmpty(backpack._playerName) ? ins.msg("backpack", player.UserIDString) : backpack._playerName, contents, distCC, currDistance));
                                         if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.red, entry.Key + new Vector3(0f, 0.5f, 0f), GetScale(currDistance));
                                         if (objectsLimit > 0 && ++drawnObjects[player.userID] > objectsLimit) return;
                                     }
@@ -997,7 +992,7 @@ namespace Oxide.Plugins
 
                                 string contents = showAirdropContents && drop.inventory.itemList.Count > 0 ? string.Format("({0}) ", string.Join(", ", drop.inventory.itemList.Select(item => string.Format("{0} ({1})", item.info.displayName.translated.ToLower(), item.amount)).ToArray())) : string.Format("({0}) ", drop.inventory.itemList.Count());
 
-                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.magenta, drop.transform.position + new Vector3(0f, 0.5f, 0f), string.Format("{0} {1}<color=orange>{2}</color>", _(drop.ShortPrefabName), contents, currDistance));
+                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.magenta, drop.transform.position + new Vector3(0f, 0.5f, 0f), string.Format("{0} {1}<color={2}>{3}</color>", _(drop.ShortPrefabName), contents, distCC, currDistance));
                                 if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.magenta, drop.transform.position + new Vector3(0f, 0.5f, 0f), GetScale(currDistance));
                             }
                         }
@@ -1041,7 +1036,8 @@ namespace Oxide.Plugins
                             }
 
                             var color = isBox ? Color.magenta : isLoot ? Color.yellow : Color.white;
-                            
+                            string colorHex = color == Color.magenta ? boxCC : color == Color.yellow ? lootCC: stashCC;
+
                             string contents = string.Empty;
                             uint uid;
 
@@ -1077,7 +1073,7 @@ namespace Oxide.Plugins
                             if (string.IsNullOrEmpty(contents) && !drawEmptyContainers)
                                 continue;
 
-                            if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, color, box.Key + new Vector3(0f, 0.5f, 0f), string.Format("{0} {1}<color=orange>{2}</color>", _(box.Value.Name), contents, currDistance));
+                            if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, color, box.Key + new Vector3(0f, 0.5f, 0f), string.Format("<color={0}>{1}</color> {2}<color={3}>{4}</color>", colorHex, _(box.Value.Name), contents, distCC, currDistance));
                             if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, color, box.Key + new Vector3(0f, 0.5f, 0f), GetScale(currDistance));
                             if (objectsLimit > 0 && ++drawnObjects[player.userID] > objectsLimit) return;
                         }
@@ -1095,7 +1091,7 @@ namespace Oxide.Plugins
 
                             if (currDistance < bagDistance && currDistance < maxDistance)
                             {
-                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.magenta, bag.Key, string.Format("bag <color=orange>{0}</color>", currDistance));
+                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, bag.Key, string.Format("<color={0}>bag</color> <color={1}>{2}</color>", bagCC, distCC, currDistance));
                                 if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.magenta, bag.Key, bag.Value.Size);
                                 if (objectsLimit > 0 && ++drawnObjects[player.userID] > objectsLimit) return;
                             }
@@ -1114,7 +1110,7 @@ namespace Oxide.Plugins
 
                             if (currDistance < turretDistance && currDistance < maxDistance)
                             {
-                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.yellow, turret.Key + new Vector3(0f, 0.5f, 0f), string.Format("AT ({0}) <color=orange>{1}</color>", turret.Value.Info, currDistance));
+                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, turret.Key + new Vector3(0f, 0.5f, 0f), string.Format("<color={0}>AT</color> ({1}) <color={2}>{3}</color>", atCC, turret.Value.Info, distCC, currDistance));
                                 if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.yellow, turret.Key + new Vector3(0f, 0.5f, 0f), turret.Value.Size);
                                 if (objectsLimit > 0 && ++drawnObjects[player.userID] > objectsLimit) return;
                             }
@@ -1129,6 +1125,9 @@ namespace Oxide.Plugins
                     {
                         foreach (var sleeper in BasePlayer.sleepingPlayerList)
                         {
+                            if (sleeper == null || sleeper.transform == null)
+                                continue;
+
                             double currDistance = Math.Floor(Vector3.Distance(sleeper.transform.position, source.transform.position));
 
                             if (currDistance > maxDistance)
@@ -1137,7 +1136,7 @@ namespace Oxide.Plugins
                             if (currDistance < playerDistance)
                             {
                                 if (drawArrows) player.SendConsoleCommand("ddraw.arrow", invokeTime + flickerDelay, Color.cyan, sleeper.transform.position + new Vector3(0f, sleeper.transform.position.y + 10), sleeper.transform.position, 1);
-                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, sleeper.IsAlive() ? Color.cyan : Color.red, sleeper.transform.position, string.Format("{0} <color=red>{1}</color> <color=orange>{2}</color>", sleeper.displayName, Math.Floor(sleeper.health), currDistance));
+                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, sleeper.transform.position, string.Format("<color={0}>{1}</color> <color={2}>{3}</color> <color={4}>{5}</color>", sleeper.IsAlive() ? sleeperCC : sleeperDeadCC, sleeper.displayName, healthCC, Math.Floor(sleeper.health), distCC, currDistance));
                                 if (drawX) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, sleeper.IsAlive() ? Color.cyan : Color.red, sleeper.transform.position + new Vector3(0f, 1f, 0f), "X");
                                 else if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, sleeper.IsAlive() ? Color.cyan : Color.red, sleeper.transform.position, GetScale(currDistance));
                             }
@@ -1191,7 +1190,7 @@ namespace Oxide.Plugins
                             if (currDistance < playerDistance)
                             {
                                 if (drawArrows) player.SendConsoleCommand("ddraw.arrow", invokeTime + flickerDelay, Color.red, zombie.transform.position + new Vector3(0f, zombie.transform.position.y + 10), zombie.transform.position, 1);
-                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.red, zombie.transform.position + new Vector3(0f, 2f, 0f), string.Format("{0} <color=red>{1}</color> <color=orange>{2}</color>", ins.msg("Zombie", player.UserIDString), Math.Floor(zombie.health), currDistance));
+                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, zombie.transform.position + new Vector3(0f, 2f, 0f), string.Format("<color={0}>{1}</color> <color={2}>{3}</color> <color={4}>{5}</color>", zombieCC, ins.msg("Zombie", player.UserIDString), healthCC, Math.Floor(zombie.health), distCC, currDistance));
                                 if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.red, zombie.transform.position + new Vector3(0f, 1f, 0f), GetScale(currDistance));
                             }
                             else player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.red, zombie.transform.position + new Vector3(0f, 1f, 0f), 5f);
@@ -1213,13 +1212,14 @@ namespace Oxide.Plugins
                             if (player == target || currDistance > maxDistance)
                                 continue;
 
-                            var color = target is NPCPlayer ? Color.yellow : Color.blue;
+                            var color = target.ShortPrefabName == "scientist" ? Color.yellow : target.ShortPrefabName == "murderer" ? Color.black : Color.blue;
+                            string npcColor = color == Color.yellow ? scientistCC : color == Color.black ? murdererCC : npcCC;
 
                             if (currDistance < playerDistance)
                             {
                                 string displayName = target.displayName ?? (target.ShortPrefabName == "scientist" ? ins.msg("scientist", player.UserIDString) : ins.msg("npc", player.UserIDString));
                                 if (drawArrows) player.SendConsoleCommand("ddraw.arrow", invokeTime + flickerDelay, color, target.transform.position + new Vector3(0f, target.transform.position.y + 10), target.transform.position, 1);
-                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, color, target.transform.position + new Vector3(0f, 2f, 0f), string.Format("{0} <color=red>{1}</color> <color=orange>{2}</color>", displayName, Math.Floor(target.health), currDistance));
+                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, target.transform.position + new Vector3(0f, 2f, 0f), string.Format("<color={0}>{1}</color> <color={2}>{3}</color> <color={4}>{5}</color>", npcColor, displayName, healthCC, Math.Floor(target.health), distCC, currDistance));
                                 if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, color, target.transform.position + new Vector3(0f, 1f, 0f), target.GetHeight(target.modelState.ducked));
                             }
                             else player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, color, target.transform.position + new Vector3(0f, 1f, 0f), 5f);
@@ -1237,7 +1237,7 @@ namespace Oxide.Plugins
 
                             if (currDistance < npcDistance && currDistance < maxDistance)
                             {
-                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.blue, npc.transform.position + new Vector3(0f, 1f, 0f), string.Format("{0} <color=red>{1}</color>  <color=orange>{2}</color>", npc.ShortPrefabName, Math.Floor(npc.health), currDistance));
+                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, npc.transform.position + new Vector3(0f, 1f, 0f), string.Format("<color={0}>{1}</color> <color={2}>{3}</color> <color={4}>{5}</color>", npcCC, npc.ShortPrefabName, healthCC, Math.Floor(npc.health), distCC, currDistance));
                                 if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.blue, npc.transform.position + new Vector3(0f, 1f, 0f), npc.bounds.size.y);
                                 if (objectsLimit > 0 && ++drawnObjects[player.userID] > objectsLimit) return;
                             }
@@ -1256,8 +1256,8 @@ namespace Oxide.Plugins
 
                             if (currDistance < oreDistance && currDistance < maxDistance)
                             {
-                                object value = showResourceAmounts ? string.Format("({0})", ore.Value.Info) : string.Format("<color=orange>{0}</color>", currDistance);
-                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.yellow, ore.Key + new Vector3(0f, 1f, 0f), string.Format("{0} {1}", ore.Value.Name, value));
+                                object value = showResourceAmounts ? string.Format("({0})", ore.Value.Info) : string.Format("<color={0}>{1}</color>", distCC, currDistance);
+                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, ore.Key + new Vector3(0f, 1f, 0f), string.Format("<color={0}>{1}</color> {2}", resourceCC, ore.Value.Name, value));
                                 if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.yellow, ore.Key + new Vector3(0f, 1f, 0f), GetScale(currDistance));
                                 if (objectsLimit > 0 && ++drawnObjects[player.userID] > objectsLimit) return;
                             }
@@ -1276,8 +1276,8 @@ namespace Oxide.Plugins
 
                             if (currDistance < colDistance && currDistance < maxDistance)
                             {
-                                object value = showResourceAmounts ? string.Format("({0})", col.Value.Info) : string.Format("<color=orange>{0}</color>", currDistance);
-                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, Color.yellow, col.Key + new Vector3(0f, 1f, 0f), string.Format("{0} ({1})", col.Value.Name, value));
+                                object value = showResourceAmounts ? string.Format("({0})", col.Value.Info) : string.Format("<color={0}>{1}</color>", distCC, currDistance);
+                                if (drawText) player.SendConsoleCommand("ddraw.text", invokeTime + flickerDelay, null, col.Key + new Vector3(0f, 1f, 0f), string.Format("<color={0}>{1}</color> {2}", colCC, col.Value.Name, value));
                                 if (drawBox) player.SendConsoleCommand("ddraw.box", invokeTime + flickerDelay, Color.yellow, col.Key + new Vector3(0f, 1f, 0f), col.Value.Size);
                                 if (objectsLimit > 0 && ++drawnObjects[player.userID] > objectsLimit) return;
                             }
@@ -1391,26 +1391,18 @@ namespace Oxide.Plugins
 
             if (entity is BasePlayer)
             {
-                if (entity.ShortPrefabName == "scientist")
-                {
-                    var npc = entity.GetComponent<NPCPlayer>();
-                    
-                    if (npc != null && !npcCache.Contains(npc))
-                    {
-                        npcCache.Add(npc.GetComponent<BasePlayer>());
-                        return true;
-                    }
-
-                    return false;
-                }
-
                 var player = entity as BasePlayer;
 
                 if (!player.userID.IsSteamId() && !npcCache.Contains(player))
                 {
-                    npcCache.Add(player);
-                    return true;
+                    if (entity is NPCPlayer || entity.ShortPrefabName == "scientist" || entity.ShortPrefabName == "murderer")
+                    {
+                        npcCache.Add(player);
+                        return true;
+                    }
                 }
+
+                return false;
             }
             else if (entity is Zombie)
             {
@@ -1536,7 +1528,7 @@ namespace Oxide.Plugins
         }
 
         static float GetScale(double v) => v <= 50 ? 1f : v > 50 && v <= 100 ? 2f : v > 100 && v <= 150 ? 2.5f : v > 150 && v <= 200 ? 3f : v > 200 && v <= 300 ? 4f : 5f;
-        
+
         [ConsoleCommand("espgui")]
         void ccmdESPGUI(ConsoleSystem.Arg arg)
         {
@@ -1747,6 +1739,11 @@ namespace Oxide.Plugins
 
                     args = storedData.Filters[player.UserIDString].ToArray();
                 }
+                else if (args[0] == "list")
+                {
+                    player.ChatMessage(activeRadars.Count == 0 ? msg("NoActiveRadars", player.UserIDString) : msg("ActiveRadars", player.UserIDString, string.Join(", ", activeRadars.Select(radar => radar.player.displayName).ToArray())));
+                    return;
+                }
                 else if (args[0] == "f")
                     args = storedData.Filters[player.UserIDString].ToArray();
             }
@@ -1804,8 +1801,8 @@ namespace Oxide.Plugins
                 {
                     string espUI = uiJson;
 
-                    espUI = espUI.Replace("{anchorMin}", alignTopLeft ? anchorMinTopLeft : anchorMinBottomRight);
-                    espUI = espUI.Replace("{anchorMax}", alignTopLeft ? anchorMaxTopLeft : anchorMaxBottomRight);
+                    espUI = espUI.Replace("{anchorMin}", anchorMin);
+                    espUI = espUI.Replace("{anchorMax}", anchorMax);
                     espUI = espUI.Replace("{colorAll}", esp.showAll ? "255 0 0 1" : "1 1 1 1");
                     espUI = espUI.Replace("{colorBags}", esp.showBags ? "255 0 0 1" : "1 1 1 1");
                     espUI = espUI.Replace("{colorBox}", esp.showBox ? "255 0 0 1" : "1 1 1 1");
@@ -1888,10 +1885,34 @@ namespace Oxide.Plugins
         static bool showUI;
         static bool useBypass;
 
+        static string distCC;
+        static string heliCC;
+        static string bradleyCC;
+        static string activeCC;
+        static string activeDeadCC;
+        static string sleeperCC;
+        static string sleeperDeadCC;
+        static string healthCC;
+        static string backpackCC;
+        static string zombieCC;
+        static string scientistCC;
+        static string murdererCC;
+        static string npcCC;
+        static string resourceCC;
+        static string colCC;
+        static string tcCC;
+        static string bagCC;
+        static string atCC;
+        static string boxCC;
+        static string lootCC;
+        static string stashCC;
+
         static string szChatCommand;
         static List<object> authorized;
         static List<string> itemExceptions = new List<string>();
         bool alignTopLeft;
+        string anchorMin;
+        string anchorMax;
 
         List<object> ItemExceptions
         {
@@ -1937,6 +1958,8 @@ namespace Oxide.Plugins
                 ["NoDrops"] = "No item drops found within {0}m",
                 ["Help9"] = "<color=orange>/{0} drops</color> - Show all dropped items within {1}m.",
                 ["Zombie"] = "<color=red>Zombie</color>",
+                ["NoActiveRadars"] = "No one is using Radar at the moment.",
+                ["ActiveRadars"] = "Active radar users: {0}",
             }, this);
         }
 
@@ -1959,7 +1982,6 @@ namespace Oxide.Plugins
             latencyMs = Convert.ToInt32(GetConfig("Settings", "Latency Cap In Milliseconds (0 = no cap)", 1000.0));
             objectsLimit = Convert.ToInt32(GetConfig("Settings", "Objects Drawn Limit (0 = unlimited)", 250));
             itemExceptions = (GetConfig("Settings", "Dropped Item Exceptions", ItemExceptions) as List<object>).Cast<string>().ToList();
-            alignTopLeft = Convert.ToBoolean(GetConfig("Settings", "Align GUI Top Left", false));
             inactiveTimeLimit = Convert.ToSingle(GetConfig("Settings", "Deactivate Radar After X Seconds Inactive", 300f));
             deactiveTimeLimit = Convert.ToInt32(GetConfig("Settings", "Deactivate Radar After X Minutes", 0));
             showUI = Convert.ToBoolean(GetConfig("Settings", "User Interface Enabled", true));
@@ -2006,11 +2028,39 @@ namespace Oxide.Plugins
             maxTrackReportDistance = Convert.ToSingle(GetConfig("Player Movement Tracker", "Max Reporting Distance", 200f));
             trackDrawTime = Convert.ToSingle(GetConfig("Player Movement Tracker", "Draw Time", 60f));
             overlapDistance = Convert.ToSingle(GetConfig("Player Movement Tracker", "Overlap Reduction Distance", 5f));
-            
+
+            distCC = Convert.ToString(GetConfig("Color-Hex Codes", "Distance", "#ffa500"));
+            heliCC = Convert.ToString(GetConfig("Color-Hex Codes", "Helicopters", "#ff00ff"));
+            bradleyCC = Convert.ToString(GetConfig("Color-Hex Codes", "Bradley", "#ff00ff"));
+            activeCC = Convert.ToString(GetConfig("Color-Hex Codes", "Online Player", "#ffffff"));
+            activeDeadCC = Convert.ToString(GetConfig("Color-Hex Codes", "Online Dead Player", "#ff0000"));
+            sleeperCC = Convert.ToString(GetConfig("Color-Hex Codes", "Sleeping Player", "#00ffff"));
+            sleeperDeadCC = Convert.ToString(GetConfig("Color-Hex Codes", "Sleeping Dead Player", "#ff0000"));
+            healthCC = Convert.ToString(GetConfig("Color-Hex Codes", "Health", "#ff0000"));
+            backpackCC = Convert.ToString(GetConfig("Color-Hex Codes", "Backpacks", "#c0c0c0"));
+            zombieCC = Convert.ToString(GetConfig("Color-Hex Codes", "Zombies", "#ff0000"));
+            scientistCC = Convert.ToString(GetConfig("Color-Hex Codes", "Scientists", "#ffff00"));
+            murdererCC = Convert.ToString(GetConfig("Color-Hex Codes", "Murderers", "#000000"));
+            npcCC = Convert.ToString(GetConfig("Color-Hex Codes", "Animals", "#0000ff"));
+            resourceCC = Convert.ToString(GetConfig("Color-Hex Codes", "Resources", "#ffff00"));
+            colCC = Convert.ToString(GetConfig("Color-Hex Codes", "Collectibles", "#ffff00"));
+            tcCC = Convert.ToString(GetConfig("Color-Hex Codes", "Tool Cupboards", "#000000"));
+            bagCC = Convert.ToString(GetConfig("Color-Hex Codes", "Sleeping Bags", "#ff00ff"));
+            atCC = Convert.ToString(GetConfig("Color-Hex Codes", "AutoTurrets", "#ffff00"));
+            boxCC = Convert.ToString(GetConfig("Color-Hex Codes", "Box", "#ff00ff"));
+            lootCC = Convert.ToString(GetConfig("Color-Hex Codes", "Loot", "#ffff00"));
+            stashCC = Convert.ToString(GetConfig("Color-Hex Codes", "Stash", "#ffffff"));
+
+            anchorMin = Convert.ToString(GetConfig("GUI", "Anchor Min", "0.667 0.020"));
+            anchorMax = Convert.ToString(GetConfig("GUI", "Anchor Max", "0.810 0.148"));
+
             szChatCommand = Convert.ToString(GetConfig("Settings", "Chat Command", "radar"));
 
             if (!string.IsNullOrEmpty(szChatCommand))
                 cmd.AddChatCommand(szChatCommand, this, cmdESP);
+
+            if (szChatCommand != "radar")
+                cmd.AddChatCommand("radar", this, cmdESP);
 
             if (Changed)
             {

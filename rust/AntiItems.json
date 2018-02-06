@@ -3,9 +3,9 @@
     "description": "Remove the need for certain items in crafting and repairing",
     "author": "redBDGR",
     "version": "1.0.10",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/antiitems.2405",
+    "url": "https:\/\/oxidemod.org\/plugins\/antiitems.2405",
     "games": [
         "rust"
     ],

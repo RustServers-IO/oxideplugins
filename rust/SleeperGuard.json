@@ -3,9 +3,9 @@
     "description": "Protects sleeping players from being hurt, killed, or looted",
     "author": "Wulf",
     "version": "0.4.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/sleeperguard.1454",
+    "url": "https:\/\/oxidemod.org\/plugins\/sleeperguard.1454",
     "games": [
         "rust"
     ],

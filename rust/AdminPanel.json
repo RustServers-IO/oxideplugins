@@ -3,16 +3,16 @@
     "description": "A small panel for clickable commands for admins",
     "author": "Wulf",
     "version": "1.2.8",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Vanish": "*",
         "Godmode": "*",
         "NTeleportation": "*",
         "AdminRadar": "*",
-        "Updater": "*"
+        "UpdateChecker": "*"
     },
-    "language": "cs\r\n",
-    "url": "http:\/\/oxidemod.org\/plugins\/adminpanel.2034",
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/adminpanel.2034",
     "games": [
         "rust"
     ],

@@ -1,0 +1,16 @@
+{
+    "name": "SteamGroups",
+    "description": "Automatically adds members of Steam group(s) to a specific permissions group",
+    "author": "Wulf",
+    "version": "0.3.8",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/steamgroups.2085",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

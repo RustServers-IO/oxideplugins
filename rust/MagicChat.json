@@ -1,11 +1,11 @@
 {
-    "name": "Magic Chat",
+    "name": "MagicChat",
     "description": "Custom chat system for public and local chat",
     "author": "Wulf",
     "version": "0.1.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/magic-chat.1437",
+    "url": "https:\/\/oxidemod.org\/plugins\/magicchat.1437",
     "games": [
         "rust"
     ],

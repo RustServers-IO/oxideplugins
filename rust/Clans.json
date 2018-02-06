@@ -1,12 +1,12 @@
 {
     "name": "Rust:IO Clans",
     "description": "Allows your players to form and manage clans with Rust:IO",
-    "author": "Wulf",
+    "author": "dcode",
     "version": "1.7.3",
-    "configuration": true,
+    "configuration": false,
     "require": {},
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/rust-io-clans.842",
+    "url": "https:\/\/oxidemod.org\/plugins\/rust-io-clans.842",
     "games": [
         "rust"
     ],

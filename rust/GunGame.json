@@ -3,14 +3,14 @@
     "description": "GunGame event for EventManager",
     "author": "k1lly0u",
     "version": "0.4.22",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "EventManager": "*",
         "ZoneManager": "*",
         "Spawns": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/gungame.1485",
+    "url": "https:\/\/oxidemod.org\/plugins\/gungame.1485",
     "games": [
         "rust"
     ],

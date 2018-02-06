@@ -3,9 +3,9 @@
     "description": "A fully customizable custom crafting UI, which allows admins to change item ingredients.",
     "author": "",
     "version": "1.2.3",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/craftui.2273",
+    "url": "https:\/\/oxidemod.org\/plugins\/craftui.2273",
     "games": [
         "rust"
     ],

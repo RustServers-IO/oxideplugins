@@ -1,16 +1,16 @@
 {
-    "name": "Event - Battlefield",
+    "name": "Event",
     "description": "Free for All, Open Arena, Vote Weapons, Vote Grounds",
     "author": "Reneb",
     "version": "1.0.4",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "EventManager": "*",
         "ZoneManager": "*",
         "Kits": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/event-battlefield.1311",
+    "url": "https:\/\/oxidemod.org\/plugins\/event-battlefield.1311",
     "games": [
         "rust"
     ],

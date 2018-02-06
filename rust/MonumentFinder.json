@@ -1,0 +1,16 @@
+{
+    "name": "MonumentFinder",
+    "description": "Allows easy teleportation to monuments",
+    "author": "PsychoTea",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/monumentfinder.2321",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

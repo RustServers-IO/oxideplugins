@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RadShrinkZone", "vaalberith", "1.0.5", ResourceId = 1828)]
+    [Info("RadShrinkZone", "vaalberith", "1.0.6", ResourceId = 1828)]
 
     class RadShrinkZone : RustPlugin
     {
@@ -395,9 +395,9 @@ namespace Oxide.Plugins
             if (arg.Args == null) return;
             string[] args = arg.Args;
 
-            if (arg.connection != null)
+            if (arg.Connection != null)
             {
-                BasePlayer player = arg.connection.player as BasePlayer;
+                BasePlayer player = arg.Connection.player as BasePlayer;
                 if (!IsAllowed(player, permissionrad))
                 {
                     PrintToChat(player, GetMessage("NoPerm", player.UserIDString));

@@ -5,14 +5,14 @@ using System.Linq;
 using Oxide.Core;
 using Oxide.Core.Configuration;
 
+/* --- Do not edit anything here if you don't know what are you doing --- */
+
 namespace Oxide.Plugins
 {
-	[Info("LastName", "deer_SWAG", "0.1.15", ResourceId = 1227)]
+	[Info("LastName", "deer_SWAG", "0.1.16", ResourceId = 1227)]
 	[Description("Stores all usernames")]
-	public class LastName : RustPlugin
+	class LastName : RustPlugin
 	{
-		const string databaseName = "LastName";
-
 		class StoredData
 		{
 			public HashSet<Player> Players = new HashSet<Player>();
@@ -38,30 +38,40 @@ namespace Oxide.Plugins
 
 		protected override void LoadDefaultConfig()
 		{
-			Config.Clear();
-
 			CheckConfig();
-
 			Puts("Default config was saved and loaded");
 		}
 
-		private void OnPluginLoaded()
+		void LoadDefaultMessages()
 		{
+			lang.RegisterMessages(new Dictionary<string, string>()
+			{
+				{ "NoAccess", "You don't have access to this command" },
+				{ "WrongQueryChat", "/names <name/steamID>" },
+				{ "WrongQueryConsole", "player.names <name/steamID>" },
+				{ "NoPlayerFound", "No players found with that name/steamID" },
+				{ "PlayerWasFound", "{name}({id}) was also known as: " }
+			}, this);
+		}
+
+		void Loaded()
+		{
+			LoadDefaultMessages();
 			CheckConfig();
 
-			data = Interface.GetMod().DataFileSystem.ReadObject<StoredData>(databaseName);
+			data = Interface.GetMod().DataFileSystem.ReadObject<StoredData>(Title);
 
 			if (data == null)
 			{
 				RaiseError("Unable to load data file");
-				ConsoleSystem.Run.Server.Normal("oxide.unload LastName");
+				rust.RunServerCommand("oxide.unload LastName");
 			}
 
 			if (IsPluginExists("NameChange"))
 				nameChangeData = Interface.GetMod().DataFileSystem.GetDatafile("NameChange");
 		}
 
-		private void OnPlayerConnected(Network.Message packet)
+		void OnPlayerConnected(Network.Message packet)
 		{
 			if ((bool)Config["ReplaceWithFirstName"] && data.Players.Count > 0)
 			{
@@ -97,7 +107,7 @@ namespace Oxide.Plugins
 			}
 		}
 
-		private void OnPlayerInit(BasePlayer player)
+		void OnPlayerInit(BasePlayer player)
 		{
 			if (data.Players.Count > 0)
 			{
@@ -145,29 +155,29 @@ namespace Oxide.Plugins
 		}
 
 		[ChatCommand("lastname")]
-		private void cmdChat(BasePlayer player, string command, string[] args)
+		void cmdChat(BasePlayer player, string command, string[] args)
 		{
 			if (player.net.connection.authLevel >= (int)Config["CommandAuthLevel"])
 				if (args.Length > 0)
 					PrintToChat(player, GetNames(args));
 				else
-					PrintToChat(player, (string)Config["Message", "WrongQuery"]);
+					PrintToChat(player, lang.GetMessage("WrongQueryChat", this));
 			else
-				PrintToChat(player, (string)Config["Message", "NoAccess"]);
+				PrintToChat(player, lang.GetMessage("NoAccess", this));
 		}
 
-		[ConsoleCommand("player.lastname")]
-		private void cmdConsole(ConsoleSystem.Arg arg)
+		[ConsoleCommand("player.names")]
+		void cmdConsole(ConsoleSystem.Arg arg)
 		{
 			if (arg.HasArgs())
 				Puts(GetNames(arg.Args));
 			else
-				Puts((string)Config["Message", "WrongQuery"]);
+				Puts(lang.GetMessage("WrongQueryConsole", this));
 		}
 
-		private string GetNames(string[] args)
+		string GetNames(string[] args)
 		{
-			string message = (string)Config["Message", "PlayerWasFound"];
+			string message = lang.GetMessage("PlayerWasFound", this);
 			string name = string.Empty;
 
 			try
@@ -192,7 +202,7 @@ namespace Oxide.Plugins
 			{
 				if (name.Length > 0)
 				{
-					message = message.Substring(0, message.Length - 2).Replace("%name%", name).Replace("%id%", args[0]);
+					message = message.Substring(0, message.Length - 2).Replace("{name}", name).Replace("{id}", args[0]);
 				}
 				else
 				{
@@ -230,11 +240,11 @@ namespace Oxide.Plugins
 						foreach (string s in found.Names)
 							message += s + ", ";
 
-						message = message.Substring(0, message.Length - 2).Replace("%name%", name).Replace("%id%", found.userID.ToString());
+						message = message.Substring(0, message.Length - 2).Replace("{name}", name).Replace("{id}", found.userID.ToString());
 					}
 					else
 					{
-						message = (string)Config["Message", "NoPlayerFound"];
+						message = lang.GetMessage("NoPlayerFound", this);
 					}
 				}
 			}
@@ -245,45 +255,41 @@ namespace Oxide.Plugins
 		void SendHelpText(BasePlayer player)
 		{
 			if (player.net.connection.authLevel >= (int)Config["CommandAuthLevel"])
-				PrintToChat(player, (string)Config["Message", "WrongQuery"]);
+				PrintToChat(player, lang.GetMessage("WrongQuery", this));
 		}
 
-		private void CheckConfig()
+		void CheckConfig()
 		{
 			ConfigItem("ReplaceWithFirstName", false);
 			ConfigItem("CommandAuthLevel", 0);
-			ConfigItem("Message", "NoAccess", "You are don't have access for this command");
-			ConfigItem("Message", "WrongQuery", "/lastname <name/steamID>");
-			ConfigItem("Message", "NoPlayerFound", "No players found with that name/steamID");
-			ConfigItem("Message", "PlayerWasFound", "%name%(%id%) was also known as: ");
 
 			SaveConfig();
 		}
 
-		private void SaveData()
+		void SaveData()
 		{
-			Interface.GetMod().DataFileSystem.WriteObject(databaseName, data);
+			Interface.GetMod().DataFileSystem.WriteObject(Title, data);
 		}
 
 		// ----------------------------- UTILS -----------------------------
 		// -----------------------------------------------------------------
 
-		private void ConfigItem(string name, object defaultValue)
+		void ConfigItem(string name, object defaultValue)
 		{
 			Config[name] = Config[name] ?? defaultValue;
 		}
 
-		private void ConfigItem(string name1, string name2, object defaultValue)
+		void ConfigItem(string name, string name2, object defaultValue)
 		{
-			Config[name1, name2] = Config[name1, name2] ?? defaultValue;
+			Config[name, name2] = Config[name, name2] ?? defaultValue;
 		}
 
 		private bool IsPluginExists(string name)
 		{
-			return Interface.GetMod().GetLibrary<Core.Libraries.Plugins>("Plugins").Exists(name);
+			return Interface.GetMod().GetLibrary<Core.Libraries.Plugins>().Exists(name);
 		}
 
-		private bool StringContains(string source, string value, StringComparison comparison)
+		bool StringContains(string source, string value, StringComparison comparison)
 		{
 			return source.IndexOf(value, comparison) >= 0;
 		}

@@ -3,9 +3,9 @@
     "description": "Enhanced grenade features",
     "author": "redBDGR",
     "version": "1.0.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/bettergrenades.2712",
+    "url": "https:\/\/oxidemod.org\/plugins\/bettergrenades.2712",
     "games": [
         "rust"
     ],

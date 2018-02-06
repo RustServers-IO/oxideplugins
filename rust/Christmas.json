@@ -3,9 +3,9 @@
     "description": "Christmas regardless of the month!",
     "author": "Kappasaurus",
     "version": "1.0.9",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/christmas.2404",
+    "url": "https:\/\/oxidemod.org\/plugins\/christmas.2404",
     "games": [
         "rust"
     ],

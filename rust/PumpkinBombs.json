@@ -3,9 +3,9 @@
     "description": "Turn pumpkins into explosive Jack'O'Lanterns",
     "author": "k1lly0u",
     "version": "0.1.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/pumpkin-bombs.2070",
+    "url": "https:\/\/oxidemod.org\/plugins\/pumpkin-bombs.2070",
     "games": [
         "rust"
     ],

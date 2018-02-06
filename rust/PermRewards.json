@@ -3,9 +3,9 @@
     "description": "Gives players a kit-like reward if they're in an oxide group",
     "author": "Ryan",
     "version": "1.0.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/permrewards.2491",
+    "url": "https:\/\/oxidemod.org\/plugins\/permrewards.2491",
     "games": [
         "rust"
     ],

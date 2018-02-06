@@ -1,0 +1,16 @@
+{
+    "name": "Connection Limiter",
+    "description": "Help server admins block spam re-connecting.",
+    "author": "Exel80",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/connection-limiter.2649",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

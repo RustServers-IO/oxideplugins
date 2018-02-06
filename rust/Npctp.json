@@ -3,7 +3,7 @@
     "description": "Create an NPC that will TP a player to anywhere, run commands, or open a door",
     "author": "",
     "version": "2.4.2",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Economics": "*",
         "ServerRewards": "*"
@@ -13,7 +13,7 @@
         "Spawns": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/npctp.2229",
+    "url": "https:\/\/oxidemod.org\/plugins\/npctp.2229",
     "games": [
         "rust"
     ],

@@ -3,9 +3,9 @@
     "description": "Allows you to set the max stack size of every item.",
     "author": "Canopy Sheep",
     "version": "1.9.8",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/stack-size-controller.2320",
+    "url": "https:\/\/oxidemod.org\/plugins\/stack-size-controller.2320",
     "games": [
         "rust"
     ],

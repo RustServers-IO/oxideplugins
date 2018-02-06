@@ -1,14 +1,15 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using Oxide.Core.Libraries.Covalence;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json;
-using Oxide.Core.Libraries.Covalence;
+#if RUST
 using UnityEngine;
-using Random = System.Random;
+#endif
 
 namespace Oxide.Plugins
 {
-    [Info("Respawner", "Wulf/lukespragg", "1.0.2", ResourceId = 669)]
+    [Info("Respawner", "Wulf/lukespragg", "1.0.3", ResourceId = 669)]
     [Description("Automatically respawns players with permission and optionally wakes them up")]
     public class Respawner : CovalencePlugin
     {
@@ -27,11 +28,13 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Respawn at same location (true/false)")]
             public bool SameLocation;
 
-            [JsonProperty(PropertyName = "Show chat respawned messages (true/false)")]
-            public bool ShowMessages;
+            //[JsonProperty(PropertyName = "Show chat respawned messages (true/false)")]
+            //public bool ShowMessages;
 
+#if RUST
             [JsonProperty(PropertyName = "Use sleeping bags if available (true/false)")]
-            public bool SleepingBags; // TODO: #if RUST check
+            public bool SleepingBags;
+#endif
 
             public static Configuration DefaultConfig()
             {
@@ -40,8 +43,10 @@ namespace Oxide.Plugins
                     AutoWakeUp = true,
                     //CustomLocation = false,
                     SameLocation = true,
-                    ShowMessages = true,
-                    SleepingBags = true, // TODO: #if RUST check
+                    //ShowMessages = true,
+#if RUST
+                    SleepingBags = true
+#endif
                 };
             }
         }
@@ -85,6 +90,8 @@ namespace Oxide.Plugins
 
         #region Initialization
 
+        private System.Random random = new System.Random();
+
         private const string permUse = "respawner.use";
 
         private void Init() => permission.RegisterPermission(permUse, this);
@@ -93,6 +100,7 @@ namespace Oxide.Plugins
 
         #region Respawn Handling
 
+#if RUST
         private BasePlayer.SpawnPoint FindSpawnPoint(BasePlayer basePlayer)
         {
             var player = basePlayer.IPlayer;
@@ -104,18 +112,19 @@ namespace Oxide.Plugins
 
             if (config.SleepingBags && bags.Length >= 1)
             {
-                var random = new Random();
                 var bag = bags[random.Next(0, bags.Length - 1)];
                 # if DEBUG
                 LogWarning($"Original location for {player.Name}: {player.Position()}");
                 LogWarning($"Target location for {player.Name}: {bag.transform.position}");
                 #endif
-                spawnPoint.pos = bag.transform.position;
+                var pos = bag.transform.position;
+                spawnPoint.pos = new Vector3(pos.x, pos.y + 0.3f, pos.z);
                 spawnPoint.rot = bag.transform.rotation;
             }
             else if (config.SameLocation)
             {
-                spawnPoint.pos = basePlayer.transform.position;
+                var pos = basePlayer.transform.position;
+                spawnPoint.pos = new Vector3(pos.x, pos.y + 0.3f, pos.z);
                 spawnPoint.rot = basePlayer.transform.rotation;
             }
             /*else if (config.CustomLocation)
@@ -131,15 +140,21 @@ namespace Oxide.Plugins
             var basePlayer = entity.ToPlayer();
             if (basePlayer == null || !permission.UserHasPermission(basePlayer.UserIDString, permUse)) return;
 
-            NextTick(() => { if (basePlayer.IsDead() && basePlayer.IsConnected) basePlayer.Respawn(); }); // TODO: #if RUST check
+            NextTick(() => { if (basePlayer.IsDead() && basePlayer.IsConnected) basePlayer.Respawn(); });
         }
 
-        private BasePlayer.SpawnPoint OnPlayerRespawn(BasePlayer basePlayer) => FindSpawnPoint(basePlayer); // TODO: Switch to IPlayer.Teleport
+        private BasePlayer.SpawnPoint OnPlayerRespawn(BasePlayer basePlayer) => FindSpawnPoint(basePlayer);
 
         private void OnPlayerRespawned(BasePlayer basePlayer)
         {
-            if (permission.UserHasPermission(basePlayer.UserIDString, permUse) && basePlayer.IsSleeping()) basePlayer.EndSleeping(); // TODO: #if RUST check
+            if (permission.UserHasPermission(basePlayer.UserIDString, permUse) && basePlayer.IsSleeping()) basePlayer.EndSleeping();
         }
+#else
+        private void OnUserRespawned(IPlayer player)
+        {
+            //player.Teleport(); // TODO: Support for other games
+        }
+#endif
 
         #endregion Respawn Handling
 
@@ -147,11 +162,13 @@ namespace Oxide.Plugins
 
         //private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        private SleepingBag[] FindSleepingBags(BasePlayer basePlayer) // TODO: #if RUST check
+#if RUST
+        private SleepingBag[] FindSleepingBags(BasePlayer basePlayer)
         {
             var bags = SleepingBag.FindForPlayer(basePlayer.userID, true);
             return bags.Where((SleepingBag b) => b.deployerUserID == basePlayer.userID).ToArray();
         }
+#endif
 
         #endregion Helpers
     }

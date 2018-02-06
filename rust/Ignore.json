@@ -3,9 +3,9 @@
     "description": "An API to manage an ignore list",
     "author": "Nogrod",
     "version": "2.0.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/ignore-api.1054",
+    "url": "https:\/\/oxidemod.org\/plugins\/ignore-api.1054",
     "games": [
         "rust"
     ],

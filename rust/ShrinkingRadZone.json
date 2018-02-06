@@ -3,9 +3,9 @@
     "description": "A true shrinking radiation zone",
     "author": "k1lly0u",
     "version": "0.1.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/shrinking-radiation-zones.2214",
+    "url": "https:\/\/oxidemod.org\/plugins\/shrinking-radiation-zones.2214",
     "games": [
         "rust"
     ],

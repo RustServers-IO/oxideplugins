@@ -3,9 +3,9 @@
     "description": "Give an extra way of punishing players",
     "author": "redBDGR",
     "version": "1.0.5",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/playerblinder.2314",
+    "url": "https:\/\/oxidemod.org\/plugins\/playerblinder.2314",
     "games": [
         "rust"
     ],

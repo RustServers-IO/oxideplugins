@@ -1,0 +1,16 @@
+{
+    "name": "Advert Messages",
+    "description": "Timed chat messages to work as informational messages",
+    "author": "LaserHydra",
+    "version": "3.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/advert-messages.1510",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

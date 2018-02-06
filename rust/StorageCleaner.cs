@@ -3,7 +3,7 @@ using Oxide.Core.Configuration;
 
 namespace Oxide.Plugins
 {
-    [Info("StorageCleaner", "k1lly0u", "0.1.0", ResourceId = 0)]
+    [Info("StorageCleaner", "k1lly0u", "0.1.1", ResourceId = 2257)]
     class StorageCleaner : RustPlugin
     {        
         StoredData storedData;
@@ -24,6 +24,7 @@ namespace Oxide.Plugins
             var Id = CommunityEntity.ServerInstance.net.ID;
             var last = storedData.InstanceId_1;
             var last2 = storedData.InstanceId_2;
+            if (Id == last) return;
             if (last2 != 0U)
             {
                 PrintWarning($"Removing left over imagery from folder {last2}");

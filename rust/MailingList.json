@@ -3,12 +3,12 @@
     "description": "Reward players for subscribing to your mailing list",
     "author": "Norn",
     "version": "0.2",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "PopupNotifications": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/mailing-list.1388",
+    "url": "https:\/\/oxidemod.org\/plugins\/mailing-list.1388",
     "games": [
         "rust"
     ],

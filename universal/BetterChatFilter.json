@@ -1,0 +1,19 @@
+{
+    "name": "BetterChatFilter",
+    "description": "Chat Filter based on keywords for BetterChat",
+    "author": "Kinesis",
+    "version": "1.2",
+    "configuration": false,
+    "require": {
+        "BetterChat": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/betterchatfilter.2403",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

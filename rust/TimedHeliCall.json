@@ -3,9 +3,9 @@
     "description": "Call a heli every x seconds to a certain location.",
     "author": "Troubled",
     "version": "0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/timedhelicall.1892",
+    "url": "https:\/\/oxidemod.org\/plugins\/timedhelicall.1892",
     "games": [
         "rust"
     ],

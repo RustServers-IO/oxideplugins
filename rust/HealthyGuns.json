@@ -1,11 +1,11 @@
 {
-    "name": "Healthy Guns",
+    "name": "HealthyGuns",
     "description": "Makes weapons in barrels\/crates spawn in good condition",
     "author": "Wulf",
     "version": "2.0.0",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/healthy-guns.2262",
+    "url": "https:\/\/oxidemod.org\/plugins\/healthyguns.2262",
     "games": [
         "rust"
     ],

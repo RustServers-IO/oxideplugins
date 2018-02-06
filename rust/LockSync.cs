@@ -9,7 +9,7 @@ using Oxide.Core.Configuration;
 
 namespace Oxide.Plugins
 {
-    [Info("LockSync", "Jake_Rich", "1.0.2", ResourceId = 2738)]
+    [Info("LockSync", "Jake_Rich", "1.0.3", ResourceId = 2738)]
     [Description("TC code lets you open all doors in privledge that share the same code.")]
 
     public partial class LockSync : RustPlugin
@@ -45,7 +45,12 @@ namespace Oxide.Plugins
             var building = (codeLock.GetParentEntity() as DecayEntity)?.GetBuilding();
             if (building == null)
             {
-                Puts($"Couldn't find building for {codeLock.GetParentEntity()?.PrefabName}!");
+                //TODO: Doesn't work for high walls. They don't store what building they are attached to
+                //Puts($"Couldn't find building for {codeLock.GetParentEntity()?.PrefabName}!");
+                return null;
+            }
+            if (building.buildingPrivileges == null)
+            {
                 return null;
             }
             if (building.buildingPrivileges.Count == 0)

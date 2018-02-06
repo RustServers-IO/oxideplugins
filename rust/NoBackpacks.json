@@ -3,9 +3,9 @@
     "description": "Removes Backpacks",
     "author": "hoppel",
     "version": "1.0.3",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/nobackpacks.2546",
+    "url": "https:\/\/oxidemod.org\/plugins\/nobackpacks.2546",
     "games": [
         "rust"
     ],

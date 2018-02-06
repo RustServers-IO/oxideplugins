@@ -3,9 +3,9 @@
     "description": "Kick players when event is started or set with toggle",
     "author": "",
     "version": "1.0.0",
-    "configuration": true,
+    "configuration": false,
     "language": "lua",
-    "url": "http:\/\/oxidemod.org\/plugins\/event-kick.1320",
+    "url": "https:\/\/oxidemod.org\/plugins\/event-kick.1320",
     "games": [
         "rust"
     ],

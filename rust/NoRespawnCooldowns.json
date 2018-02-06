@@ -1,0 +1,16 @@
+{
+    "name": "NoRespawnCooldowns",
+    "description": "With Permissions you will never have Respawn Cooldowns",
+    "author": "Absolut",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/norespawncooldowns.2349",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

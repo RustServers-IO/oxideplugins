@@ -3,9 +3,9 @@
     "description": "Configurable despawn times for dropped items, and base backpack despawn times on your configuration.",
     "author": "Jake Rich",
     "version": "1.2.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/despawnconfig.2467",
+    "url": "https:\/\/oxidemod.org\/plugins\/despawnconfig.2467",
     "games": [
         "rust"
     ],

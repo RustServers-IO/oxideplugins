@@ -3,9 +3,9 @@
     "description": "Removes bow raiding",
     "author": "Bamabo",
     "version": "1.0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/nobowraid.2021",
+    "url": "https:\/\/oxidemod.org\/plugins\/nobowraid.2021",
     "games": [
         "rust"
     ],

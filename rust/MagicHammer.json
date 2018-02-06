@@ -3,12 +3,12 @@
     "description": "Hit stuff with the hammer and do things",
     "author": "Werkrat",
     "version": "0.5.2",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "PopupNotifications": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/magic-hammer.1375",
+    "url": "https:\/\/oxidemod.org\/plugins\/magic-hammer.1375",
     "games": [
         "rust"
     ],

@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("HandyMan", "nivex", "1.1.1", ResourceId = 1737)]
+    [Info("HandyMan", "nivex", "1.2.0", ResourceId = 1737)]
     [Description("Provides AOE repair functionality to the player. Repair is only possible where you can build.")]
     public class HandyMan : RustPlugin
     {
@@ -62,7 +62,10 @@ namespace Oxide.Plugins
                 {"FixDone", "Guess I fixed them all..."},
                 {"MissingFix", "I'm telling you... it disappeared... I can't find anything to fix."},
                 {"NoPermission", "You don't have permission to use this command." },
-                {"Help", helpText}
+                {"Help", helpText},
+                {"Missing Resources Single", "Missing resources: {0} ({1}). I'll need the full amount to repair this." },
+                {"Missing Resources Multiple", "Missing resources: {0} ({1})" },
+                {"Missing Resources Partial", "I can do some repairs with a partial amount of these resources." }
             }, this);
         }
 
@@ -112,7 +115,7 @@ namespace Oxide.Plugins
                 player.ChatMessage(GetMsg("Help", player.userID).Replace("{ver}", Version.ToString()));
         }
         #endregion
-        
+
         #region Repair Methods
 
         /// <summary>
@@ -143,7 +146,7 @@ namespace Oxide.Plugins
                 SendChatMessage(player, Title, GetMsg("NotAllowed", player.userID));
         }
 
-        bool CanRepair(BaseCombatEntity entity, BasePlayer player)
+        object CanRepair(BaseCombatEntity entity, BasePlayer player)
         {
             float num = entity.MaxHealth() - entity.health;
             float num2 = num / entity.MaxHealth();
@@ -151,13 +154,15 @@ namespace Oxide.Plugins
 
             if (list != null && list.Count > 0)
             {
-                foreach(var ia in list)
+                foreach (var ia in list)
                 {
                     var items = player.inventory.FindItemIDs(ia.itemid);
                     int sum = items.Sum(item => item.amount);
 
                     if (sum * repairMulti < ia.amount * repairMulti)
-                        return false;
+                    {
+                        return new KeyValuePair<string, float>(ia.itemDef.displayName.english, ia.amount);
+                    }
                 }
             }
 
@@ -174,7 +179,7 @@ namespace Oxide.Plugins
             //This needs to be set to false in order to prevent the subsequent repairs from triggering the AOE repair.
             //If you don't do this - you create an infinite repair loop.
             _allowAOERepair = false;
-            
+
             //gets the position of the block we just hit
             var position = new OBB(entity.transform, entity.bounds).ToBounds().center;
             //sets up the collectionf or the blocks that will be affected
@@ -183,38 +188,82 @@ namespace Oxide.Plugins
             //gets a list of entities within a specified range of the current target
             Vis.Entities(position, RepairRange, entities, repairDeployables ? allMask : constructionMask);
             int repaired = 0;
-            
+
             //check if we have blocks - we should always have at least 1
             if (entities.Count > 0)
             {
                 bool hasRepaired = false;
+                var resources = new Dictionary<string, float>();
 
                 //cycle through our block list - figure out which ones need repairing
                 foreach (var ent in entities)
-                {   
+                {
                     //check to see if the block has been damaged before repairing.
                     if (ent.health < ent.MaxHealth())
                     {
                         //yes - repair
-                        if (!CanRepair(ent, player))
+                        var ret = CanRepair(ent, player);
+
+                        if (ret is KeyValuePair<string, float>)
+                        {
+                            var kvp = (KeyValuePair<string, float>)ret;
+
+                            if (!resources.ContainsKey(kvp.Key))
+                            {
+                                resources.Add(kvp.Key, kvp.Value);
+                            }
+                            else
+                            {
+                                resources[kvp.Key] += kvp.Value;
+                            }
+
                             continue;
+                        }
+                        else if (ret is bool && (bool)ret)
+                        {
+                            if (DoRepair(ent, player))
+                            {
+                                hasRepaired = true;
 
-                        DoRepair(ent, player);
-                        hasRepaired = true;
-
-                        if (++repaired > maxRepairEnts)
-                            break;
+                                if (++repaired > maxRepairEnts)
+                                    break;
+                            }
+                        }
                     }
                 }
 
                 Pool.FreeList(ref entities);
+
+                if (resources.Count > 0)
+                {
+                    if (resources.Count > 1 || (resources.Count == 1 && resources.First().Key == "High Quality Metal" && resources.First().Value > 3))
+                    {
+                        foreach (var kvp in resources)
+                        {
+                            SendChatMessage(player, Title, string.Format(GetMsg("Missing Resources Multiple", player.userID), kvp.Key, kvp.Value));
+                        }
+
+                        SendChatMessage(player, Title, string.Format(GetMsg("Missing Resources Partial", player.userID)));
+                    }
+                    else
+                    {
+                        SendChatMessage(player, Title, string.Format(GetMsg("Missing Resources Single", player.userID), resources.First().Key, resources.First().Value));
+                    }
+
+                    if (repaired == 0)
+                    {
+                        _allowAOERepair = true;
+                        return;
+                    }
+                }                
+
                 SendChatMessage(player, Title, hasRepaired ? string.Format(GetMsg("IFixedEx", player.userID), repaired) : GetMsg("FixDone", player.userID));
             }
             else
             {
                 SendChatMessage(player, Title, GetMsg("MissingFix", player.userID));
             }
-            
+
             _allowAOERepair = true;
         }
 
@@ -243,11 +292,11 @@ namespace Oxide.Plugins
         }
 
         // BaseCombatEntity
-        public virtual void DoRepair(BaseCombatEntity entity, BasePlayer player)
+        public bool DoRepair(BaseCombatEntity entity, BasePlayer player)
         {
             if (!entity.repair.enabled)
             {
-                return;
+                return false;
             }
             if (Interface.CallHook("OnStructureRepair", new object[]
             {
@@ -255,26 +304,26 @@ namespace Oxide.Plugins
                 player
             }) != null)
             {
-                return;
+                return false;
             }
-            if (entity.SecondsSinceAttacked <= 8f)
+            if (entity.SecondsSinceAttacked <= 30f)
             {
                 entity.OnRepairFailed();
-                return;
+                return false;
             }
-            float num = entity.MaxHealth() - entity.health;
+            float num = entity.MaxHealth() - entity.Health();
             float num2 = num / entity.MaxHealth();
             if (num <= 0f || num2 <= 0f)
             {
                 entity.OnRepairFailed();
-                return;
+                return false;
             }
             var list = entity.RepairCost(num2);
             if (list == null)
             {
-                return;
+                return false;
             }
-            foreach(var ia in list.ToList())
+            foreach (var ia in list)
             {
                 ia.amount *= repairMulti;
             }
@@ -286,30 +335,24 @@ namespace Oxide.Plugins
                 if (num4 <= 0f)
                 {
                     entity.OnRepairFailed();
-                    return;
+                    return false;
                 }
                 int num5 = 0;
                 foreach (var current in list)
                 {
                     int amount = Mathf.CeilToInt(num4 * current.amount);
                     int num6 = player.inventory.Take(null, current.itemid, amount);
-                    if (num6 > 0)
+                    
+                    if (num6 == 0)
                     {
-                        num5 += num6;
-                        /*player.Command("note.inv", new object[]
-                        {
-                            current.itemid,
-                            num6 * -1
-                        });*/
+                        entity.OnRepairFailed();
+                        return false;
                     }
+
+                    num5 += num6;
                 }
                 float num7 = (float)num5 / num3;
                 entity.health += num * num7;
-                entity.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
-            }
-            else
-            {
-                entity.health += num;
                 entity.SendNetworkUpdate(BasePlayer.NetworkQueue.Update);
             }
             if (entity.health >= entity.MaxHealth())
@@ -320,6 +363,8 @@ namespace Oxide.Plugins
             {
                 entity.OnRepair();
             }
+
+            return true;
         }
 
         #endregion

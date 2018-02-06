@@ -5,8 +5,8 @@ using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Easy Airdrop", "LaserHydra", "3.2.3", ResourceId = 860)]
-    [Description("Easy Airdrop")]
+    [Info("Easy Airdrop", "LaserHydra", "3.2.5", ResourceId = 860)]
+    [Description("Call airdrops using simple commands")]
     class EasyAirdrop : RustPlugin
     {
         ////////////////////////////////////////
@@ -28,7 +28,7 @@ namespace Oxide.Plugins
         ///     Config Handling
         ////////////////////////////////////////
 
-        void LoadConfig()
+        new void LoadConfig()
         {
             SetConfig("Settings", "Broadcast to Chat", true);
             SetConfig("Settings", "Send to Console", true);
@@ -128,7 +128,7 @@ namespace Oxide.Plugins
                             x = Convert.ToSingle(args[1]);
                             z = Convert.ToSingle(args[2]);
                         }
-                        catch (FormatException ex)
+                        catch (FormatException)
                         {
                             SendChatMessage(player, "Arguments must be numbers!");
                             return;
@@ -179,7 +179,7 @@ namespace Oxide.Plugins
             {
                 amount = Convert.ToInt32(args[0]);
             }
-            catch(FormatException ex)
+            catch(FormatException)
             {
                 SendChatMessage(player, "Argument must be a number!");
                 return;
@@ -263,9 +263,9 @@ namespace Oxide.Plugins
         {
             float max = ConVar.Server.worldsize / 2;
 
-            float x = UnityEngine.Random.Range(max * (-1), max);
+            float x = UnityEngine.Random.Range(-max, max);
             float y = UnityEngine.Random.Range(200, 300);
-            float z = UnityEngine.Random.Range(max * (-1), max);
+            float z = UnityEngine.Random.Range(-max, max);
 
             return new Vector3(x, y, z);
         }
@@ -278,7 +278,7 @@ namespace Oxide.Plugins
         {
             if (arg == null) return;
 
-            BasePlayer player = arg?.connection?.player == null ? arg?.connection?.player as BasePlayer : null;
+            BasePlayer player = arg?.Connection?.player == null ? null : arg?.Connection?.player as BasePlayer;
             string cmd = arg.cmd?.Name ?? "unknown";
             string[] args = arg.HasArgs() ? arg.Args : new string[0];
 

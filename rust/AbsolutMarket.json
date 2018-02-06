@@ -2,13 +2,13 @@
     "name": "AbsolutMarket",
     "description": "Global Trade Menu. Any player can buy and sell items. Simply list it!",
     "author": "Absolut",
-    "version": "1.8.3",
-    "configuration": true,
+    "version": "1.8.4",
+    "configuration": false,
     "require": {
         "ImageLibrary": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/absolutmarket.2118",
+    "url": "https:\/\/oxidemod.org\/plugins\/absolutmarket.2118",
     "games": [
         "rust"
     ],

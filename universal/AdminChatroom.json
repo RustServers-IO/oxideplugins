@@ -1,0 +1,16 @@
+{
+    "name": "Admin Chatroom",
+    "description": "Allow admins to chat between themselves",
+    "author": "Austinv900",
+    "version": "1.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/admin-chatroom.2185",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

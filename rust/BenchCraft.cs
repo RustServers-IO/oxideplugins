@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("BenchCraft", "ignignokt84", "0.0.14", ResourceId = 2338)]
+	[Info("BenchCraft", "ignignokt84", "0.0.15", ResourceId = 2338)]
 	[Description("Involve repair benches in crafting")]
 	class BenchCraft : RustPlugin
 	{
@@ -254,6 +254,7 @@ namespace Oxide.Plugins
 		object OnItemCraft(ItemCraftTask task, BasePlayer player, Item item)
 		{
 			if (hasPermission(player, PermIgnore) || instacraft) return null;
+			if (task.blueprint.targetItem.shortname == "door.key") return null; // exclude door keys
 			float boost = ConfigValue<float>(Option.boost);
 			float penalty = ConfigValue<float>(Option.penalty);
 			float baseRate = ConfigValue<float>(Option.baseRate);

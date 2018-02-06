@@ -1,11 +1,11 @@
 {
     "name": "Tear It Up!",
     "description": "This allows a player to tear up a blueprint and get fragments back.",
-    "author": "DaBludger",
+    "author": "",
     "version": "1.91",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/tear-it-up.1300",
+    "url": "https:\/\/oxidemod.org\/plugins\/tear-it-up.1300",
     "games": [
         "rust"
     ],

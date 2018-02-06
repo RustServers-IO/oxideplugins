@@ -3,9 +3,9 @@
     "description": "Simple plugin that deletes all of a player's entities after a certain amount of deaths.",
     "author": "Kappasaurus",
     "version": "1.0.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/permadeath.2505",
+    "url": "https:\/\/oxidemod.org\/plugins\/permadeath.2505",
     "games": [
         "rust"
     ],

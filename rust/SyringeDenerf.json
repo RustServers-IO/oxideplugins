@@ -3,9 +3,9 @@
     "description": "De-nerf Syringes",
     "author": "ignignokt84",
     "version": "0.1.4",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/syringedenerf.1809",
+    "url": "https:\/\/oxidemod.org\/plugins\/syringedenerf.1809",
     "games": [
         "rust"
     ],

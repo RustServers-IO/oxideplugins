@@ -4,7 +4,8 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-	[Info("MagicMeat", "ignignokt84", "0.1.2", ResourceId = 2011)]
+	[Info("MagicMeat", "ignignokt84", "0.1.3", ResourceId = 2011)]
+	[Description("Item replacement plugin - originally for converting uncooked meat to cooked meat")]
 	class MagicMeat : RustPlugin
 	{
 		void LoadDefaultMessages()
@@ -40,7 +41,7 @@ namespace Oxide.Plugins
 		private enum Option { pickup, store };
 		// default values array
 		private object[] def = { true, false };
-		
+		// dictionary of items to replace
 		private Dictionary<int,int> recipes = new Dictionary<int,int>() {
 			{1325935999, -2043730634},	// bear meat
 			{-253819519, 991728250},	// pork
@@ -72,7 +73,6 @@ namespace Oxide.Plugins
         string GetMessage(string key, string userId = null) => lang.GetMessage(key, this, userId);
 		
 		// delegation method for console commands
-		//[ConsoleCommand("tpve")]
 		void ccmdDelegator(ConsoleSystem.Arg arg)
 		{
 			// user doesn't have access to run console command
@@ -220,7 +220,7 @@ namespace Oxide.Plugins
 			int position = item.position;
 			
 			// handle pickup (player inventory)
-			if(getBool(Option.pickup) && container.playerOwner != null)
+			if(getBool(Option.pickup))
 			{
 				// item added to player inventory
 				item.RemoveFromContainer();
@@ -230,7 +230,7 @@ namespace Oxide.Plugins
 			}
 			
 			// handle storage (other inventory)
-			if(getBool(Option.store) && container.entityOwner != null)
+			if(getBool(Option.store))
 			{
 				// item added to storage box
 				item.RemoveFromContainer();
@@ -289,9 +289,9 @@ namespace Oxide.Plugins
 		// check user access
 		bool hasAccess(ConsoleSystem.Arg arg)
 		{
-			if (arg.connection != null)
+			if (arg.Connection != null)
 			{
-				if (arg.connection.authLevel < 1)
+				if (arg.Connection.authLevel < 1)
 				{
 					SendReply(arg, GetMessage("NoPermission"));
 					return false;

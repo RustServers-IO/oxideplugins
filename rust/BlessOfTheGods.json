@@ -1,14 +1,14 @@
 {
     "name": "Blessing of The Gods",
     "description": "Players will be randomly blessed by a God",
-    "author": "Dora",
+    "author": "",
     "version": "1.0.4",
     "configuration": false,
     "suggest": {
-        "Updater": "*"
+        "UpdateChecker": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/blessing-of-the-gods.2022",
+    "url": "https:\/\/oxidemod.org\/plugins\/blessing-of-the-gods.2022",
     "games": [
         "rust"
     ],

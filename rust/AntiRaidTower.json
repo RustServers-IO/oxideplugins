@@ -3,9 +3,9 @@
     "description": "High jump instant death\/No wounded teleport",
     "author": "Calytic",
     "version": "0.2.3",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/antiraidtower.1211",
+    "url": "https:\/\/oxidemod.org\/plugins\/antiraidtower.1211",
     "games": [
         "rust"
     ],

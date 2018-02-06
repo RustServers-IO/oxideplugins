@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("PreventLooting", "CaseMan", "1.4.8", ResourceId = 2469)]
+    [Info("PreventLooting", "CaseMan", "1.5.1", ResourceId = 2469)]
     [Description("Prevent looting by other players")]
 
     class PreventLooting : RustPlugin
@@ -22,10 +22,11 @@ namespace Oxide.Plugins
 		bool UsePermission;
 		bool UseFriendsAPI;
 		bool AdminCanLoot;
-		bool CanLootPlayer;
+		bool CanLootPl;
 		bool CanLootCorpse;
-		bool CanLootEntity;
+		bool CanLootEnt;
 		bool CanLootBackpack;
+		bool CanLootBackpackPlugin;
 		bool UseZoneManager;
 		bool UseExcludeEntities;
 		bool UseCupboard;
@@ -38,13 +39,7 @@ namespace Oxide.Plugins
 		string BackpackPerm = "preventlooting.backpack";
 		string StoragePerm = "preventlooting.storage";
 		string AdmPerm = "preventlooting.admin";
-		List<string> neededShortNames = new List<string> {
-			"fuelstorage",
-			"hopperoutput",
-			"crudeoutput"
-		};
-		private readonly Collider[] colBuffer = (Collider[])typeof(Vis).GetField("colBuffer", (BindingFlags.Static | BindingFlags.NonPublic)).GetValue(null);
-		
+	
 		class StoredData
         {
             public Dictionary<ulong, EntityData> Data = new Dictionary<ulong, EntityData>();
@@ -84,10 +79,11 @@ namespace Oxide.Plugins
 			Config["UsePermission"] = UsePermission = GetConfig("UsePermission", false);
 			Config["UseFriendsAPI"] = UseFriendsAPI = GetConfig("UseFriendsAPI", true);
 			Config["AdminCanLoot"] = AdminCanLoot = GetConfig("AdminCanLoot", true);
-			Config["CanLootPlayer"] = CanLootPlayer = GetConfig("CanLootPlayer", false);
+			Config["CanLootPlayer"] = CanLootPl = GetConfig("CanLootPlayer", false);
 			Config["CanLootCorpse"] = CanLootCorpse = GetConfig("CanLootCorpse", false);
-			Config["CanLootEntity"] = CanLootEntity = GetConfig("CanLootEntity", false);
+			Config["CanLootEntity"] = CanLootEnt = GetConfig("CanLootEntity", false);
 			Config["CanLootBackpack"] = CanLootBackpack = GetConfig("CanLootBackpack", false);
+			Config["CanLootBackpackPlugin"] = CanLootBackpackPlugin = GetConfig("CanLootBackpackPlugin", false);
 			Config["UseZoneManager"] = UseZoneManager = GetConfig("UseZoneManager", false);			
 			Config["ZoneID"] = ZoneID = GetConfig("ZoneID", new List<object>{"12345678"});
 			Config["UseExcludeEntities"] = UseExcludeEntities = GetConfig("UseExcludeEntities", true);
@@ -155,87 +151,94 @@ namespace Oxide.Plugins
         }
         #endregion
 		#region Hooks
-	
-		void OnLootEntity(BasePlayer player, BaseEntity entity)
+		private object CanLootEntity(BasePlayer player, LootableCorpse corpse)
 		{
-			if(entity == null || player == null) return;
-			if(player.IsAdmin && AdminCanLoot) return;
-			if(permission.UserHasPermission(player.userID.ToString(), AdmPerm)) return;
+			if(CanLootCorpse) return null;
+			if(CheckHelper(player, corpse as BaseEntity)) return null;
+			if(IsFriend(corpse.playerSteamID, player.userID)) return null;
+			if(UsePermission && !permission.UserHasPermission(corpse.playerSteamID.ToString(), CorpsePerm)) return null;
+			if(corpse.playerSteamID < 76561197960265728L || player.userID == corpse.playerSteamID) return null;
+			SendReply(player, lang.GetMessage("OnTryLootCorpse", this, player.UserIDString));	
+			return true;
+		}		
+		private object CanLootEntity(BasePlayer player, DroppedItemContainer container)
+		{
+			if(CanLootBackpack && CanLootBackpackPlugin) return null;
+			if(CheckHelper(player, container as BaseEntity)) return null;
+			if(((container as BaseEntity).name.Contains("item_drop_backpack") && !CanLootBackpack) || ((container as BaseEntity).name.Contains("droppedbackpack") && !CanLootBackpackPlugin))
+			{
+				if(IsFriend(container.playerSteamID, player.userID)) return null;
+				if(UsePermission && !permission.UserHasPermission(container.playerSteamID.ToString(), BackpackPerm)) return null;
+				if(container.playerSteamID < 76561197960265728L || player.userID == container.playerSteamID) return null;
+				SendReply(player, lang.GetMessage("OnTryLootBackpack", this, player.UserIDString));	
+				return true;
+			}
+			return null;
+		}	
+		private bool CanLootPlayer(BasePlayer target, BasePlayer player)
+		{
+			if(CanLootPl) return true;
+			if(CheckHelper(player, target as BaseEntity)) return true;
+			if(IsFriend(target.userID, player.userID)) return true;
+			if(UsePermission && !permission.UserHasPermission(target.userID.ToString(), PlayerPerm)) return true;
+			if(player.userID == target.userID) return true;
+			SendReply(player, lang.GetMessage("OnTryLootPlayer", this, player.UserIDString));
+			return false;
+		}	
+		private bool CheckHelper(BasePlayer player, BaseEntity entity)
+		{
+			if(entity == null || player == null) return true;
+			if(player.IsAdmin && AdminCanLoot) return true;
+			if(permission.UserHasPermission(player.userID.ToString(), AdmPerm)) return true;
 			if(UseZoneManager && ZoneManager != null)
 			{
 				foreach(var zoneID in ZoneID)
 				{
-					if((bool)ZoneManager.Call("isPlayerInZone", zoneID, player)) return;				
+					if((bool)ZoneManager.Call("isPlayerInZone", zoneID, player)) return true;				
 				}
 			}
-			if(entity is SupplyDrop) return;
-			if(entity is LootableCorpse)
-			{		
-				if(IsFriend((entity as LootableCorpse).playerSteamID, player.userID)) return;
-				if(UsePermission && !permission.UserHasPermission((entity as LootableCorpse).playerSteamID.ToString(), CorpsePerm)) return;
-				if((entity as LootableCorpse).playerSteamID < 76561197960265728L || CanLootCorpse || player.userID == (entity as LootableCorpse).playerSteamID) return;
-				StopLooting(player, "OnTryLootCorpse");
-				return;
-			}
-			if(entity is BasePlayer)
+			if(entity is SupplyDrop) return true;
+			return false;
+		}		
+		private object CanLootEntity(BasePlayer player, StorageContainer container)
+		{
+			if(CanLootEnt) return null;
+			BaseEntity entity = container as BaseEntity;
+			if(CheckHelper(player, entity)) return null;
+			if(storedData.Data.ContainsKey(entity.net.ID))
 			{
-				if(IsFriend((entity as BasePlayer).userID, player.userID)) return;
-				if(UsePermission && !permission.UserHasPermission((entity as BasePlayer).userID.ToString(), PlayerPerm)) return;
-				if(player.userID == (entity as BasePlayer).userID || CanLootPlayer) return;
-				StopLooting(player, "OnTryLootPlayer");
-				return;
-			}	
-			if((entity is DroppedItemContainer) && entity.name.Contains("item_drop_backpack"))
-			{
-				if(IsFriend((entity as DroppedItemContainer).playerSteamID, player.userID)) return;
-				if(UsePermission && !permission.UserHasPermission((entity as DroppedItemContainer).playerSteamID.ToString(), BackpackPerm)) return;
-				if((entity as DroppedItemContainer).playerSteamID < 76561197960265728L || CanLootBackpack || player.userID == (entity as DroppedItemContainer).playerSteamID) return;
-				StopLooting(player, "OnTryLootBackpack");	
-				return;
+				if(storedData.Data[entity.net.ID].Share.Contains(player.userID) || storedData.Data[entity.net.ID].Share.Contains(0)) return null;
 			}
-			if (neededShortNames.Contains(entity.ShortPrefabName))	
-			{
-				List<BaseCombatEntity> entlist = new List<BaseCombatEntity>();
-				Vis.Entities<BaseCombatEntity>(player.transform.position, 10f, entlist);
-				foreach (BaseCombatEntity success in entlist)
-				{	
-					if (success is MiningQuarry)
-					{
-						var subs = (success as MiningQuarry).children;
-						if (subs != null)
-						{
-							foreach (var sub in subs)
-							{
-								if(sub.GetComponent<StorageContainer>()) entity.OwnerID=(success as BaseEntity).OwnerID;
-							}
-						}
-					}	
-				}
-			}
-			if(IsFriend(entity.OwnerID, player.userID)) return;			
-			if(UsePermission && !permission.UserHasPermission(entity.OwnerID.ToString(), StoragePerm)) return;		
+			entity = CheckParent(entity, true); 	
+			if(IsFriend(entity.OwnerID, player.userID)) return null;			
+			if(UsePermission && !permission.UserHasPermission(entity.OwnerID.ToString(), StoragePerm)) return null;		
 			if(UseExcludeEntities)
 			{
-				if(ExcludeEntities.Contains(entity.ShortPrefabName)) return;
-			}			
-			if(storedData.Data.ContainsKey(entity.net.ID))
-				{
-					if(storedData.Data[entity.net.ID].Share.Contains(player.userID) || storedData.Data[entity.net.ID].Share.Contains(0)) return;
-				}
-			if(IsVendingOpen(player, entity) || IsDropBoxOpen(player, entity) || CanLootEntity) return;
+				if(ExcludeEntities.Contains(entity.ShortPrefabName)) return null;
+			}		
+			if(IsVendingOpen(player, entity) || IsDropBoxOpen(player, entity)) return null;
 			if(entity.OwnerID != player.userID && entity.OwnerID != 0)
 			{								
 				if(UseCupboard || UseOnlyInCupboardRange)
-					if(CheckAuthCupboard(entity, player)) return;
-				StopLooting(player, "OnTryLootEntity");
+					if(CheckAuthCupboard(entity, player)) return null;
+				SendReply(player, lang.GetMessage("OnTryLootEntity", this, player.UserIDString));
+				return false;	
 			}
-		}
-		private void StopLooting(BasePlayer player, string message)
-		{			
-			NextTick(() => player.EndLooting());
-			SendReply(player, lang.GetMessage(message, this, player.UserIDString));	
+			return null;
 		}	
-		
+		private BaseEntity CheckParent(BaseEntity entity, bool change=false)
+		{
+			if(entity.HasParent())
+			{
+				BaseEntity parententity = entity.GetParentEntity();
+				if(parententity is MiningQuarry)	
+				{
+					entity.OwnerID=parententity.OwnerID;
+					if(change) entity=parententity;
+				}	
+			}
+			return entity;	
+		}	
 		bool IsVendingOpen(BasePlayer player, BaseEntity entity)
 		{
 			if(entity is VendingMachine) 
@@ -283,9 +286,32 @@ namespace Oxide.Plugins
 			if(UseCupboard && bprev.IsAuthed(player)) return true;
 			return false;
 		}
+				private IPlayer CheckPlayer(BasePlayer player, string[] args)
+		{
+			var playerlist = covalence.Players.FindPlayers(args[0]).ToList();
+			if(playerlist.Count > 1)
+			{
+				
+				var message="<color=red>"+lang.GetMessage("MultiplePlayerFind", this, player.UserIDString)+"</color>\n";
+				int i=0;
+				foreach(var pl in playerlist)
+				{
+					i++;
+					message+= string.Format("{0}. <color=orange>{1}</color> ({2})\n\r", i, pl.Name, pl.Id);
+				}
+				SendReply(player, message);
+                return null;
+            }
+			var player0 = covalence.Players.FindPlayer(args[0]);
+			if(player0==null) 
+			{
+				SendReply(player, string.Format(lang.GetMessage("PlayerNotFound", this, player.UserIDString), "<color=orange>"+args[0]+"</color>")); 
+				return null;
+			}
+			return player0;
+		}	
 		#endregion
-		#region Commands
-	
+		#region Commands	
 		[ChatCommand("share")]
         void Share(BasePlayer player, string command, string[] args)
         {	
@@ -294,74 +320,53 @@ namespace Oxide.Plugins
 				SendReply(player, lang.GetMessage("NoPermission", this, player.UserIDString));
 				return;
 			}
-			ulong ID;
-			string tgname="";
-							
-			if (args == null || args.Length <= 0)
-			{
-				ID=0;
-			}
+			IPlayer player0 = null;
+			ulong ID;							
+			if (args == null || args.Length <= 0) ID=0;
 			else
-			{
-				var playersadd = covalence.Players.FindPlayers(args[0]).ToList();
-				if(playersadd.Count > 1)
-				{
-					
-					var message="<color=red>"+lang.GetMessage("MultiplePlayerFind", this, player.UserIDString)+"</color>\n";
-					int i=0;
-					foreach(var pl in playersadd)
-					{
-						i++;
-						message+= string.Format("{0}. <color=orange>{1}</color> ({2})\n\r", i, pl.Name, pl.Id);
-					}
-					SendReply(player, message);
-                	return;
-                }
-				var playeradd = covalence.Players.FindPlayer(args[0]);
-				if(playeradd==null) 
-				{
-					SendReply(player, string.Format(lang.GetMessage("PlayerNotFound", this, player.UserIDString), "<color=orange>"+args[0]+"</color>")); 
-					return;
-				}
-				ID=Convert.ToUInt64(playeradd.Id);
-				tgname=playeradd.Name;				
+			{	
+				player0 = CheckPlayer(player, args);
+				if(player0 == null) return;
+				ID=Convert.ToUInt64(player0.Id);
 			}
 			object success;
 			if (FindEntityFromRay(player, out success))
 			{
 				if (success is BaseEntity)
 				{	
-					if((success as BaseEntity).OwnerID == ID)
+					BaseEntity entity = success as BaseEntity;
+					entity = CheckParent(entity, false);
+					if(entity.OwnerID == ID)
 					{
 						SendReply(player, lang.GetMessage("OwnEntity", this, player.UserIDString));
 						return;
 					}				
-					if((success as BaseEntity).OwnerID != player.userID && (!player.IsAdmin || (player.IsAdmin &&!AdminCanLoot)))
+					if(entity.OwnerID != player.userID && (!player.IsAdmin || (player.IsAdmin &&!AdminCanLoot)))
 					{
 						SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
 						return;
 					}
-					if(!storedData.Data.ContainsKey((success as BaseEntity).net.ID)) 
+					if(!storedData.Data.ContainsKey(entity.net.ID)) 
 					{
 						var data = new EntityData();
 						data.Share = new List<ulong>();
-						storedData.Data.Add((success as BaseEntity).net.ID, data);
+						storedData.Data.Add(entity.net.ID, data);
 						data.Share.Add(ID);
 						if(ID==0) SendReply(player, lang.GetMessage("ShareAll", this, player.UserIDString));
-						else SendReply(player, string.Format(lang.GetMessage("SharePlayer", this, player.UserIDString), "<color=orange>"+tgname+"</color>"));
+						else SendReply(player, string.Format(lang.GetMessage("SharePlayer", this, player.UserIDString), "<color=orange>"+player0.Name+"</color>"));
 					}	
 					else 
 					{
-						if(storedData.Data[(success as BaseEntity).net.ID].Share.Contains(ID))
+						if(storedData.Data[entity.net.ID].Share.Contains(ID))
 						{
 							if(ID==0) SendReply(player, lang.GetMessage("HasShareAll", this, player.UserIDString));
-							else SendReply(player, string.Format(lang.GetMessage("HasSharePlayer", this, player.UserIDString), "<color=orange>"+tgname+"</color>"));
+							else SendReply(player, string.Format(lang.GetMessage("HasSharePlayer", this, player.UserIDString), "<color=orange>"+player0.Name+"</color>"));
 						}
 						else
 						{
-							storedData.Data[(success as BaseEntity).net.ID].Share.Add(ID);
+							storedData.Data[entity.net.ID].Share.Add(ID);
 							if(ID==0) SendReply(player, lang.GetMessage("ShareAll", this, player.UserIDString));
-							else SendReply(player, string.Format(lang.GetMessage("SharePlayer", this, player.UserIDString), "<color=orange>"+tgname+"</color>"));
+							else SendReply(player, string.Format(lang.GetMessage("SharePlayer", this, player.UserIDString), "<color=orange>"+player0.Name+"</color>"));
 						}
 					}
 				}
@@ -370,74 +375,53 @@ namespace Oxide.Plugins
 			{
 				SendReply(player, lang.GetMessage("EntityNotFound", this, player.UserIDString));
 			}	
-        }
-		
+        }		
         [ChatCommand("unshare")]
         void Unshare(BasePlayer player, string command, string[] args)
         {
-			if (UsePermission && !permission.UserHasPermission(player.UserIDString, PLPerm)) 
+		    if (UsePermission && !permission.UserHasPermission(player.UserIDString, PLPerm)) 
 			{
 				SendReply(player, lang.GetMessage("NoPermission", this, player.UserIDString));
 				return;
 			}
-			ulong ID;
-			string tgname="";
-						
-			if (args == null || args.Length <= 0)
-			{
-				ID=0;
-			}
+			IPlayer player0 = null;
+			ulong ID;							
+			if (args == null || args.Length <= 0) ID=0;
 			else
 			{	
-				var playersremove = covalence.Players.FindPlayers(args[0]).ToList();
-				if(playersremove.Count > 1)
-				{
-					var message="<color=red>"+lang.GetMessage("MultiplePlayerFind", this, player.UserIDString)+"</color>\n";
-					int i=0;
-					foreach(var pl in playersremove)
-					{
-						i++;
-						message+= string.Format("{0}. <color=orange>{1}</color> ({2})\n\r", i, pl.Name, pl.Id);
-					}
-					SendReply(player, message);
-                	return;
-                }
-				var playerremove = covalence.Players.FindPlayer(args[0]);
-				if(playerremove==null) 
-				{
-					SendReply(player, string.Format(lang.GetMessage("PlayerNotFound", this, player.UserIDString), "<color=orange>"+args[0]+"</color>")); 
-					return;
-				}
-				ID=Convert.ToUInt64(playerremove.Id);
-				tgname=playerremove.Name;
+				player0 = CheckPlayer(player, args);
+				if(player0 == null) return;
+				ID=Convert.ToUInt64(player0.Id);
 			}
 			object success;
 			if (FindEntityFromRay(player, out success))			
 			{
 				if (success is BaseEntity)
 				{
-					if((success as BaseEntity).OwnerID != player.userID && (!player.IsAdmin || (player.IsAdmin &&!AdminCanLoot)))
+					BaseEntity entity = success as BaseEntity;
+					entity = CheckParent(entity, false);
+					if(entity.OwnerID != player.userID && (!player.IsAdmin || (player.IsAdmin &&!AdminCanLoot)))
 					{
 						SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
 						return;
 					}
-					if(!storedData.Data.ContainsKey((success as BaseEntity).net.ID)) 
+					if(!storedData.Data.ContainsKey(entity.net.ID)) 
 					{
 						SendReply(player, lang.GetMessage("NoShare", this, player.UserIDString));
 					}	
 					else 
 					{
-						if(!storedData.Data[(success as BaseEntity).net.ID].Share.Contains(ID))
+						if(!storedData.Data[entity.net.ID].Share.Contains(ID))
 						{
 							if(ID==0) SendReply(player, lang.GetMessage("HasUnShareAll", this, player.UserIDString));	
-							else SendReply(player, string.Format(lang.GetMessage("HasUnSharePlayer", this, player.UserIDString), "<color=orange>"+tgname+"</color>"));	
+							else SendReply(player, string.Format(lang.GetMessage("HasUnSharePlayer", this, player.UserIDString), "<color=orange>"+player0.Name+"</color>"));	
 						}
 						else
 						{
-							storedData.Data[(success as BaseEntity).net.ID].Share.Remove(ID);
-							if(storedData.Data[(success as BaseEntity).net.ID].Share.Count==0) storedData.Data.Remove((success as BaseEntity).net.ID);
+							storedData.Data[entity.net.ID].Share.Remove(ID);
+							if(storedData.Data[entity.net.ID].Share.Count==0) storedData.Data.Remove(entity.net.ID);
 							if(ID==0) SendReply(player, lang.GetMessage("WasUnShareAll", this, player.UserIDString));
-							else SendReply(player, string.Format(lang.GetMessage("WasUnSharePlayer", this, player.UserIDString), "<color=orange>"+tgname+"</color>"));
+							else SendReply(player, string.Format(lang.GetMessage("WasUnSharePlayer", this, player.UserIDString), "<color=orange>"+player0.Name+"</color>"));
 						}
 						Sharelist(player);
 					}
@@ -447,8 +431,7 @@ namespace Oxide.Plugins
 			{
 				SendReply(player, lang.GetMessage("EntityNotFound", this, player.UserIDString));
 			}			
-		}
-		
+		}		
 		[ChatCommand("sharelist")]
         void Sharelist(BasePlayer player)
         {
@@ -462,25 +445,27 @@ namespace Oxide.Plugins
 			{			
 				if (success is BaseEntity)
 				{
-					if((success as BaseEntity).OwnerID != player.userID && (!player.IsAdmin || (player.IsAdmin &&!AdminCanLoot)))
+					BaseEntity entity = success as BaseEntity;
+					entity = CheckParent(entity, false);
+					if(entity.OwnerID != player.userID && (!player.IsAdmin || (player.IsAdmin &&!AdminCanLoot)))
 					{
 						SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
 						return;
 					}
-					if(!storedData.Data.ContainsKey((success as BaseEntity).net.ID)) 
+					if(!storedData.Data.ContainsKey(entity.net.ID)) 
 					{
 						SendReply(player, lang.GetMessage("NoShare", this, player.UserIDString));
 					}
 					else
 					{
-						if(storedData.Data[(success as BaseEntity).net.ID].Share.Contains(0))
+						if(storedData.Data[entity.net.ID].Share.Contains(0))
 						{
 							SendReply(player, lang.GetMessage("HasShareAllList", this, player.UserIDString));
 							return;
 						}	
 						var message="<color=yellow>"+lang.GetMessage("ListShare", this, player.UserIDString)+"</color>\n";
 						int i=0;
-						foreach(var share in storedData.Data[(success as BaseEntity).net.ID].Share)
+						foreach(var share in storedData.Data[entity.net.ID].Share)
 						{
 							i++;
 							message+= string.Format("{0}. <color=green>{1}</color> ({2})\n\r", i, covalence.Players.FindPlayer(share.ToString()).Name, covalence.Players.FindPlayer(share.ToString()).Id);
@@ -508,19 +493,21 @@ namespace Oxide.Plugins
 			{
 				if (success is BaseEntity)
 				{
-					if((success as BaseEntity).OwnerID != player.userID && (!player.IsAdmin || (player.IsAdmin &&!AdminCanLoot)))
+					BaseEntity entity = success as BaseEntity;
+					entity = CheckParent(entity, false);
+					if(entity.OwnerID != player.userID && (!player.IsAdmin || (player.IsAdmin &&!AdminCanLoot)))
 					{
 						SendReply(player, lang.GetMessage("NoAccess", this, player.UserIDString));
 						return;
 					}
-					if(!storedData.Data.ContainsKey((success as BaseEntity).net.ID)) 
+					if(!storedData.Data.ContainsKey(entity.net.ID)) 
 					{
 						SendReply(player, lang.GetMessage("NoShare", this, player.UserIDString));
 					}
 					else
 					{
-						storedData.Data[(success as BaseEntity).net.ID].Share.Clear();
-						if(storedData.Data[(success as BaseEntity).net.ID].Share.Count==0) storedData.Data.Remove((success as BaseEntity).net.ID);
+						storedData.Data[entity.net.ID].Share.Clear();
+						if(storedData.Data[entity.net.ID].Share.Count==0) storedData.Data.Remove(entity.net.ID);
 						SendReply(player, lang.GetMessage("ShareClear", this, player.UserIDString));
 					}
 				}	

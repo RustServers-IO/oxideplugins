@@ -1,5 +1,5 @@
 {
-    "name": "Cupboard  Friends",
+    "name": "CupboardForFriends",
     "description": "Only allow friends of already authorized people to authorize themselves.",
     "author": "Wulf",
     "version": "1.2.7",
@@ -11,7 +11,7 @@
         "Friends": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/cupboard-for-friends.1578",
+    "url": "https:\/\/oxidemod.org\/plugins\/cupboardforfriends.1578",
     "games": [
         "rust"
     ],

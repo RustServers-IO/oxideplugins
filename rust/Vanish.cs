@@ -1,15 +1,9 @@
 ﻿/*
 TODO:
-- Add option to hide as a deployed entity of choice
 - Add daily limit option
-- Add option to not show other vanished for mods?
-- Add option to vanish on connection if have permission
-- Add option to vanish when sleeping if have permission
 - Add AppearWhileRunning option (player.IsRunning())
 - Add AppearWhenDamaged option (player.IsWounded())
-- Add options for where to position status indicator
 - Add restoring after reconnection (datafile/static dictionary)
-- Fix CUI overlay overlapping HUD elements/inventory (if possible)
 - Fix player becoming visible when switching weapons? (need to verify)
 */
 
@@ -17,14 +11,14 @@ using System.Collections.Generic;
 using System.Linq;
 using Network;
 using Newtonsoft.Json;
-using Rust;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Game.Rust.Cui;
+using Rust;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Vanish", "Wulf/lukespragg (maintained by Jake_Rich)", "0.4.2", ResourceId = 1420)]
+    [Info("Vanish", "Wulf/lukespragg (maintained by Jake_Rich)", "0.5.1", ResourceId = 1420)]
     [Description("Allows players with permission to become truly invisible")]
     public class Vanish : RustPlugin
     {
@@ -34,14 +28,17 @@ namespace Oxide.Plugins
 
         public class Configuration
         {
+            // TODO: Add config option to not show other vanished for custom group
+            // TODO: Add config option to customize effect/sound prefab
+
+            [JsonProperty(PropertyName = "Image URL for vanish icon (.png or .jpg)")]
+            public string ImageUrlIcon;
+
             [JsonProperty(PropertyName = "Play sound effect (true/false)")]
             public bool PlaySoundEffect;
 
             [JsonProperty(PropertyName = "Show visual indicator (true/false)")]
-            public bool ShowIndicator;
-
-            [JsonProperty(PropertyName = "Show visual overlay (true/false)")]
-            public bool ShowOverlay;
+            public bool ShowGuiIcon;
 
             [JsonProperty(PropertyName = "Vanish timeout (seconds, 0 to disable)")]
             public int VanishTimeout;
@@ -49,15 +46,19 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Visible to admin (true/false)")]
             public bool VisibleToAdmin;
 
+            //[JsonProperty(PropertyName = "Visible to moderators (true/false)")]
+            //public bool VisibleToMods;
+
             public static Configuration DefaultConfig()
             {
                 return new Configuration
                 {
+                    ImageUrlIcon = "http://i.imgur.com/Gr5G3YI.png",
                     PlaySoundEffect = true,
-                    ShowIndicator = true,
-                    ShowOverlay = false,
+                    ShowGuiIcon = true,
                     VanishTimeout = 0,
                     VisibleToAdmin = false
+                    //VisibleToMods = false
                 };
             }
         }
@@ -97,9 +98,10 @@ namespace Oxide.Plugins
                 ["CantUseTeleport"] = "You can't teleport while vanished",
                 ["CommandVanish"] = "vanish",
                 ["NotAllowed"] = "Sorry, you can't use '{0}' right now",
+                ["PlayersOnly"] = "Command '{0}' can only be used by a player",
                 ["VanishDisabled"] = "You are no longer invisible!",
                 ["VanishEnabled"] = "You have vanished from sight...",
-                ["VanishTimedOut"] = "Vanish timeout reached!",
+                ["VanishTimedOut"] = "Vanish time limit reached!",
                 ["NotAllowedPerm"] = "You are missing permissions! ({0})",
             }, this);
         }
@@ -108,29 +110,51 @@ namespace Oxide.Plugins
 
         #region Initialization
 
-        private const string effectPrefab = "assets/prefabs/npc/patrol helicopter/effects/rocket_fire.prefab"; // TODO: Config option
-        //private const string permAlwaysHidden = "vanish.alwayshidden";
-        private const string permDamageBuilds = "vanish.damagebuilds";
-        private const string permInvulnerable = "vanish.invulnerable";
-        private const string permHurtAnimals = "vanish.hurtanimals";
-        private const string permHurtPlayers = "vanish.hurtplayers";
-        private const string permTeleport = "vanish.teleport";
-        //private const string permWeapons = "vanish.weapons";
+        private const string defaultEffect = "assets/prefabs/npc/patrol helicopter/effects/rocket_fire.prefab";
+        private const string permAbilitiesInvulnerable = "vanish.abilities.invulnerable";
+        private const string permAbilitiesPersistence = "vanish.abilities.persistence";
+        private const string permAbilitiesTeleport = "vanish.abilities.teleport";
+        private const string permAbilitiesWeapons = "vanish.abilities.weapons";
+        private const string permDamageAnimals = "vanish.damage.animals";
+        private const string permDamageBuildings = "vanish.damage.buildings";
+        private const string permDamagePlayers = "vanish.damage.players";
         private const string permUse = "vanish.use";
 
         private void Init()
         {
-            //permission.RegisterPermission(permAlwaysHidden, this);
-            permission.RegisterPermission(permDamageBuilds, this);
-            permission.RegisterPermission(permInvulnerable, this);
-            permission.RegisterPermission(permHurtAnimals, this);
-            permission.RegisterPermission(permHurtPlayers, this);
-            permission.RegisterPermission(permTeleport, this);
-            //permission.RegisterPermission(permWeapons, this);
+            permission.RegisterPermission(permAbilitiesInvulnerable, this);
+            permission.RegisterPermission(permAbilitiesPersistence, this);
+            permission.RegisterPermission(permAbilitiesTeleport, this);
+            permission.RegisterPermission(permAbilitiesWeapons, this);
+            permission.RegisterPermission(permDamageAnimals, this);
+            permission.RegisterPermission(permDamageBuildings, this);
+            permission.RegisterPermission(permDamagePlayers, this);
             permission.RegisterPermission(permUse, this);
 
             AddCommandAliases("CommandVanish", "VanishCommand");
 
+            if (config.ImageUrlIcon == null)
+            {
+                config.ImageUrlIcon = "http://i.imgur.com/Gr5G3YI.png";
+            }
+
+            Unsubscribe();
+        }
+
+        private void Subscribe()
+        {
+            Subscribe(nameof(CanNetworkTo));
+            Subscribe(nameof(CanBeTargeted));
+            Subscribe(nameof(CanBradleyApcTarget));
+            Subscribe(nameof(OnNpcPlayerTarget));
+            Subscribe(nameof(OnNpcTarget));
+            Subscribe(nameof(OnEntityTakeDamage));
+            Subscribe(nameof(OnPlayerSleepEnded));
+            Subscribe(nameof(OnPlayerLand));
+        }
+
+        private void Unsubscribe()
+        {
             Unsubscribe(nameof(CanNetworkTo));
             Unsubscribe(nameof(CanBeTargeted));
             Unsubscribe(nameof(CanBradleyApcTarget));
@@ -138,6 +162,7 @@ namespace Oxide.Plugins
             Unsubscribe(nameof(OnNpcTarget));
             Unsubscribe(nameof(OnEntityTakeDamage));
             Unsubscribe(nameof(OnPlayerSleepEnded));
+            Unsubscribe(nameof(OnPlayerLand));
         }
 
         #endregion
@@ -152,7 +177,6 @@ namespace Oxide.Plugins
 
         [OnlinePlayers]
         private Hash<BasePlayer, OnlinePlayer> onlinePlayers = new Hash<BasePlayer, OnlinePlayer>();
-        private void OnPlayerInit() {} // Temporary 'fix' for [OnlinePlayers] and hook 'overloading'
 
         #endregion
 
@@ -160,22 +184,22 @@ namespace Oxide.Plugins
 
         private void VanishCommand(IPlayer player, string command, string[] args)
         {
-            if (!player.HasPermission(permUse))
-            {
-                player.Reply(Lang("NotAllowedPerm", player.Id, permUse));
-                return;
-            }
-
             var basePlayer = player.Object as BasePlayer;
             if (basePlayer == null)
             {
-                // TODO: Only for players message
+                player.Reply(Lang("PlayersOnly", player.Id, command));
                 return;
             }
 
-            // TODO: Add command cooldown
+            if (!player.HasPermission(permUse))
+            {
+                Message(player, Lang("NotAllowedPerm", player.Id, permUse));
+                return;
+            }
 
-            if (config.PlaySoundEffect) Effect.server.Run(effectPrefab, basePlayer.transform.position);
+            // TODO: Add optional command cooldown
+
+            if (config.PlaySoundEffect) Effect.server.Run(defaultEffect, basePlayer.transform.position); // TODO: Check if prefab/effect exists
             if (IsInvisible(basePlayer)) Reappear(basePlayer);
             else Disappear(basePlayer);
         }
@@ -184,69 +208,63 @@ namespace Oxide.Plugins
 
         #region Vanishing Act
 
-        private void Disappear(BasePlayer player)
+        private void Disappear(BasePlayer basePlayer)
         {
             var connections = new List<Connection>();
-            foreach (var basePlayer in BasePlayer.activePlayerList)
+            foreach (var target in BasePlayer.activePlayerList)
             {
-                if (player == basePlayer || !basePlayer.IsConnected) continue;
-                if (config.VisibleToAdmin && IsAdmin(basePlayer)) continue;
-                connections.Add(basePlayer.net.connection);
+                if (basePlayer == target || !target.IsConnected) continue;
+                if (config.VisibleToAdmin && target.IPlayer.IsAdmin) continue;
+
+                connections.Add(target.net.connection);
+            }
+
+            var held = basePlayer.GetHeldEntity();
+            if (held != null)
+            {
+                held.SetHeld(false);
+                held.UpdateVisiblity_Invis();
+                held.SendNetworkUpdate();
             }
 
             if (Net.sv.write.Start())
             {
                 Net.sv.write.PacketID(Network.Message.Type.EntityDestroy);
-                Net.sv.write.EntityID(player.net.ID);
+                Net.sv.write.EntityID(basePlayer.net.ID);
                 Net.sv.write.UInt8((byte)BaseNetworkable.DestroyMode.None);
                 Net.sv.write.Send(new SendInfo(connections));
             }
 
-            var held = player.GetHeldEntity();
-            if (held != null && Net.sv.write.Start())
-            {
-                Net.sv.write.PacketID(Network.Message.Type.EntityDestroy);
-                Net.sv.write.EntityID(held.net.ID);
-                Net.sv.write.UInt8((byte)BaseNetworkable.DestroyMode.None);
-                Net.sv.write.Send(new SendInfo(connections));
-            }
+            basePlayer.UpdatePlayerCollider(false);
 
-            if (config.ShowOverlay || config.ShowIndicator) VanishGui(player);
+            if (config.ShowGuiIcon) VanishGui(basePlayer);
+            onlinePlayers[basePlayer].IsInvisible = true;
+            Message(basePlayer.IPlayer, "VanishEnabled");
 
             if (config.VanishTimeout > 0f) timer.Once(config.VanishTimeout, () =>
             {
-                if (!onlinePlayers[player].IsInvisible) return;
+                if (!onlinePlayers[basePlayer].IsInvisible) return;
 
-                player.ChatMessage(Lang("VanishTimedOut", player.UserIDString));
-                Reappear(player);
+                Reappear(basePlayer);
+                Message(basePlayer.IPlayer, "VanishTimedOut");
             });
 
-
-
-            player.ChatMessage(Lang("VanishEnabled", player.UserIDString));
-            onlinePlayers[player].IsInvisible = true;
+            Subscribe();
 
             //Remove player from Grid so animals can't target it (HACKY SOLUTION)
             //Is good for now, as the only thing that uses this grid is AI, so removing it only prevents AI from finding player
             //Player is added back to grid when reappearing
-            BaseEntity.Query.Server.RemovePlayer(player);
-
-            Subscribe(nameof(CanNetworkTo));
-            Subscribe(nameof(CanBeTargeted));
-            Subscribe(nameof(CanBradleyApcTarget));
-            Subscribe(nameof(OnNpcPlayerTarget));
-            Subscribe(nameof(OnNpcTarget));
-            Subscribe(nameof(OnEntityTakeDamage));
-            Subscribe(nameof(OnPlayerSleepEnded));
+            BaseEntity.Query.Server.RemovePlayer(basePlayer);
+            Puts("Removed Player From Animal Grid");
         }
 
         // Hide from other players
         private object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
         {
-            var player = entity as BasePlayer ?? (entity as HeldEntity)?.GetOwnerPlayer();
-            if (player == null || target == null || player == target) return null;
-            if (config.VisibleToAdmin && IsAdmin(target)) return null;
-            if (IsInvisible(player)) return false;
+            var basePlayer = entity as BasePlayer ?? (entity as HeldEntity)?.GetOwnerPlayer();
+            if (basePlayer == null || target == null || basePlayer == target) return null;
+            if (config.VisibleToAdmin && target.IPlayer.IsAdmin) return null;
+            if (IsInvisible(basePlayer)) return false;
 
             return null;
         }
@@ -254,25 +272,25 @@ namespace Oxide.Plugins
         // Hide from helis/turrets
         private object CanBeTargeted(BaseCombatEntity entity)
         {
-            var player = entity as BasePlayer;
-            if (player != null && IsInvisible(player)) return false;
+            var basePlayer = entity as BasePlayer;
+            if (basePlayer != null && IsInvisible(basePlayer)) return false;
 
             return null;
         }
 
         // Hide from the bradley APC
-        private object CanBradleyApcTarget(BradleyAPC bradleyApc, BaseEntity entity)
+        private object CanBradleyApcTarget(BradleyAPC apc, BaseEntity entity)
         {
-            var player = entity as BasePlayer;
-            if (player != null && IsInvisible(player)) return false;
+            var basePlayer = entity as BasePlayer;
+            if (basePlayer != null && IsInvisible(basePlayer)) return false;
 
             return null;
         }
 
         // Hide from the patrol helicopter
-        private object CanHelicopterTarget(PatrolHelicopterAI heli, BasePlayer player)
+        private object CanHelicopterTarget(PatrolHelicopterAI heli, BasePlayer basePlayer)
         {
-            if (IsInvisible(player)) return false;
+            if (IsInvisible(basePlayer)) return false;
 
             return null;
         }
@@ -280,8 +298,8 @@ namespace Oxide.Plugins
         // Hide from scientist NPCs
         private object OnNpcPlayerTarget(NPCPlayerApex npc, BaseEntity entity)
         {
-            var player = entity as BasePlayer;
-            if (player != null && IsInvisible(player)) return 0f;
+            var basePlayer = entity as BasePlayer;
+            if (basePlayer != null && IsInvisible(basePlayer)) return 0f;
 
             return null;
         }
@@ -289,80 +307,95 @@ namespace Oxide.Plugins
         // Hide from all other NPCs
         private object OnNpcTarget(BaseNpc npc, BaseEntity entity)
         {
-            var player = entity as BasePlayer;
-            if (player != null && IsInvisible(player)) return 0f;
+            var basePlayer = entity as BasePlayer;
+            if (basePlayer != null && IsInvisible(basePlayer)) return 0f;
 
             return null;
         }
 
-        private void OnPlayerSleepEnded(BasePlayer player)
+        private void OnPlayerSleepEnded(BasePlayer basePlayer)
         {
-            if (IsInvisible(player)) Disappear(player);
-            // TODO: Notify if still vanished
+            if (IsInvisible(basePlayer)) // TODO: Add persistence permission check
+            {
+                Disappear(basePlayer);
+                // TODO: Send message that still vanished
+            }
+        }
+
+        private object OnPlayerLand(BasePlayer player, float num)
+        {
+            if (IsInvisible(player))
+            {
+                return false;
+            }
+            return null;
+        }
+
+        private object CanUseLockedEntity(BasePlayer player, BaseLock baseLock)
+        {
+            if (IsInvisible(player))
+            {
+                if (permission.UserHasPermission(player.UserIDString, permAbilitiesInvulnerable) || player.IsImmortal())
+                {
+                    return true;
+                }
+            }
+            return null;
         }
 
         #endregion
 
         #region Reappearing Act
 
-        private void Reappear(BasePlayer player)
+        private void Reappear(BasePlayer basePlayer)
         {
-            onlinePlayers[player].IsInvisible = false;
+            onlinePlayers[basePlayer].IsInvisible = false;
+            basePlayer.SendNetworkUpdate();
 
-            player.SendNetworkUpdate();
-            player?.GetHeldEntity()?.SendNetworkUpdate();
+            var held = basePlayer.GetHeldEntity();
+            if (held != null)
+            {
+                held.UpdateVisibility_Hand();
+                held.SendNetworkUpdate();
+            }
+
+            basePlayer.UpdatePlayerCollider(true);
 
             string gui;
-            if (guiInfo.TryGetValue(player.userID, out gui)) CuiHelper.DestroyUi(player, gui);
-
+            if (guiInfo.TryGetValue(basePlayer.userID, out gui)) CuiHelper.DestroyUi(basePlayer, gui);
+            Puts("Added Player From Animal Grid");
             //Add player back to Grid so AI can find it
-            BaseEntity.Query.Server.AddPlayer(player);
+            BaseEntity.Query.Server.AddPlayer(basePlayer);
 
-            player.ChatMessage(Lang("VanishDisabled", player.UserIDString));
+            Message(basePlayer.IPlayer, "VanishDisabled");
             if (onlinePlayers.Values.Count(p => p.IsInvisible) <= 0) Unsubscribe(nameof(CanNetworkTo));
         }
 
         #endregion
 
-        #region GUI Indicator/Overlay
+        #region GUI Indicator
 
         private Dictionary<ulong, string> guiInfo = new Dictionary<ulong, string>();
 
-        private void VanishGui(BasePlayer player)
+        private void VanishGui(BasePlayer basePlayer)
         {
             string gui;
-            if (guiInfo.TryGetValue(player.userID, out gui)) CuiHelper.DestroyUi(player, gui);
+            if (guiInfo.TryGetValue(basePlayer.userID, out gui)) CuiHelper.DestroyUi(basePlayer, gui);
 
             var elements = new CuiElementContainer();
-            guiInfo[player.userID] = CuiHelper.GetGuid();
+            guiInfo[basePlayer.userID] = CuiHelper.GetGuid();
 
-            if (config.ShowIndicator)
+            elements.Add(new CuiElement
             {
-                elements.Add(new CuiElement
+                Name = guiInfo[basePlayer.userID],
+                Components =
                 {
-                    Name = guiInfo[player.userID],
-                    Components =
-                    {
-                        new CuiRawImageComponent { Color = "1 1 1 0.3", Url = "http://i.imgur.com/Gr5G3YI.png" }, // TODO: Add config options
-                        new CuiRectTransformComponent { AnchorMin = "0.175 0.017",  AnchorMax = "0.22 0.08" } // TODO: Add config options
-                    }
-                });
-            }
+                    new CuiRawImageComponent { Color = "1 1 1 0.3", Url = config.ImageUrlIcon }, // TODO: Add position config options
+                    new CuiRectTransformComponent { AnchorMin = "0.175 0.017",  AnchorMax = "0.22 0.08" } // TODO: Add position config options
+                }
+            });
 
-            if (config.ShowOverlay)
-            {
-                elements.Add(new CuiElement
-                {
-                    Name = guiInfo[player.userID],
-                    Components =
-                    {
-                        new CuiRawImageComponent { Sprite = "assets/content/ui/overlay_freezing.png" }, // TODO: Add config options
-                        new CuiRectTransformComponent { AnchorMin = "0 0", AnchorMax = "1 1" } // TODO: Add config options
-                    }
-                });
-            }
-
-            CuiHelper.AddUi(player, elements);
+            CuiHelper.AddUi(basePlayer, elements);
         }
 
         #endregion
@@ -371,43 +404,48 @@ namespace Oxide.Plugins
 
         private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
-            var player = (info?.Initiator as BasePlayer) ?? entity as BasePlayer;
-            if (player == null || !player.IsConnected || !onlinePlayers[player].IsInvisible) return null;
+            var basePlayer = (info?.Initiator as BasePlayer) ?? entity as BasePlayer;
+            if (basePlayer == null || !basePlayer.IsConnected || !onlinePlayers[basePlayer].IsInvisible) return null;
+
+            var player = basePlayer.IPlayer;
 
             // Block damage to animals
             if (entity is BaseNpc)
             {
-                if (!HasPerm(player.UserIDString, permHurtAnimals)) return null;
+                if (player.HasPermission(permDamageAnimals)) return null;
 
-                player.ChatMessage(Lang("CantHurtAnimals", player.UserIDString));
+                Message(player, "CantHurtAnimals");
                 return true;
             }
 
-            // Block damage to builds
+            // Block damage to buildings
             if (!(entity is BasePlayer))
             {
-                if (!HasPerm(player.UserIDString, permDamageBuilds)) return null;
+                if (player.HasPermission(permDamageBuildings)) return null;
 
-                player.ChatMessage(Lang("CantDamageBuilds", player.UserIDString));
+                Message(player, "CantDamageBuilds");
                 return true;
             }
 
             // Block damage to players
             if (info?.Initiator is BasePlayer)
             {
-                if (!HasPerm(player.UserIDString, permHurtPlayers)) return null;
+                if (player.HasPermission(permDamagePlayers)) return null;
 
-                player.ChatMessage(Lang("CantHurtPlayers", player.UserIDString));
+                Message(player, "CantHurtPlayers");
                 return true;
             }
 
-            // Block damage to self
-            if (HasPerm(player.UserIDString, permInvulnerable))
+            if (basePlayer == info.HitEntity)
             {
-                info.damageTypes = new DamageTypeList();
-                info.HitMaterial = 0;
-                info.PointStart = Vector3.zero;
-                return true;
+                // Block damage to self
+                if (player.HasPermission(permAbilitiesInvulnerable))
+                {
+                    info.damageTypes = new DamageTypeList();
+                    info.HitMaterial = 0;
+                    info.PointStart = Vector3.zero;
+                    return true;
+                }
             }
 
             return null;
@@ -417,23 +455,42 @@ namespace Oxide.Plugins
 
         #region Weapon Blocking
 
-        /*private void OnPlayerTick(BasePlayer player)
+        private void OnPlayerTick(BasePlayer basePlayer)
         {
-            if (onlinePlayers[player].IsInvisible && player.GetHeldEntity() != null) // TODO: Add permission and check for
-            {
-                var heldEntity = player.GetHeldEntity() as HeldEntity;
-                heldEntity?.SetHeld(false);
-            }
-        }*/
+            if (!onlinePlayers[basePlayer].IsInvisible) return;
+
+            var held = basePlayer.GetHeldEntity();
+            if (held != null && basePlayer.IPlayer.HasPermission(permAbilitiesWeapons)) held.SetHeld(false);
+        }
 
         #endregion
 
         #region Teleport Blocking
 
-        private object CanTeleport(BasePlayer player)
+        private object CanTeleport(BasePlayer basePlayer)
         {
-            if (onlinePlayers[player] == null) return null;
-            return onlinePlayers[player].IsInvisible && !HasPerm(player.UserIDString, permTeleport) ? Lang("CantUseTeleport", player.UserIDString) : null;
+            if (onlinePlayers[basePlayer] == null)
+            {
+                return null;
+            }
+
+            //Ignore for normal teleport plugins
+            if (!onlinePlayers[basePlayer].IsInvisible)
+            {
+                return null;
+            }
+
+            var canTeleport = basePlayer.IPlayer.HasPermission(permAbilitiesTeleport);
+            return !canTeleport ? Lang("CantUseTeleport", basePlayer.UserIDString) : null;
+        }
+
+        #endregion
+
+        #region Persistence Handling
+
+        private void OnPlayerInit(BasePlayer basePlayer)
+        {
+            // TODO: Persistence permission check and handling
         }
 
         #endregion
@@ -442,10 +499,10 @@ namespace Oxide.Plugins
 
         private void Unload()
         {
-            foreach (var player in BasePlayer.activePlayerList)
+            foreach (var basePlayer in BasePlayer.activePlayerList)
             {
                 string gui;
-                if (guiInfo.TryGetValue(player.userID, out gui)) CuiHelper.DestroyUi(player, gui);
+                if (guiInfo.TryGetValue(basePlayer.userID, out gui)) CuiHelper.DestroyUi(basePlayer, gui);
             }
         }
 
@@ -464,9 +521,7 @@ namespace Oxide.Plugins
 
         private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        private bool HasPerm(string id, string perm) => permission.UserHasPermission(id, perm);
-
-        private bool IsAdmin(BasePlayer player) => permission.UserHasGroup(player.UserIDString, "admin") || player.net?.connection?.authLevel > 0;
+        private void Message(IPlayer player, string key, params object[] args) => player.Reply(Lang(key, player.Id, args));
 
         private bool IsInvisible(BasePlayer player) => onlinePlayers[player]?.IsInvisible ?? false;
 

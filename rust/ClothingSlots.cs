@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("ClothingSlots", "Jake_Rich", "1.0.1")]
+    [Info("ClothingSlots", "Jake_Rich", "1.1.0")]
     [Description("Available Inventory Slots Depends On Clothing Worn")]
 
     public partial class ClothingSlots : RustPlugin
@@ -57,6 +57,36 @@ namespace Oxide.Plugins
             PlayerData.Get(player).UpdateSlots();
         }
 
+        void OnPlayerRespawned(BasePlayer player)
+        {
+            PlayerData.Get(player).UpdateSlots();
+        }
+
+        object CanMoveItem(Item movedItem, PlayerInventory inventory, uint targetContainerID, int targetSlot, int amount)
+        {
+            var container = inventory.FindContainer(targetContainerID);
+            var player = inventory.GetComponent<BasePlayer>();
+
+            if (targetSlot != -1)
+            {
+                return null;
+            }
+
+            if (movedItem.parent != inventory.containerBelt)
+            {
+                return null;
+            }
+
+            if (movedItem.info.GetComponent<ItemModWearable>() != null)
+            {
+                if (movedItem.MoveToContainer(inventory.containerWear))
+                {
+                    return false;
+                }
+            }
+            return null;
+        }
+
         void OnItemAddedToContainer(ItemContainer container, Item item)
         {
             var player = container.playerOwner as BasePlayer;
@@ -85,6 +115,14 @@ namespace Oxide.Plugins
             NextFrame(() =>
             {
                 //NextFrame it, so when clothing is put into the inventory it will move when capacity decreases
+                if (player == null)
+                {
+                    return;
+                }
+                if (player.IsDead())
+                {
+                    return;
+                }
                 PlayerData.Get(player).UpdateSlots();
             });
         }
@@ -110,7 +148,7 @@ namespace Oxide.Plugins
             public int DefaultSlots = 6;
             public Dictionary<string, ClothingSetting> Clothing = new Dictionary<string, ClothingSetting>() //Default values are as follows
             {
-                {"burlap.shirt", new ClothingSetting() { Slots = 4, } },
+                {"burlap.shirt", new ClothingSetting() { Slots = 3, } },
                 {"burlap.shoes", new ClothingSetting() { Slots = 2, } },
                 {"facialhair.style01", new ClothingSetting() { Slots = 0, } },
                 {"femalearmpithair.style01", new ClothingSetting() { Slots = 0, } },
@@ -122,7 +160,7 @@ namespace Oxide.Plugins
                 {"gloweyes", new ClothingSetting() { Slots = 0, } },
                 {"male_hairstyle_01", new ClothingSetting() { Slots = 0, } },
                 {"female_hairstyle_02", new ClothingSetting() { Slots = 0, } },
-                {"attire.hide.helterneck", new ClothingSetting() { Slots = 4, } },
+                {"attire.hide.helterneck", new ClothingSetting() { Slots = 3, } },
                 {"hat.beenie", new ClothingSetting() { Slots = 2, } },
                 {"hat.boonie", new ClothingSetting() { Slots = 2, } },
                 {"bucket.helmet", new ClothingSetting() { Slots = 0, } },
@@ -137,10 +175,10 @@ namespace Oxide.Plugins
                 {"riot.helmet", new ClothingSetting() { Slots = 0, } },
                 {"hat.wolf", new ClothingSetting() { Slots = 0, } },
                 {"wood.armor.helmet", new ClothingSetting() { Slots = 0, } },
-                {"hazmatsuit", new ClothingSetting() { Slots = 12, } },
+                {"hazmatsuit", new ClothingSetting() { Slots = 15, } },
                 {"attire.hide.boots", new ClothingSetting() { Slots = 3, } },
-                {"attire.hide.skirt", new ClothingSetting() { Slots = 4, } },
-                {"attire.hide.vest", new ClothingSetting() { Slots = 6, } },
+                {"attire.hide.skirt", new ClothingSetting() { Slots = 3, } },
+                {"attire.hide.vest", new ClothingSetting() { Slots = 5, } },
                 {"hoodie", new ClothingSetting() { Slots = 12, } },
                 {"bone.armor.suit", new ClothingSetting() { Slots = 6, } },
                 {"heavy.plate.jacket", new ClothingSetting() { Slots = 4, } },
@@ -156,13 +194,13 @@ namespace Oxide.Plugins
                 {"mask.bandana", new ClothingSetting() { Slots = 2, } },
                 {"metal.facemask", new ClothingSetting() { Slots = 0, } },
                 {"metal.plate.torso", new ClothingSetting() { Slots = 0, } },
-                {"burlap.trousers", new ClothingSetting() { Slots = 4, } },
+                {"burlap.trousers", new ClothingSetting() { Slots = 3, } },
                 {"pants", new ClothingSetting() { Slots = 8, } },
                 {"heavy.plate.pants", new ClothingSetting() { Slots = 4, } },
                 {"attire.hide.pants", new ClothingSetting() { Slots = 4, } },
                 {"roadsign.kilt", new ClothingSetting() { Slots = 0, } },
                 {"pants.shorts", new ClothingSetting() { Slots = 4, } },
-                {"attire.hide.poncho", new ClothingSetting() { Slots = 0, } },
+                {"attire.hide.poncho", new ClothingSetting() { Slots = 6, } },
                 {"pumpkin", new ClothingSetting() { Slots = 0, } },
                 {"roadsign.jacket", new ClothingSetting() { Slots = 0, } },
                 {"santahat", new ClothingSetting() { Slots = 0, } },
@@ -201,6 +239,10 @@ namespace Oxide.Plugins
         {
             public void SetSlots(int slots)
             {
+                if (Player == null)
+                {
+                    return;
+                }
                 Player.inventory.containerBelt.MarkDirty();
                 Player.inventory.containerMain.MarkDirty();
                 if (slots <= 6)
@@ -243,12 +285,14 @@ namespace Oxide.Plugins
                                         if (slotItem.amount > maxStack)
                                         {
                                             invalidItem.amount = slotItem.amount - maxStack;
+                                            slotItem.amount = maxStack;
                                         }
                                         else
                                         {
                                             //Combined item
                                             hasMovedItem = true;
                                             invalidItem.Remove();
+                                            ItemManager.DoRemoves();
                                             break;
                                         }
                                     }

@@ -1,0 +1,16 @@
+{
+    "name": "FriendsAPI",
+    "description": "An API to manage a friend list",
+    "author": "Wulf",
+    "version": "2.2.5",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/friendsapi.686",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,4 +1,8 @@
-﻿using Facepunch;
+﻿// Reference: System.Drawing
+
+using Facepunch;
+using Graphics = System.Drawing.Graphics; 
+using ImageFormat = System.Drawing.Imaging.ImageFormat;
 using Oxide.Core;
 using Oxide.Core.Libraries;
 using Newtonsoft.Json;
@@ -6,17 +10,19 @@ using ProtoBuf;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("Copy Paste", "Reneb", "3.5.3", ResourceId = 716)]
+	[Info("Copy Paste", "Reneb", "3.5.7", ResourceId = 716)]
 	[Description("Copy and paste your buildings to save them or move them")]
 
 	class CopyPaste : RustPlugin
-	{
+	{		
 		private int copyLayer 		= LayerMask.GetMask("Construction", "Construction Trigger", "Trigger", "Deployed", "Default");
 		private int groundLayer 	= LayerMask.GetMask("Terrain", "Default");
 		private int rayCopy 		= LayerMask.GetMask("Construction", "Deployed", "Tree", "Resource", "Prevent Building");
@@ -30,6 +36,28 @@ namespace Oxide.Plugins
 
 		private Dictionary<string, Stack<List<BaseEntity>>> lastPastes = new Dictionary<string, Stack<List<BaseEntity>>>();
 
+		private Dictionary<string, SignSize> signSizes = new Dictionary<string, SignSize>()
+		{
+			//{"spinner.wheel.deployed", new SignSize(512, 512)},
+			{"sign.pictureframe.landscape", new SignSize(256, 128)},
+			{"sign.pictureframe.tall", new SignSize(128, 512)}, 
+			{"sign.pictureframe.portrait", new SignSize(128, 256)}, 
+			{"sign.pictureframe.xxl", new SignSize(1024, 512)}, 
+			{"sign.pictureframe.xl", new SignSize(512, 512)}, 
+			{"sign.small.wood", new SignSize(128, 64)}, 
+			{"sign.medium.wood", new SignSize(256, 128)}, 
+			{"sign.large.wood", new SignSize(256, 128)},
+			{"sign.huge.wood", new SignSize(512, 128)},
+			{"sign.hanging.banner.large", new SignSize(64, 256)}, 
+			{"sign.pole.banner.large", new SignSize(64, 256)},
+			{"sign.post.single", new SignSize(128, 64)}, 
+			{"sign.post.double", new SignSize(256, 256)}, 
+			{"sign.post.town", new SignSize(256, 128)}, 
+			{"sign.post.town.roof", new SignSize(256, 128)}, 
+			{"sign.hanging", new SignSize(128, 256)}, 
+			{"sign.hanging.ornate", new SignSize(256, 128)}, 
+		};
+		
 		private List<BaseEntity.Slot> checkSlots = new List<BaseEntity.Slot>()
 		{
 			BaseEntity.Slot.Lock,
@@ -40,9 +68,20 @@ namespace Oxide.Plugins
 
 		private enum CopyMechanics { Building, Proximity }
 
-		private FieldInfo _hasCode = typeof(CodeLock).GetField("hasCode", (BindingFlags.Instance | BindingFlags.NonPublic));
-		private FieldInfo _hasGuestCode = typeof(CodeLock).GetField("hasGuestCode", (BindingFlags.Instance | BindingFlags.NonPublic));
-		private FieldInfo _equippingActive = typeof(Locker).GetField("equippingActive", (BindingFlags.Instance | BindingFlags.NonPublic));
+		private FieldInfo _equippingActive = typeof(Locker).GetField("equippingActive", BindingFlags.Instance | BindingFlags.NonPublic);
+		private FieldInfo _colBuffer = typeof(Vis).GetField("colBuffer", BindingFlags.NonPublic | BindingFlags.Static);
+		
+		private class SignSize
+		{
+			public int width;
+			public int height;
+			
+			public SignSize(int width, int height)
+			{
+				this.width = width;
+				this.height = height;
+			}
+		}
 		
 		//Config
 
@@ -58,21 +97,9 @@ namespace Oxide.Plugins
 			
 			public class CopyOptions
 			{
-				[JsonProperty(PropertyName = "Buildings (true/false)")]
-				[DefaultValue(true)]
-				public bool Buildings { get; set; } = true;
-
-				[JsonProperty(PropertyName = "Deployables (true/false)")]
-				[DefaultValue(true)]
-				public bool Deployables { get; set; } = true;
-
 				[JsonProperty(PropertyName = "Check radius from each entity (true/false)")]
 				[DefaultValue(true)]
 				public bool EachToEach { get; set; } = true;
-				
-				[JsonProperty(PropertyName = "Inventories (true/false)")]
-				[DefaultValue(true)]
-				public bool Inventories { get; set; } = true;
 				
 				[JsonProperty(PropertyName = "Share (true/false)")]
 				[DefaultValue(false)]
@@ -154,8 +181,12 @@ namespace Oxide.Plugins
 			}
 		}
 
-		private void OnServerInitialized() => LoadVariables();
-
+		private void OnServerInitialized()
+		{
+			LoadVariables();
+			
+			_colBuffer.SetValue(null, new Collider[8192 * 16]);
+		}
 		//API
 
 		object TryCopyFromSteamID(ulong userID, string filename, string[] args)
@@ -259,16 +290,13 @@ namespace Oxide.Plugins
 			return true;
 		}
 
-		private object Copy(Vector3 sourcePos, Vector3 sourceRot, string filename, float RotationCorrection, CopyMechanics copyMechanics, float range, bool saveBuildings, bool saveDeployables, bool saveInventories, bool saveTree, bool saveShare, bool eachToEach)
+		private object Copy(Vector3 sourcePos, Vector3 sourceRot, string filename, float RotationCorrection, CopyMechanics copyMechanics, float range, bool saveTree, bool saveShare, bool eachToEach)
 		{
-			var rawData = new List<object>();
-			var copy = CopyProcess(sourcePos, sourceRot, RotationCorrection, range, saveBuildings, saveDeployables, saveInventories, saveTree, saveShare, copyMechanics, eachToEach);
+			var copy = CopyProcess(sourcePos, sourceRot, RotationCorrection, range, saveTree, saveShare, copyMechanics, eachToEach);
 
 			if(copy is string)
 				return copy;
-
-			rawData = copy as List<object>;
-
+			
 			var defaultData = new Dictionary<string, object>
 			{
 				{"position", new Dictionary<string, object>
@@ -287,21 +315,20 @@ namespace Oxide.Plugins
 
 			CopyData.Clear();
 			CopyData["default"] = defaultData;
-			CopyData["entities"] = rawData;
+			CopyData["entities"] = copy as List<object>;
 
 			Interface.Oxide.DataFileSystem.SaveDatafile(path);
-
+			
 			return true;
 		}
 
-		private object CopyProcess(Vector3 sourcePos, Vector3 sourceRot, float RotationCorrection, float range, bool saveBuildings, bool saveDeployables, bool saveInventories, bool saveTree, bool saveShare, CopyMechanics copyMechanics, bool eachToEach)
+		private object CopyProcess(Vector3 sourcePos, Vector3 sourceRot, float RotationCorrection, float range, bool saveTree, bool saveShare, CopyMechanics copyMechanics, bool eachToEach)
 		{
-			var rawData = new List<object>();
-			var houseList = new List<BaseEntity>();
-			var checkFrom = new List<Vector3> { sourcePos };
+			List<object> rawData = new List<object>();
+			HashSet<BaseEntity> houseList = new HashSet<BaseEntity>();
+			List<Vector3> checkFrom = new List<Vector3> { sourcePos };
+			int currentLayer = copyLayer, current = 0;
 			uint buildingID = 0;
-			int currentLayer = copyLayer;
-			int current = 0;
 
 			if(saveTree)
 				currentLayer |= LayerMask.GetMask("Tree");
@@ -310,23 +337,22 @@ namespace Oxide.Plugins
 			{
 				List<BaseEntity> list = Pool.GetList<BaseEntity>();
 				Vis.Entities<BaseEntity>(checkFrom[current], range, list, currentLayer);
-
+				
 				foreach(var entity in list)
 				{
-					if(!IsValid(entity) || houseList.Contains(entity))
+					if(!houseList.Add(entity))
 						continue;
-				
-					houseList.Add(entity);
 
 					if(copyMechanics == CopyMechanics.Building)
 					{
 						BuildingBlock buildingBlock = entity.GetComponentInParent<BuildingBlock>();
 
-						if(buildingBlock)
+						if(buildingBlock != null)
 						{
 							if(buildingID == 0)
 								buildingID = buildingBlock.buildingID;
-							else if(buildingID != buildingBlock.buildingID)
+							
+							if(buildingID != buildingBlock.buildingID)
 								continue;
 						}
 					}
@@ -334,22 +360,18 @@ namespace Oxide.Plugins
 					if(eachToEach && !checkFrom.Contains(entity.transform.position))
 						checkFrom.Add(entity.transform.position);
 
-					if(!saveBuildings && entity.GetComponentInParent<BuildingBlock>() != null)
-						continue;
-
-					if(!saveDeployables && (entity.GetComponentInParent<BuildingBlock>() == null && entity.GetComponent<BaseCombatEntity>() != null))
-						continue;
-
-					rawData.Add(EntityData(entity, sourcePos, sourceRot, entity.transform.position, entity.transform.rotation.ToEulerAngles(), RotationCorrection, saveInventories, saveShare));
+					rawData.Add(EntityData(entity, sourcePos, sourceRot, entity.transform.position, entity.transform.rotation.ToEulerAngles(), RotationCorrection, saveShare));
 				}
-
+				
+				Pool.FreeList(ref list);
+				
 				current++;
 			}
-
+			
 			return rawData;
 		}
 		
-		private Dictionary<string, object> EntityData(BaseEntity entity, Vector3 sourcePos, Vector3 sourceRot, Vector3 entPos, Vector3 entRot, float diffRot, bool saveInventories, bool saveShare)
+		private Dictionary<string, object> EntityData(BaseEntity entity, Vector3 sourcePos, Vector3 sourceRot, Vector3 entPos, Vector3 entRot, float diffRot, bool saveShare)
 		{
 			var normalizedPos = NormalizePosition(sourcePos, entPos, diffRot);
 			
@@ -391,57 +413,57 @@ namespace Oxide.Plugins
 			{
 				var itemlist = new List<object>();
 
-				if(saveInventories)
+				foreach(Item item in box.inventory.itemList)
 				{
-					foreach(Item item in box.inventory.itemList)
+					var itemdata = new Dictionary<string, object>
 					{
-						var itemdata = new Dictionary<string, object>
+						{"condition", item.condition.ToString() },
+						{"id", item.info.itemid },
+						{"amount", item.amount },
+						{"skinid", item.skin },
+						{"position", item.position },
+					};
+
+					if(!string.IsNullOrEmpty(item.text))
+						itemdata["text"] = item.text;
+					
+					var heldEnt = item.GetHeldEntity();
+
+					if(heldEnt != null)
+					{
+						var projectiles = heldEnt.GetComponent<BaseProjectile>();
+
+						if(projectiles != null)
 						{
-							{"condition", item.condition.ToString() },
-							{"id", item.info.itemid },
-							{"amount", item.amount },
-							{"skinid", item.skin },
-							{"position", item.position },
-						};
+							var magazine = projectiles.primaryMagazine;
 
-						var heldEnt = item.GetHeldEntity();
-
-						if(heldEnt != null)
-						{
-							var projectiles = heldEnt.GetComponent<BaseProjectile>();
-
-							if(projectiles != null)
+							if(magazine != null)
 							{
-								var magazine = projectiles.primaryMagazine;
-
-								if(magazine != null)
+								itemdata.Add("magazine", new Dictionary<string, object>
 								{
-									itemdata.Add("magazine", new Dictionary<string, object>
-									{
-										{ magazine.ammoType.itemid.ToString(), magazine.contents }
-									});
-								}
-							}
-						}
-
-						if(item?.contents?.itemList != null)
-						{
-							var contents = new List<object>();
-
-							foreach(Item itemContains in item.contents.itemList)
-							{
-								contents.Add(new Dictionary<string, object>
-								{
-									{"id", itemContains.info.itemid },
-									{"amount", itemContains.amount },
+									{ magazine.ammoType.itemid.ToString(), magazine.contents }
 								});
 							}
+						}
+					}
 
-							itemdata["items"] = contents;
+					if(item?.contents?.itemList != null)
+					{
+						var contents = new List<object>();
+
+						foreach(Item itemContains in item.contents.itemList)
+						{
+							contents.Add(new Dictionary<string, object>
+							{
+								{"id", itemContains.info.itemid },
+								{"amount", itemContains.amount },
+							});
 						}
 
-						itemlist.Add(itemdata);
+						itemdata["items"] = contents;
 					}
+
+					itemlist.Add(itemdata);
 				}
 
 				data.Add("items", itemlist);
@@ -555,6 +577,16 @@ namespace Oxide.Plugins
 			return true;
 		}
 
+        private void FixSignage(Signage sign, byte[] imageBytes)
+		{	
+			if(!signSizes.ContainsKey(sign.ShortPrefabName))
+				return;
+			
+			byte[] resizedImage = ImageResize(imageBytes, signSizes[sign.ShortPrefabName].width, signSizes[sign.ShortPrefabName].height);
+
+			sign.textureID = FileStorage.server.Store(resizedImage, FileStorage.Type.png, sign.net.ID);
+		}
+		
 		private object GetGround(Vector3 pos)
 		{
 			RaycastHit hitInfo;
@@ -572,10 +604,18 @@ namespace Oxide.Plugins
 		{
 			return player.IsAdmin || permission.UserHasPermission(player.UserIDString, permName);
 		}
+		
+        private byte[] ImageResize(byte[] imageBytes, int width, int height)
+        {
+			Bitmap resizedImage = new Bitmap(width, height),  
+				   sourceImage = new Bitmap(new MemoryStream(imageBytes));	
+				   
+			Graphics.FromImage(resizedImage).DrawImage(sourceImage, new Rectangle(0, 0, width, height), new Rectangle(0,0, sourceImage.Width, sourceImage.Height), GraphicsUnit.Pixel);         
 
-		private bool IsValid(BaseEntity entity)
-		{
-			return (entity.GetComponentInParent<BuildingBlock>() != null || entity.GetComponentInParent<BaseCombatEntity>() != null || entity.GetComponentInParent<Spawnable>() != null);
+			MemoryStream ms = new MemoryStream();
+			resizedImage.Save(ms, ImageFormat.Png);
+
+			return ms.ToArray(); 
 		}
 
 		private string Lang(string key, string userID = null, params object[] args) => string.Format(lang.GetMessage(key, this, userID), args);
@@ -682,6 +722,9 @@ namespace Oxide.Plugins
 						{
 							i.condition = itemcondition;
 
+							if(item.ContainsKey("text"))
+								i.text = item["text"].ToString();
+							
 							if(item.ContainsKey("magazine"))
 							{
 								var heldent = i.GetHeldEntity();
@@ -737,8 +780,9 @@ namespace Oxide.Plugins
 
 					if(signData.ContainsKey("texture"))
 					{
-						var stringSign = Convert.FromBase64String(signData["texture"].ToString());
-						sign.textureID = FileStorage.server.Store(stringSign, FileStorage.Type.png, sign.net.ID);
+						byte[] imageBytes = Convert.FromBase64String(signData["texture"].ToString());
+						
+						FixSignage(sign, imageBytes);
 					}
 
 					if(Convert.ToBoolean(signData["locked"]))
@@ -893,7 +937,7 @@ namespace Oxide.Plugins
 
 		private object TryCopy(Vector3 sourcePos, Vector3 sourceRot, string filename, float RotationCorrection, string[] args)
 		{
-			bool saveBuildings = config.Copy.Buildings, saveDeployables = config.Copy.Deployables, saveInventories = config.Copy.Inventories, saveShare = config.Copy.Share, saveTree = config.Copy.Tree, eachToEach = config.Copy.EachToEach;
+			bool saveShare = config.Copy.Share, saveTree = config.Copy.Tree, eachToEach = config.Copy.EachToEach;
 			CopyMechanics copyMechanics = CopyMechanics.Proximity;
 			float radius = 3f;
 
@@ -911,27 +955,9 @@ namespace Oxide.Plugins
 
 				switch(param)
 				{
-					case "b":
-					case "buildings":
-						if(!bool.TryParse(args[valueIndex], out saveBuildings))
-							return Lang("SYNTAX_BOOL", null, param);
-
-						break;
-					case "d":
-					case "deployables":
-						if(!bool.TryParse(args[valueIndex], out saveDeployables))
-							return Lang("SYNTAX_BOOL", null, param);
-
-						break;
 					case "e":
 					case "each":
 						if(!bool.TryParse(args[valueIndex], out eachToEach))
-							return Lang("SYNTAX_BOOL", null, param);
-
-						break;
-					case "i":
-					case "inventories":
-						if(!bool.TryParse(args[valueIndex], out saveInventories))
 							return Lang("SYNTAX_BOOL", null, param);
 
 						break;
@@ -973,7 +999,7 @@ namespace Oxide.Plugins
 				}
 			}
 
-			return Copy(sourcePos, sourceRot, filename, RotationCorrection, copyMechanics, radius, saveBuildings, saveDeployables, saveInventories, saveTree, saveShare, eachToEach);
+			return Copy(sourcePos, sourceRot, filename, RotationCorrection, copyMechanics, radius, saveTree, saveShare, eachToEach);
 		}
 
 		private void TryCopySlots(BaseEntity ent, IDictionary<string, object> housedata, bool saveShare)
@@ -1186,8 +1212,8 @@ namespace Oxide.Plugins
 					if(!string.IsNullOrEmpty(code))
 					{
 						CodeLock codeLock = slotEntity.GetComponent<CodeLock>();
-						codeLock.code = code;					
-						_hasCode.SetValue(codeLock, true);
+						codeLock.code = code;
+						codeLock.hasCode = true;
 						
 						if(slotData.ContainsKey("whitelistPlayers"))
 						{
@@ -1202,7 +1228,7 @@ namespace Oxide.Plugins
 							string guestCode = (string)slotData["guestCode"];
 							
 							codeLock.guestCode = guestCode;
-							_hasGuestCode.SetValue(codeLock, true);
+							codeLock.hasGuestCode = true;
 							
 							if(slotData.ContainsKey("guestPlayers"))
 							{

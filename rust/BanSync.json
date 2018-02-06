@@ -3,9 +3,9 @@
     "description": "Syncs bans across multiple servers.",
     "author": "sqroot",
     "version": "1.0.2",
-    "configuration": true,
+    "configuration": false,
     "language": "py",
-    "url": "http:\/\/oxidemod.org\/plugins\/bansync.1897",
+    "url": "https:\/\/oxidemod.org\/plugins\/bansync.1897",
     "games": [
         "rust"
     ],

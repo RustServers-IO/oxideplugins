@@ -3,9 +3,9 @@
     "description": "Over 100 new hooks to reduce boiler-plate and save time",
     "author": "Calytic",
     "version": "0.0.12",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/hooksextended.2239",
+    "url": "https:\/\/oxidemod.org\/plugins\/hooksextended.2239",
     "games": [
         "rust"
     ],

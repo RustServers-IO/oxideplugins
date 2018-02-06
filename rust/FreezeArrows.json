@@ -3,9 +3,9 @@
     "description": "Freezes players within radius for a short time",
     "author": "Colon Blow",
     "version": "1.0.10",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/freeze-arrows.1601",
+    "url": "https:\/\/oxidemod.org\/plugins\/freeze-arrows.1601",
     "games": [
         "rust"
     ],

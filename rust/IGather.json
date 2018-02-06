@@ -3,9 +3,9 @@
     "description": "Adds the ability to create gather groups!",
     "author": "DylanSMR",
     "version": "1.0.10",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/igather.1763",
+    "url": "https:\/\/oxidemod.org\/plugins\/igather.1763",
     "games": [
         "rust"
     ],

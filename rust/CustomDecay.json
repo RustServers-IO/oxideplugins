@@ -3,9 +3,9 @@
     "description": "Custom decay for all individual entities with auto configuration for any new entities added to rust",
     "author": "",
     "version": "1.0.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/customdecay.2690",
+    "url": "https:\/\/oxidemod.org\/plugins\/customdecay.2690",
     "games": [
         "rust"
     ],

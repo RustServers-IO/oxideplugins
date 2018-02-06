@@ -3,14 +3,14 @@
     "description": "1v1 and TDM dueling event.",
     "author": "nivex",
     "version": "1.1.5",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Kits": "*",
         "Economics": "*",
         "ServerRewards": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/duelist.2520",
+    "url": "https:\/\/oxidemod.org\/plugins\/duelist.2520",
     "games": [
         "rust"
     ],

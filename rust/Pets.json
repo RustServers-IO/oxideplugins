@@ -3,9 +3,9 @@
     "description": "Do you want a pet? This plugin is for you!",
     "author": "k1lly0u",
     "version": "0.6.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/pets.851",
+    "url": "https:\/\/oxidemod.org\/plugins\/pets.851",
     "games": [
         "rust"
     ],

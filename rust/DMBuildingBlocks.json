@@ -3,9 +3,9 @@
     "description": "Prevent \/ Allow damage to specific building blocks (ie..pillars, floors)",
     "author": "Colon Blow",
     "version": "1.0.4",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/damage-mod-building-block-protection.1430",
+    "url": "https:\/\/oxidemod.org\/plugins\/damage-mod-building-block-protection.1430",
     "games": [
         "rust"
     ],

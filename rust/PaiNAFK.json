@@ -3,9 +3,9 @@
     "description": "Simple \"Away From Keyboard\" system",
     "author": "PaiN",
     "version": "0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/pain-afk.976",
+    "url": "https:\/\/oxidemod.org\/plugins\/pain-afk.976",
     "games": [
         "rust"
     ],

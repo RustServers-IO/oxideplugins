@@ -3,9 +3,9 @@
     "description": "Barrels containing certain items can explode",
     "author": "ignignokt84",
     "version": "0.3.4",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/explodingbarrels.1902",
+    "url": "https:\/\/oxidemod.org\/plugins\/explodingbarrels.1902",
     "games": [
         "rust"
     ],

@@ -1,11 +1,17 @@
 {
     "name": "StartProtection",
     "description": "Protect new players when they first connect",
-    "author": "Wulf",
-    "version": "1.9",
-    "configuration": true,
+    "author": "wazzzup",
+    "version": "2.2.0",
+    "configuration": false,
+    "suggest": {
+        "Friends": "*"
+    },
+    "require": {
+        "ImageLibrary": "*"
+    },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/startprotection.1342",
+    "url": "https:\/\/oxidemod.org\/plugins\/startprotection.1342",
     "games": [
         "rust"
     ],

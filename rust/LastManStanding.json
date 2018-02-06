@@ -3,12 +3,12 @@
     "description": "Fight to the death event for EventManager",
     "author": "k1lly0u",
     "version": "2.0.22",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "EventManager": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/last-man-standing-event.1663",
+    "url": "https:\/\/oxidemod.org\/plugins\/last-man-standing-event.1663",
     "games": [
         "rust"
     ],

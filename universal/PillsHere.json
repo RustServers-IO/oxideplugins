@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Recovers health, hunger, and thirst by set amounts when using rad pills",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/pillshere.1723",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -3,12 +3,12 @@
     "description": "Adds a few new features to traps",
     "author": "redBDGR",
     "version": "1.0.11",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Friends": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/trapper.2417",
+    "url": "https:\/\/oxidemod.org\/plugins\/trapper.2417",
     "games": [
         "rust"
     ],

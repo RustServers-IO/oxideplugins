@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Basic economics system and economy API",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/economics.717",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

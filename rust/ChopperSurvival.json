@@ -3,7 +3,7 @@
     "description": "Helicopter survival event for EventManager",
     "author": "k1lly0u",
     "version": "0.2.82",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "EventManager": "*",
         "ZoneManager": "*",
@@ -11,7 +11,7 @@
         "Kits": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/chopper-survival.1590",
+    "url": "https:\/\/oxidemod.org\/plugins\/chopper-survival.1590",
     "games": [
         "rust"
     ],

@@ -3,7 +3,7 @@
     "description": "Keep track of player kill streaks and either reward or punish them",
     "author": "k1lly0u",
     "version": "0.1.56",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Airstrike": "*",
         "Friends": "*",
@@ -11,7 +11,7 @@
         "EventManager": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/killstreaks.1752",
+    "url": "https:\/\/oxidemod.org\/plugins\/killstreaks.1752",
     "games": [
         "rust"
     ],

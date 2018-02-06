@@ -3,9 +3,9 @@
     "description": "Allows only players with permission to spectate",
     "author": "Wulf",
     "version": "0.4.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/spectate.1426",
+    "url": "https:\/\/oxidemod.org\/plugins\/spectate.1426",
     "games": [
         "rust"
     ],

@@ -3,9 +3,9 @@
     "description": "Go out with a bang",
     "author": "Calytic",
     "version": "0.0.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/suicidebomber.1425",
+    "url": "https:\/\/oxidemod.org\/plugins\/suicidebomber.1425",
     "games": [
         "rust"
     ],

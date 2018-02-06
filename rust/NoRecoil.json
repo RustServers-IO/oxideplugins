@@ -3,9 +3,9 @@
     "description": "Detects recoil scripts from programs such as AutoHotKey.",
     "author": "Kappasaurus",
     "version": "1.0.6",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/norecoil.2429",
+    "url": "https:\/\/oxidemod.org\/plugins\/norecoil.2429",
     "games": [
         "rust"
     ],

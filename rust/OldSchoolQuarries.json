@@ -3,9 +3,9 @@
     "description": "Makes resource output from quarries better",
     "author": "S0N_0F_BISCUIT",
     "version": "1.0.6",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/old-school-quarries.2585",
+    "url": "https:\/\/oxidemod.org\/plugins\/old-school-quarries.2585",
     "games": [
         "rust"
     ],

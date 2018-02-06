@@ -1,0 +1,16 @@
+{
+    "name": "PlayerList",
+    "description": "Shows a list and count of all online, non-hidden players",
+    "author": "Wulf",
+    "version": "0.3.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/playerlist.2126",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

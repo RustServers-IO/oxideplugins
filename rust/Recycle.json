@@ -3,9 +3,9 @@
     "description": "Recycle crafted items to base resources",
     "author": "Calytic",
     "version": "2.0.8",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/recycle.1296",
+    "url": "https:\/\/oxidemod.org\/plugins\/recycle.1296",
     "games": [
         "rust"
     ],

@@ -3,9 +3,9 @@
     "description": "Choose a materials that won't be consumed while crafting.",
     "author": "",
     "version": "0.2.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/nocost.2225",
+    "url": "https:\/\/oxidemod.org\/plugins\/nocost.2225",
     "games": [
         "rust"
     ],

@@ -3,7 +3,7 @@
     "description": "Broadcasts raid activity to chat",
     "author": "Calytic",
     "version": "1.0.0",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Slack": "*",
         "Discord": "*",
@@ -11,7 +11,7 @@
         "Clans": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/raidnotes.2117",
+    "url": "https:\/\/oxidemod.org\/plugins\/raidnotes.2117",
     "games": [
         "rust"
     ],

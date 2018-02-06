@@ -3,9 +3,9 @@
     "description": "Allows control over research speed.",
     "author": "Tori1157",
     "version": "2.0.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/instant-research.1318",
+    "url": "https:\/\/oxidemod.org\/plugins\/instant-research.1318",
     "games": [
         "rust"
     ],

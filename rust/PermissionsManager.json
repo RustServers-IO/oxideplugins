@@ -1,11 +1,11 @@
 {
     "name": "Permissions Manager",
     "description": "GUI manager for player and group permissions",
-    "author": "=BBUK= Steenamaroo",
+    "author": "Steenamaroo",
     "version": "0.0.9",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/permissions-manager.2629",
+    "url": "https:\/\/oxidemod.org\/plugins\/permissions-manager.2629",
     "games": [
         "rust"
     ],

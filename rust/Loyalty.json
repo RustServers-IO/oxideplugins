@@ -3,9 +3,9 @@
     "description": "Reward your players for play time with new permissions\/usergroups",
     "author": "Wulf",
     "version": "1.3.4",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/loyalty.1978",
+    "url": "https:\/\/oxidemod.org\/plugins\/loyalty.1978",
     "games": [
         "rust"
     ],

@@ -3,12 +3,12 @@
     "description": "A Tax System for Factions Core",
     "author": "Absolut",
     "version": "1.0.0",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "FactionsCore": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/factionstax.2424",
+    "url": "https:\/\/oxidemod.org\/plugins\/factionstax.2424",
     "games": [
         "rust"
     ],

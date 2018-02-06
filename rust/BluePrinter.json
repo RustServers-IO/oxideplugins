@@ -1,14 +1,14 @@
 {
     "name": "BluePrinter",
     "description": "Allows producing blueprints your char knows, needs paper or research paper",
-    "author": "mk_sky",
+    "author": "",
     "version": "1.0.7",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "PopupNotifications": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/blueprinter.1343",
+    "url": "https:\/\/oxidemod.org\/plugins\/blueprinter.1343",
     "games": [
         "rust"
     ],

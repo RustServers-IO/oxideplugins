@@ -1,11 +1,11 @@
 {
     "name": "ConsoleMessages",
     "description": "Send messages to individual players with console commands",
-    "author": "Skrallex",
-    "version": "1.1.1",
-    "configuration": true,
+    "author": "Wulf",
+    "version": "1.1.2",
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/consolemessages.2093",
+    "url": "https:\/\/oxidemod.org\/plugins\/consolemessages.2093",
     "games": [
         "rust"
     ],

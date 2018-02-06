@@ -3,12 +3,12 @@
     "description": "Call an airstrike using a supply signal\/chat command",
     "author": "k1lly0u",
     "version": "0.3.03",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Economics": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/airstrike.1489",
+    "url": "https:\/\/oxidemod.org\/plugins\/airstrike.1489",
     "games": [
         "rust"
     ],

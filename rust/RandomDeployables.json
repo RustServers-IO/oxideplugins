@@ -3,9 +3,9 @@
     "description": "Randomize deployable skins",
     "author": "Norn",
     "version": "0.1.9",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/random-deployables.2187",
+    "url": "https:\/\/oxidemod.org\/plugins\/random-deployables.2187",
     "games": [
         "rust"
     ],

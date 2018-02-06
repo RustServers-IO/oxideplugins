@@ -1,11 +1,11 @@
 {
-    "name": "Anti-Dupe",
+    "name": "Anti",
     "description": "Prevent player to stack-duplicate items",
     "author": "SPooCK",
     "version": "1.0.2",
     "configuration": false,
     "language": "lua",
-    "url": "http:\/\/oxidemod.org\/plugins\/anti-dupe.734",
+    "url": "https:\/\/oxidemod.org\/plugins\/anti-dupe.734",
     "games": [
         "rust"
     ],

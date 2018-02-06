@@ -3,9 +3,9 @@
     "description": "Safe player storage",
     "author": "Calytic",
     "version": "0.1.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/bank.2116",
+    "url": "https:\/\/oxidemod.org\/plugins\/bank.2116",
     "games": [
         "rust"
     ],

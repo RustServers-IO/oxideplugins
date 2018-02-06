@@ -1,14 +1,14 @@
 {
-    "name": "BattleRoyale Local RadZone",
+    "name": "BattleRoyaleRadZone",
     "description": "BattleRoyale-styled radiation system",
     "author": "Wulf",
-    "version": "1.0.5",
-    "configuration": true,
+    "version": "1.0.6",
+    "configuration": false,
     "require": {
         "ZoneManager": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/battleroyale-local-radzone.1828",
+    "url": "https:\/\/oxidemod.org\/plugins\/battleroyaleradzone.1828",
     "games": [
         "rust"
     ],

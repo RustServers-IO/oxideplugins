@@ -1,11 +1,11 @@
 {
     "name": "StashControl",
     "description": "Manage small stashes",
-    "author": "Piarb",
+    "author": "",
     "version": "1.0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/stashcontrol.1950",
+    "url": "https:\/\/oxidemod.org\/plugins\/stashcontrol.1950",
     "games": [
         "rust"
     ],

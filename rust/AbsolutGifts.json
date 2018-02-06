@@ -3,7 +3,7 @@
     "description": "Daily Gift Reward System - PlayTimeRewards.. Time Resets per config!",
     "author": "Absolut",
     "version": "1.4.4",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Economics": "*",
         "ServerRewards": "*",
@@ -13,7 +13,7 @@
         "ImageLibrary": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/absolutgifts.2159",
+    "url": "https:\/\/oxidemod.org\/plugins\/absolutgifts.2159",
     "games": [
         "rust"
     ],

@@ -3,12 +3,12 @@
     "description": "A mod that alters pvp into zones created by chat commands, designed for RPG servers.",
     "author": "Alphawar",
     "version": "0.9.1",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "RustIOFriendListAPI": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/antibandit.1879",
+    "url": "https:\/\/oxidemod.org\/plugins\/antibandit.1879",
     "games": [
         "rust"
     ],

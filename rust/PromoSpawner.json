@@ -3,9 +3,9 @@
     "description": "Spawns the box with your promocode. Save them between reloads.",
     "author": "Vlad-00003",
     "version": "1.1.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/promocode-spawner.2410",
+    "url": "https:\/\/oxidemod.org\/plugins\/promocode-spawner.2410",
     "games": [
         "rust"
     ],

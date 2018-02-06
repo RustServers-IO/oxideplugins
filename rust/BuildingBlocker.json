@@ -3,12 +3,12 @@
     "description": "Fully prevents building in the building blocked zone. Fixes the \"Devblog 158 of 4th may\"",
     "author": "Vlad-00003",
     "version": "2.4.0",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "NoEscape": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/building-blocker.2456",
+    "url": "https:\/\/oxidemod.org\/plugins\/building-blocker.2456",
     "games": [
         "rust"
     ],

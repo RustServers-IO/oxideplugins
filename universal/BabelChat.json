@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Translates chat messages to each player's language preference or default language",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/babelchat.1964",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

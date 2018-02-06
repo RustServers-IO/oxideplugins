@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Simple mute system, made for use with BetterChat",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/betterchatmute.2272",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

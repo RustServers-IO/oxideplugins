@@ -1,11 +1,11 @@
 {
-    "name": "Craft Spam Blocker",
+    "name": "CraftSpamBlocker",
     "description": "Prevents items from being crafted if the player's inventory is full",
-    "author": "LeoCurtss",
+    "author": "Wulf",
     "version": "0.2",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/craft-spam-blocker.1805",
+    "url": "https:\/\/oxidemod.org\/plugins\/craftspamblocker.1805",
     "games": [
         "rust"
     ],

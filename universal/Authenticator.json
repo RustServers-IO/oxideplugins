@@ -1,0 +1,16 @@
+{
+    "name": "Authenticator",
+    "description": "Allows players to add passwords to their accounts on your server",
+    "author": "Spicy",
+    "version": "2.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/authenticator.701",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

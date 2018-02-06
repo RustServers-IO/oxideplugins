@@ -1,11 +1,11 @@
 {
-    "name": "Weapons On Back",
+    "name": "Weapons On Back [Obsolete]",
     "description": "Renders the player's best weapon on their back, and best sidearm on their hip",
     "author": "Jake Rich",
     "version": "0.2.3",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/weapons-on-back.2188",
+    "url": "https:\/\/oxidemod.org\/plugins\/weapons-on-back-obsolete.2188",
     "games": [
         "rust"
     ],

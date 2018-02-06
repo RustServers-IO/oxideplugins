@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Customize chat colors, formatting, prefix and more",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/betterchat.979",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -3,12 +3,12 @@
     "description": "GUI-based player manager",
     "author": "Reneb",
     "version": "1.0.11",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "PlayerDatabase": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/player-manager.1535",
+    "url": "https:\/\/oxidemod.org\/plugins\/player-manager.1535",
     "games": [
         "rust"
     ],

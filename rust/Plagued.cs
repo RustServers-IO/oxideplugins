@@ -1,44 +1,42 @@
-using System.Reflection;
-using System.Collections.Generic;
 using System;
-
+using System.Collections.Generic;
+using System.Reflection;
 using Oxide.Core;
-using Oxide.Core.Configuration;
-using Oxide.Core.Plugins;
-using Oxide.Ext.SQLite;
-
+using Oxide.Core.SQLite;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Plagued", "Wernesgruner", "0.3.3")]
-    [Description("Everyone is infected.")]
+    [Info("Plagued", "Psi|ocybin", "0.3.4", ResourceId = 1991)]
+    [Description("Everyone is infected")]
 
     class Plagued : RustPlugin
     {
-        private static int plagueRange = 20;
-        private static int plagueIncreaseRate = 5;
-        private static int plagueDecreaseRate = 1;
-        private static int plagueMinAffinity = 6000;
-        private static int affinityIncRate = 10;
-        private static int affinityDecRate = 1;
-        private static int maxKin = 2;
-        private static int maxKinChanges = 3;
-        private static int playerLayer;
-        private static bool disableSleeperAffinity = false;
+        #region Initialization
 
-        private readonly FieldInfo serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
+        static int plagueRange = 20;
+        static int plagueIncreaseRate = 5;
+        static int plagueDecreaseRate = 1;
+        static int plagueMinAffinity = 6000;
+        static int affinityIncRate = 10;
+        static int affinityDecRate = 1;
+        static int maxKin = 2;
+        static int maxKinChanges = 3;
+        static int playerLayer;
+        static bool disableSleeperAffinity = false;
 
         // Get the buffer size from the Vis class using relfection. It should always be 8ko, but it might change in the future
-        private static readonly Collider[] colBuffer = (Collider[])typeof(Vis).GetField("colBuffer", (BindingFlags.Static | BindingFlags.NonPublic)).GetValue(null);
+        static readonly Collider[] colBuffer = (Collider[])typeof(Vis).GetField("colBuffer", (BindingFlags.Static | BindingFlags.NonPublic)).GetValue(null);
 
-        //
-        private Dictionary<ulong, PlayerState> playerStates;
+        Dictionary<ulong, PlayerState> playerStates;
+
+        #endregion
 
         #region Hooks
+
         protected override void LoadDefaultConfig()
         {
-            PrintWarning("Creating a new configuration file (Plagued Mod)");
+            PrintWarning("Creating a new configuration file");
 
             Config.Clear();
             Config["plagueRange"] = 20;
@@ -54,10 +52,7 @@ namespace Oxide.Plugins
             SaveConfig();
         }
 
-        void Unload()
-        {
-            PlayerState.closeDatabase();
-        }
+        void Unload() => PlayerState.closeDatabase();
 
         void OnServerInitialized()
         {
@@ -71,16 +66,16 @@ namespace Oxide.Plugins
             {
                 playerStates.Add(player.userID, new PlayerState(player, null));
             }
-            
-            plagueRange = (int) Config["plagueRange"];
-            plagueIncreaseRate = (int) Config["plagueIncreaseRate"];
-            plagueDecreaseRate = (int) Config["plagueDecreaseRate"];
-            plagueMinAffinity = (int) Config["plagueMinAffinity"];
-            affinityIncRate = (int) Config["affinityIncRate"];
-            affinityDecRate = (int) Config["affinityDecRate"];
-            maxKin = (int) Config["maxKin"];
-            maxKinChanges = (int) Config["maxKinChanges"];
-            disableSleeperAffinity = (bool) Config["disableSleeperAffinity"];
+
+            plagueRange = (int)Config["plagueRange"];
+            plagueIncreaseRate = (int)Config["plagueIncreaseRate"];
+            plagueDecreaseRate = (int)Config["plagueDecreaseRate"];
+            plagueMinAffinity = (int)Config["plagueMinAffinity"];
+            affinityIncRate = (int)Config["affinityIncRate"];
+            affinityDecRate = (int)Config["affinityDecRate"];
+            maxKin = (int)Config["maxKin"];
+            maxKinChanges = (int)Config["maxKinChanges"];
+            disableSleeperAffinity = (bool)Config["disableSleeperAffinity"];
         }
 
         void OnPlayerInit(BasePlayer player)
@@ -88,7 +83,8 @@ namespace Oxide.Plugins
             // Add the player to the player state list
             if (!playerStates.ContainsKey(player.userID))
             {
-                PlayerState state = new PlayerState(player, stateRef => {
+                PlayerState state = new PlayerState(player, stateRef =>
+                {
                     // The player was loaded in the current game session
                     playerStates.Add(player.userID, stateRef);
                     SendReply(player, "Welcome to plagued mod. Try the <color=#81F781>/plagued</color> command for more information.");
@@ -99,7 +95,8 @@ namespace Oxide.Plugins
 
                     return true;
                 });
-            } else
+            }
+            else
             {
                 // Add the proximity detector to the player
                 player.gameObject.AddComponent<ProximityDetector>();
@@ -142,48 +139,47 @@ namespace Oxide.Plugins
             float defaultCaloriesLoss = 0.05f;
             float defaultHydrationLoss = 0.025f;
 
-
-            //Interface.Oxide.LogInfo("Infection stage " + (plagueLevel / 1000).ToString());
+            //Puts("Infection stage " + (plagueLevel / 1000).ToString());
 
             if (plagueLevel == 0) return;
 
             if (plagueLevel <= 1) return;
-            //Interface.Oxide.LogInfo("Infection stage 1 " + player.displayName + " " + player.userID);
+            //Puts("Infection stage 1 " + player.displayName + " " + player.userID);
             metabolism.pending_health.value = metabolism.pending_health.value + (defaultHealthGain / 2f);
 
             if (plagueLevel <= 1000) return;
-            //Interface.Oxide.LogInfo("Infection stage 2");
+            //Puts("Infection stage 2");
             metabolism.calories.value = metabolism.calories.value - ((defaultCaloriesLoss * 3f) + (metabolism.heartrate.value / 10f));
 
             if (plagueLevel <= 2000) return;
-            //Interface.Oxide.LogInfo("Infection stage 3");
+            //Puts("Infection stage 3");
             metabolism.hydration.value = metabolism.hydration.value - ((defaultHydrationLoss * 3f) + (metabolism.heartrate.value / 10f));
 
             if (plagueLevel <= 3000) return;
             metabolism.pending_health.value = metabolism.pending_health.value - (defaultHealthGain / 2f);
 
             if (plagueLevel <= 4000) return;
-            //Interface.Oxide.LogInfo("Infection stage 5");
+            //Puts("Infection stage 5");
             metabolism.comfort.value = -1;
 
             if (plagueLevel <= 5000) return;
-            //Interface.Oxide.LogInfo("Infection stage 6");
+            //Puts("Infection stage 6");
             metabolism.calories.value = metabolism.calories.value - ((defaultCaloriesLoss * 5f) + (metabolism.heartrate.value / 10f));
 
             if (plagueLevel <= 6000) return;
-            //Interface.Oxide.LogInfo("Infection stage 7");
+            //Puts("Infection stage 7");
             metabolism.hydration.value = metabolism.hydration.value - ((defaultHydrationLoss * 5f) + (metabolism.heartrate.value / 10f));
 
             if (plagueLevel <= 7000) return;
-            ///Interface.Oxide.LogInfo("Infection stage 8");
+            ///Puts("Infection stage 8");
             metabolism.temperature.value = metabolism.temperature.value - 0.05f;
 
             if (plagueLevel <= 8000) return;
-            //Interface.Oxide.LogInfo("Infection stage 9");
+            //Puts("Infection stage 9");
             metabolism.bleeding.value = metabolism.bleeding.value + 0.2f;
 
             if (plagueLevel < 10000) return;
-            //Interface.Oxide.LogInfo("Infection stage 10");
+            //Puts("Infection stage 10");
             metabolism.poison.value = 2;
         }
 
@@ -204,9 +200,11 @@ namespace Oxide.Plugins
                 playerStates[player.userID].decreasePlaguePenalty();
             }
         }
+
         #endregion
 
         #region Commands
+
         [ChatCommand("plagued")]
         void cmdPlagued(BasePlayer player, string command, string[] args)
         {
@@ -241,7 +239,8 @@ namespace Oxide.Plugins
                             {
                                 SendReply(player, "Kin position must be a valid number!");
                             }
-                        } else
+                        }
+                        else
                         {
                             cmdDelKin(player);
                         }
@@ -262,7 +261,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private void cmdAddKin(BasePlayer player)
+        void cmdAddKin(BasePlayer player)
         {
             BasePlayer targetPlayer;
 
@@ -285,7 +284,8 @@ namespace Oxide.Plugins
                     SendReply(targetPlayer, "You are now kin with " + player.displayName + "!");
 
                     return;
-                } else
+                }
+                else
                 {
                     targetPlayerState.addKinRequest(player.userID);
                     SendReply(player, "You have requested to be " + targetPlayer.displayName + "'s kin!");
@@ -299,7 +299,7 @@ namespace Oxide.Plugins
 
         }
 
-        private bool cmdDelKin(BasePlayer player)
+        bool cmdDelKin(BasePlayer player)
         {
             BasePlayer targetPlayer;
 
@@ -329,13 +329,13 @@ namespace Oxide.Plugins
             return false;
         }
 
-        private bool cmdDelKin(BasePlayer player, int id)
+        bool cmdDelKin(BasePlayer player, int id)
         {
             PlayerState state = playerStates[player.userID];
 
             if (state.removeKinById(id))
             {
-                foreach(var item in playerStates)
+                foreach (var item in playerStates)
                 {
                     if (item.Value.getId() == id)
                     {
@@ -343,28 +343,29 @@ namespace Oxide.Plugins
                     }
                 }
                 SendReply(player, "Successfully removed kin.");
-            } else
+            }
+            else
             {
                 SendReply(player, "Could not remove kin.");
             }
-            
+
             return false;
         }
 
-        private void cmdListKin(BasePlayer player)
+        void cmdListKin(BasePlayer player)
         {
             List<string> kinList = playerStates[player.userID].getKinList();
 
             displayList(player, "Kin", kinList);
         }
 
-        private void cmdListAssociates(BasePlayer player)
+        void cmdListAssociates(BasePlayer player)
         {
             List<string> associatesList = playerStates[player.userID].getAssociatesList();
             displayList(player, "Associates", associatesList);
         }
 
-        private bool cmdInfo(BasePlayer player)
+        bool cmdInfo(BasePlayer player)
         {
             SendReply(player, " ===== Plagued mod ======");
             SendReply(player, "An unknown airborne pathogen has decimated most of the population. You find yourself on a deserted island, lucky to be among the few survivors. But the biological apocalypse is far from being over. It seems that the virus starts to express itself when certain hormonal changes are triggered by highly social behaviors. It has been noted that small groups of survivor seems to be relatively unaffected, but there isn't one single town or clan that wasn't decimated.");
@@ -377,6 +378,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Helpers
+
         public static void MsgPlayer(BasePlayer player, string format, params object[] args)
         {
             if (player?.net != null) player.SendConsoleCommand("chat.add", 0, args.Length > 0 ? string.Format(format, args) : format, 1f);
@@ -386,7 +388,7 @@ namespace Oxide.Plugins
         {
             if (stringList.Count == 0)
             {
-                SendReply(player, "You have no "+ listName.ToLower()+".");
+                SendReply(player, "You have no " + listName.ToLower() + ".");
                 return;
             }
 
@@ -404,7 +406,7 @@ namespace Oxide.Plugins
 
         #region Geometry
 
-        private bool getPlayerLookedAt(BasePlayer player, out BasePlayer targetPlayer)
+        bool getPlayerLookedAt(BasePlayer player, out BasePlayer targetPlayer)
         {
             targetPlayer = null;
 
@@ -429,9 +431,9 @@ namespace Oxide.Plugins
             return true;
         }
 
-        private bool TryGetClosestRayPoint(Vector3 sourcePos, Quaternion sourceDir, out object closestEnt, out Vector3 closestHitpoint)
+        bool TryGetClosestRayPoint(Vector3 sourcePos, Quaternion sourceDir, out object closestEnt, out Vector3 closestHitpoint)
         {
-            /**
+            /*
              * Credit: Nogrod (HumanNPC)
              */
             Vector3 sourceEye = sourcePos + new Vector3(0f, 1.5f, 0f);
@@ -456,14 +458,15 @@ namespace Oxide.Plugins
             return true;
         }
 
-        private bool TryGetPlayerView(BasePlayer player, out Quaternion viewAngle)
+        bool TryGetPlayerView(BasePlayer player, out Quaternion viewAngle)
         {
-            /**
+            /*
              * Credit: Nogrod (HumanNPC)
              */
             viewAngle = new Quaternion(0f, 0f, 0f, 0f);
-            var input = serverinput.GetValue(player) as InputState;
-            if (input?.current == null) return false;
+            var input = player.serverInput;
+            if (input.current == null) return false;
+
             viewAngle = Quaternion.Euler(input.current.aimAngles);
             return true;
         }
@@ -471,60 +474,61 @@ namespace Oxide.Plugins
         #endregion
 
         #region Data
-        /**
+
+        /*
          * This class handles the in-memory state of a player.
          */
         public class PlayerState
         {
-            private static readonly Oxide.Ext.SQLite.Libraries.SQLite sqlite = Interface.GetMod().GetLibrary<Ext.SQLite.Libraries.SQLite>();
-            private static Core.Database.Connection sqlConnection;
-            private BasePlayer player;
-            private int id;
-            private int plagueLevel;
-            private int kinChangesCount;
-            private bool pristine;
-            private Dictionary<ulong, Association> associations;
-            private Dictionary<ulong, Kin> kins;
-            private List<ulong> kinRequests;
+            static readonly Core.SQLite.Libraries.SQLite sqlite = Interface.Oxide.GetLibrary<Core.SQLite.Libraries.SQLite>();
+            static Core.Database.Connection sqlConnection;
+            BasePlayer player;
+            int id;
+            int plagueLevel;
+            int kinChangesCount;
+            bool pristine;
+            Dictionary<ulong, Association> associations;
+            Dictionary<ulong, Kin> kins;
+            List<ulong> kinRequests;
 
-            private const string UpdateAssociation = "UPDATE associations SET level=@0 WHERE associations.id = @1;";
-            private const string InsertAssociation = "INSERT INTO associations (player_id,associate_id,level) VALUES (@0,@1,@2);";
-            private const string CheckAssociationExists = "SELECT id FROM associations WHERE player_id == @0 AND associate_id == @1;";
-            private const string DeleteAssociation = "DELETE FROM associations WHERE id=@0";
-            private const string InsertPlayer = "INSERT OR IGNORE INTO players (user_id, name, plague_level, kin_changes_count, pristine) VALUES (@0, @1,0,0,1);";
-            private const string SelectPlayer = "SELECT * FROM players WHERE players.user_id == @0;";
-            private const string UpdatePlayerPlagueLevel = "UPDATE players SET plague_level=@0,pristine=@1 WHERE players.user_id == @2;";
-            private const string SelectAssociations = @"
+            const string UpdateAssociation = "UPDATE associations SET level=@0 WHERE associations.id = @1;";
+            const string InsertAssociation = "INSERT INTO associations (player_id,associate_id,level) VALUES (@0,@1,@2);";
+            const string CheckAssociationExists = "SELECT id FROM associations WHERE player_id == @0 AND associate_id == @1;";
+            const string DeleteAssociation = "DELETE FROM associations WHERE id=@0";
+            const string InsertPlayer = "INSERT OR IGNORE INTO players (user_id, name, plague_level, kin_changes_count, pristine) VALUES (@0, @1,0,0,1);";
+            const string SelectPlayer = "SELECT * FROM players WHERE players.user_id == @0;";
+            const string UpdatePlayerPlagueLevel = "UPDATE players SET plague_level=@0,pristine=@1 WHERE players.user_id == @2;";
+            const string SelectAssociations = @"
                 SELECT associations.id, associations.player_id, associations.associate_id, associations.level, players.user_id, players.name
                 FROM associations
                 JOIN players ON associations.associate_id = players.id
                 WHERE associations.player_id = @0
             ";
-            private const string SelectKinList = @"
+            const string SelectKinList = @"
                 SELECT kin.self_id, kin.kin_id, players.name as kin_name, players.user_id as kin_user_id
                 FROM kin
                 JOIN players ON kin.kin_id = players.id
                 WHERE kin.self_id = @0
             ";
-            private const string InsertKin = "INSERT INTO kin (self_id,kin_id) VALUES (@0,@1);";
-            private const string DeleteKin = "DELETE FROM kin WHERE self_id=@0 AND kin_id=@1";
-            private const string SelectKinRequestList = @"";
+            const string InsertKin = "INSERT INTO kin (self_id,kin_id) VALUES (@0,@1);";
+            const string DeleteKin = "DELETE FROM kin WHERE self_id=@0 AND kin_id=@1";
+            const string SelectKinRequestList = @"";
 
-            /**
+            /*
              * Retrieves a player from database and restore its store or creates a new database entry
              */
-            public PlayerState(BasePlayer newPlayer, Func<PlayerState,bool> callback)
+            public PlayerState(BasePlayer newPlayer, Func<PlayerState, bool> callback)
             {
                 player = newPlayer;
                 Interface.Oxide.LogInfo("Loading player: " + player.displayName);
 
-                var sql = new Oxide.Core.Database.Sql();
+                var sql = new Core.Database.Sql();
                 sql.Append(InsertPlayer, player.userID, player.displayName);
                 sqlite.Insert(sql, sqlConnection, create_results =>
                 {
                     if (create_results == 1) Interface.Oxide.LogInfo("New user created!");
 
-                    sql = new Oxide.Core.Database.Sql();
+                    sql = new Core.Database.Sql();
                     sql.Append(SelectPlayer, player.userID);
 
                     sqlite.Query(sql, sqlConnection, results =>
@@ -563,7 +567,7 @@ namespace Oxide.Plugins
             {
                 sqlConnection = sqlite.OpenDb($"Plagued.db", plugin);
 
-                var sql = new Oxide.Core.Database.Sql();
+                var sql = new Core.Database.Sql();
 
                 sql.Append(@"CREATE TABLE IF NOT EXISTS players (
                                  id INTEGER PRIMARY KEY   AUTOINCREMENT,
@@ -610,10 +614,10 @@ namespace Oxide.Plugins
                 sqlite.CloseDb(sqlConnection);
             }
 
-            /**
+            /*
              * Increases the affinity of an associate and returns his new affinity
              */
-            private Association increaseAssociateAffinity(BasePlayer associate)
+            Association increaseAssociateAffinity(BasePlayer associate)
             {
                 if (associate == null) return null;
                 if (player.userID == associate.userID) return null;
@@ -628,7 +632,8 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    createAssociation(associate.userID, associationRef => {
+                    createAssociation(associate.userID, associationRef =>
+                    {
                         if (associationRef != null)
                         {
                             association = associationRef;
@@ -639,19 +644,19 @@ namespace Oxide.Plugins
                     });
                 }
 
-                //Interface.Oxide.LogInfo(player.displayName + " -> " + associate.displayName + " = " + associates[associate.userID].ToString());
+                //Puts(player.displayName + " -> " + associate.displayName + " = " + associates[associate.userID].ToString());
 
                 return association;
             }
 
-            /**
+            /*
              * Increases the affinity of all the associations in the list and increases the plague penalty if some associations are over the plague threshold
              * It also decreases the plague treshold if all the associates are kin or under the threshold
              */
             public void increasePlaguePenalty(BasePlayer[] associates)
             {
                 int contagionVectorsCount = 0;
-                var sql = new Oxide.Core.Database.Sql();
+                var sql = new Core.Database.Sql();
 
                 foreach (BasePlayer associate in associates)
                 {
@@ -660,7 +665,7 @@ namespace Oxide.Plugins
                     Association association = increaseAssociateAffinity(associate);
 
                     if (association == null) continue;
-                    
+
                     sql.Append(UpdateAssociation, association.level, association.id);
 
                     if (association.level >= plagueMinAffinity)
@@ -675,43 +680,42 @@ namespace Oxide.Plugins
                 if (contagionVectorsCount > 0)
                 {
                     increasePlagueLevel(contagionVectorsCount);
-                } else
+                }
+                else
                 {
                     decreasePlagueLevel();
                 }
 
-                //Interface.Oxide.LogInfo(player.displayName + " -> " + plagueLevel);
+                //Puts(player.displayName + " -> " + plagueLevel);
             }
 
-            /**
+            /*
              * Decreases the affinity of all associations and decreases the plague level.
              */
             public void decreasePlaguePenalty()
             {
                 decreaseAssociationsLevel();
 
-                if (!pristine)
-                {
-                    decreasePlagueLevel();
-                }
+                if (!pristine) decreasePlagueLevel();
             }
 
             public void increasePlagueLevel(int contagionVectorCount)
             {
-                if ((plagueLevel + (contagionVectorCount * plagueIncreaseRate)) <= 10000) {
+                if ((plagueLevel + (contagionVectorCount * plagueIncreaseRate)) <= 10000)
+                {
                     plagueLevel += contagionVectorCount * plagueIncreaseRate;
 
                     if (pristine == true)
                     {
                         pristine = false;
                         MsgPlayer(player, "I don't feel so good.");
-                        //Interface.Oxide.LogInfo(player.displayName + " is now sick.");
+                        //Puts(player.displayName + " is now sick.");
                     }
 
                     syncPlagueLevel();
                 }
 
-                //Interface.Oxide.LogInfo(player.displayName + "'s new plague level: " + plagueLevel.ToString());
+                //Puts(player.displayName + "'s new plague level: " + plagueLevel.ToString());
             }
 
             public void decreasePlagueLevel()
@@ -724,7 +728,7 @@ namespace Oxide.Plugins
                     {
                         pristine = true;
                         MsgPlayer(player, "I feel a bit better now.");
-                        //Interface.Oxide.LogInfo(player.displayName + " is now cured.");
+                        //Puts(player.displayName + " is now cured.");
                     }
 
                     syncPlagueLevel();
@@ -736,7 +740,7 @@ namespace Oxide.Plugins
                 if (associations.Count == 0) return;
 
                 List<ulong> to_remove = new List<ulong>();
-                var sql = new Oxide.Core.Database.Sql();
+                var sql = new Core.Database.Sql();
 
                 foreach (ulong key in associations.Keys)
                 {
@@ -746,14 +750,15 @@ namespace Oxide.Plugins
                     {
                         association.level = association.level - affinityDecRate;
                         sql.Append(UpdateAssociation, association.level, association.id);
-                    } else if (new_affinity <= 0)
+                    }
+                    else if (new_affinity <= 0)
                     {
                         sql.Append(DeleteAssociation, association.id);
                         to_remove.Add(key);
                     }
                 }
 
-                foreach(ulong keyToRemove in to_remove)
+                foreach (ulong keyToRemove in to_remove)
                 {
                     associations.Remove(keyToRemove);
                 }
@@ -764,21 +769,16 @@ namespace Oxide.Plugins
 
             public bool isKinByUserID(ulong userID)
             {
-                foreach(var item in kins)
+                foreach (var item in kins)
                 {
                     if (item.Value.kin_user_id == userID)
-                    {
                         return true;
-                    }
                 }
 
                 return false;
             }
 
-            public bool hasKinRequest(ulong kinID)
-            {
-                return kinRequests.Contains(kinID);
-            }
+            public bool hasKinRequest(ulong kinID) => kinRequests.Contains(kinID);
 
             public bool addKinRequest(ulong kinID)
             {
@@ -792,7 +792,8 @@ namespace Oxide.Plugins
                 return false;
             }
 
-            public bool addKin(ulong kinUserID) {
+            public bool addKin(ulong kinUserID)
+            {
                 if (kins.Count + 1 <= maxKin && !isKinByUserID(kinUserID))
                 {
                     if (kinRequests.Contains(kinUserID)) kinRequests.Remove(kinUserID);
@@ -810,13 +811,9 @@ namespace Oxide.Plugins
             {
                 if ((kinChangesCount + 1) <= maxKinChanges)
                 {
-                    foreach(Kin kin in kins.Values)
-                    {
+                    foreach (Kin kin in kins.Values)
                         if (kin.kin_id == id)
-                        {
                             return forceRemoveKin(kin.kin_user_id);
-                        }
-                    }
                 }
 
                 return false;
@@ -825,9 +822,7 @@ namespace Oxide.Plugins
             public bool removeKin(ulong kinUserID)
             {
                 if ((kinChangesCount + 1) <= maxKinChanges)
-                {
                     return forceRemoveKin(kinUserID);
-                }
 
                 return false;
             }
@@ -839,7 +834,7 @@ namespace Oxide.Plugins
                     kinChangesCount++;
                     Kin kin = kins[kinUserID];
 
-                    var sql = new Oxide.Core.Database.Sql();
+                    var sql = new Core.Database.Sql();
                     sql.Append(DeleteKin, kin.self_id, kin.kin_id);
                     sqlite.ExecuteNonQuery(sql, sqlConnection);
 
@@ -856,48 +851,36 @@ namespace Oxide.Plugins
                 List<string> kinList = new List<string>();
 
                 foreach (Kin kin in kins.Values)
-                {
                     kinList.Add(String.Format("{0} (Id: {1})", kin.kin_name, kin.kin_id));
-                }
 
                 return kinList;
             }
-            
+
             public List<string> getAssociatesList()
             {
                 List<string> associatesList = new List<string>();
 
                 foreach (Association association in associations.Values)
-                {
-                    associatesList.Add(String.Format("{0} (Id: {1} | Level: {2})", association.associate_name, association.associate_id, association.getAffinityLabel()));
-                }
+                    associatesList.Add(string.Format("{0} (Id: {1} | Level: {2})", association.associate_name, association.associate_id, association.getAffinityLabel()));
 
                 return associatesList;
             }
 
-            public int getPlagueLevel()
-            {
-                return plagueLevel;
-            }
+            public int getPlagueLevel() => plagueLevel;
 
-            public int getId()
-            {
-                return id;
-            }
+            public int getId() => id;
 
-            public bool getPristine()
-            {
-                return pristine;
-            }
+            public bool getPristine() => pristine;
 
-            private Kin createKin(ulong kinUserId)
+            Kin createKin(ulong kinUserId)
             {
                 Kin kin = new Kin(id);
 
-                var sql = new Oxide.Core.Database.Sql();
+                var sql = new Core.Database.Sql();
                 sql.Append(SelectPlayer, kinUserId);
 
-                sqlite.Query(sql, sqlConnection, list => {
+                sqlite.Query(sql, sqlConnection, list =>
+                {
                     if (list == null) return;
 
                     foreach (var user in list)
@@ -914,15 +897,17 @@ namespace Oxide.Plugins
                 return kin;
             }
 
-            private void createAssociation(ulong associate_user_id, Func<Association, bool> callback)
+            void createAssociation(ulong associate_user_id, Func<Association, bool> callback)
             {
                 Association association = new Association();
 
-                var sql = new Oxide.Core.Database.Sql();
+                var sql = new Core.Database.Sql();
                 sql.Append(SelectPlayer, associate_user_id);
-                sqlite.Query(sql, sqlConnection, list => {
+                sqlite.Query(sql, sqlConnection, list =>
+                {
                     if (list == null) return;
-                    if (list.Count == 0) {
+                    if (list.Count == 0)
+                    {
                         callback(null);
                         return;
                     };
@@ -942,33 +927,36 @@ namespace Oxide.Plugins
                 });
             }
 
-            private void syncPlagueLevel()
+            void syncPlagueLevel()
             {
-                var sql = new Oxide.Core.Database.Sql();
+                var sql = new Core.Database.Sql();
                 sql.Append(UpdatePlayerPlagueLevel, plagueLevel, (pristine ? 1 : 0), player.userID);
                 sqlite.Update(sql, sqlConnection);
             }
 
-            private void loadAssociations()
+            void loadAssociations()
             {
-                var sql = new Oxide.Core.Database.Sql();
+                var sql = new Core.Database.Sql();
                 sql.Append(SelectAssociations, id);
-                sqlite.Query(sql, sqlConnection, results => {
+                sqlite.Query(sql, sqlConnection, results =>
+                {
                     if (results == null) return;
 
-                    foreach (var association_result in results) {
-                        Association association =  new Association();
+                    foreach (var association_result in results)
+                    {
+                        Association association = new Association();
                         association.load(association_result);
                         associations[association.associate_user_id] = association;
                     }
                 });
             }
 
-            private void loadKinList()
+            void loadKinList()
             {
-                var sql = new Oxide.Core.Database.Sql();
+                var sql = new Core.Database.Sql();
                 sql.Append(SelectKinList, id);
-                sqlite.Query(sql, sqlConnection, results => {
+                sqlite.Query(sql, sqlConnection, results =>
+                {
                     if (results == null) return;
 
                     foreach (var kinResult in results)
@@ -980,11 +968,12 @@ namespace Oxide.Plugins
                 });
             }
 
-            private void loadKinRequestList()
+            void loadKinRequestList()
             {
-                var sql = new Oxide.Core.Database.Sql();
+                var sql = new Core.Database.Sql();
                 sql.Append(SelectKinRequestList, id);
-                sqlite.Query(sql, sqlConnection, results => {
+                sqlite.Query(sql, sqlConnection, results =>
+                {
                     if (results == null) return;
 
                     foreach (var kinRequest in results)
@@ -994,7 +983,7 @@ namespace Oxide.Plugins
                 });
             }
 
-            private class Association
+            class Association
             {
                 public int id;
                 public int player_id;
@@ -1005,7 +994,7 @@ namespace Oxide.Plugins
 
                 public void create()
                 {
-                    var sql = new Oxide.Core.Database.Sql();
+                    var sql = new Core.Database.Sql();
                     sql.Append(CheckAssociationExists, player_id, associate_id);
 
                     // Check if the relationship exists before creating it
@@ -1013,7 +1002,7 @@ namespace Oxide.Plugins
                     {
                         if (check_results.Count > 0) return;
 
-                        sql = new Oxide.Core.Database.Sql();
+                        sql = new Core.Database.Sql();
 
                         sql.Append(InsertAssociation, player_id, associate_id, level);
                         sqlite.Insert(sql, sqlConnection, result =>
@@ -1028,7 +1017,7 @@ namespace Oxide.Plugins
                 {
                     id = Convert.ToInt32(association["id"]);
                     associate_name = Convert.ToString(association["name"]);
-                    associate_user_id = (ulong) Convert.ToInt64(association["user_id"]);
+                    associate_user_id = (ulong)Convert.ToInt64(association["user_id"]);
                     associate_id = Convert.ToInt32(association["associate_id"]);
                     player_id = Convert.ToInt32(association["player_id"]);
                     level = Convert.ToInt32(association["level"]);
@@ -1039,14 +1028,15 @@ namespace Oxide.Plugins
                     if (level >= plagueMinAffinity)
                     {
                         return "Associate";
-                    } else
+                    }
+                    else
                     {
                         return "Acquaintance";
                     }
                 }
             }
 
-            private class Kin
+            class Kin
             {
                 public int self_id;
                 public int kin_id;
@@ -1055,7 +1045,7 @@ namespace Oxide.Plugins
                 public int player_one_id;
                 public int player_two_id;
 
-                private Kin()
+                Kin()
                 {
 
                 }
@@ -1067,7 +1057,7 @@ namespace Oxide.Plugins
 
                 public void create()
                 {
-                    var sql = new Oxide.Core.Database.Sql();
+                    var sql = new Core.Database.Sql();
                     sql.Append(InsertKin, self_id, kin_id);
                     sqlite.Insert(sql, sqlConnection);
                 }
@@ -1086,17 +1076,14 @@ namespace Oxide.Plugins
 
         #region Unity Components
 
-        /**
+        /*
          * This component adds a timers and collects all players colliders in a given radius. It then triggers custom hooks to reflect the situation of a given player
          */
         public class ProximityDetector : MonoBehaviour
         {
             public BasePlayer player;
 
-            public void disableProximityCheck()
-            {
-                CancelInvoke("CheckProximity");
-            }
+            public void disableProximityCheck() => CancelInvoke("CheckProximity");
 
             void Awake()
             {
@@ -1104,10 +1091,7 @@ namespace Oxide.Plugins
                 InvokeRepeating("CheckProximity", 0, 2.5f);
             }
 
-            void OnDestroy()
-            {
-                disableProximityCheck();
-            }
+            void OnDestroy() => disableProximityCheck();
 
             void CheckProximity()
             {
@@ -1124,22 +1108,18 @@ namespace Oxide.Plugins
                         playersNear[i] = collidingPlayer;
                     }
                     notifyPlayerProximity(playersNear);
-                } else
+                }
+                else
                 {
                     notifyPlayerAlone();
                 }
             }
 
-            void notifyPlayerProximity(BasePlayer[] players)
-            {
-                Interface.Oxide.CallHook("OnPlayerProximity", player, players);
-            }
+            void notifyPlayerProximity(BasePlayer[] players) => Interface.Oxide.CallHook("OnPlayerProximity", player, players);
 
-            void notifyPlayerAlone()
-            {
-                Interface.Oxide.CallHook("OnPlayerAlone", player);
-            }
+            void notifyPlayerAlone() => Interface.Oxide.CallHook("OnPlayerAlone", player);
         }
+
         #endregion
     }
 }

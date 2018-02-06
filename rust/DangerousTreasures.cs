@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Dangerous Treasures", "nivex", "1.1.2", ResourceId = 2479)]
+    [Info("Dangerous Treasures", "nivex", "1.1.3", ResourceId = 2479)]
     [Description("Event with treasure chests.")]
     public class DangerousTreasures : RustPlugin
     {
@@ -968,23 +968,29 @@ namespace Oxide.Plugins
                 return;
             }
 
-            foreach (var entry in treasureChests)
+            NextTick(() =>
             {
-                if (Vector3.Distance(entity.transform.position, entry.Value.containerPos) <= eventRadius + 25f) // some extra distance for fireballs that travel outside the sphere, usually on hills
-                {
-                    if (entity is FireBall)
-                    {
-                        var fireball = entity as FireBall;
-                        ModifyFireball(fireball);
-                    }
-                    else if (entity is BaseLock)
-                    {
-                        entity.KillMessage();
-                    }
+                if (entity == null || entity.transform == null)
+                    return;
 
-                    break;
+                foreach (var entry in treasureChests)
+                {
+                    if (Vector3.Distance(entity.transform.position, entry.Value.containerPos) <= eventRadius + 25f) // some extra distance for fireballs that travel outside the sphere, usually on hills
+                    {
+                        if (entity is FireBall)
+                        {
+                            var fireball = entity as FireBall;
+                            ModifyFireball(fireball);
+                        }
+                        else if (entity is BaseLock || entity is CodeLock)
+                        {
+                            entity.KillMessage();
+                        }
+
+                        break;
+                    }
                 }
-            }
+            });
         }
 
         object CanBuild(Planner plan, Construction prefab)
@@ -1665,7 +1671,10 @@ namespace Oxide.Plugins
             if (apex == null || apex.IsDestroyed)
                 return;
 
-            apex.SetDestination(pos);
+            if (apex.GetNavAgent.isOnNavMesh)
+                apex.GetNavAgent.SetDestination(pos);
+            else
+                apex.SetDestination(pos);
 
             if (IsInRock(apex.transform.position) || Vector3.Distance(apex.transform.position, pos) > eventRadius)
             {
@@ -1673,8 +1682,11 @@ namespace Oxide.Plugins
                 var spawnpoint = GetRandomPositions(treasureChests.ContainsKey(uid) ? treasureChests[uid].containerPos : pos, 15f, 5, 0f).GetRandom();
 
                 spawnpoint.y = GetGroundPosition(spawnpoint);
+                //apex.StopMoving();
                 apex.Pause();
                 player.ServerPosition = spawnpoint;
+                apex.GuardPosition = spawnpoint;
+                //apex.RandomMove();
                 apex.Resume();
                 ins.timer.Once(10f, () => UpdateDestination(apex, spawnpoint, uid));
                 return;

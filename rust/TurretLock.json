@@ -3,9 +3,9 @@
     "description": "Give players the ability to lock their turrets",
     "author": "redBDGR",
     "version": "1.0.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/turretlock.2703",
+    "url": "https:\/\/oxidemod.org\/plugins\/turretlock.2703",
     "games": [
         "rust"
     ],

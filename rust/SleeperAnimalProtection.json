@@ -1,11 +1,11 @@
 {
-    "name": "Sleeper Animal Protection",
+    "name": "SleeperAnimalProtection",
     "description": "Protects sleeping players from being killed by animals",
     "author": "Fujikura",
     "version": "1.0.0",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/sleeper-animal-protection.1959",
+    "url": "https:\/\/oxidemod.org\/plugins\/sleeperanimalprotection.1959",
     "games": [
         "rust"
     ],

@@ -5,7 +5,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("NoDecay", "Diesel_42o", "1.0.19", ResourceId = 1160)]  //Original Credit to Deicide666ra/Piarb
+    [Info("NoDecay", "Diesel_42o", "1.0.20", ResourceId = 1160)]  //Original Credit to Deicide666ra/Piarb
     [Description("Scales or disables decay of items")]
 
     class NoDecay : RustPlugin
@@ -27,7 +27,6 @@ namespace Oxide.Plugins
         private float c_bbqMultiplier;
 
         private bool c_outputToRcon;
-        private bool c_hideGameTips;
 
         private bool g_configChanged;
         private string entity_name;
@@ -55,19 +54,12 @@ namespace Oxide.Plugins
             c_highStoneWallMultiplier = Convert.ToSingle(GetConfigValue("Mutipliers", "highStoneWallMultiplier", 0.0));
 
             c_outputToRcon = Convert.ToBoolean(GetConfigValue("Debug", "outputToRcon", false));
-            c_hideGameTips = Convert.ToBoolean(GetConfigValue("Options", "hideGameTips", false));
 
             if (g_configChanged)
             {
                 Puts("Configuration file updated.");
                 SaveConfig();
             }
-        }
-
-        void OnPlayerInit(BasePlayer player)
-        {
-            if (c_hideGameTips)
-                if (player != null) timer.Once(4, () => player?.SendConsoleCommand("gametip.hidegametip"));
         }
 
         object GetConfigValue(string category, string setting, object defaultValue)

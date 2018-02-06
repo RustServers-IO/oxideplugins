@@ -1,9 +1,9 @@
 {
-    "name": "R-Remover Tool",
+    "name": "R",
     "description": "Building and entity removal tool",
     "author": "Fujikura",
-    "version": "4.2.5",
-    "configuration": true,
+    "version": "4.2.8",
+    "configuration": false,
     "suggest": {
         "BuildingOwners": "*",
         "Friends": "*",
@@ -11,7 +11,7 @@
         "Economics": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/r-remover-tool.651",
+    "url": "https:\/\/oxidemod.org\/plugins\/r-removertool.651",
     "games": [
         "rust"
     ],

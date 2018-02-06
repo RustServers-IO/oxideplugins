@@ -3,9 +3,9 @@
     "description": "This plugin displays the rules on connect.",
     "author": "PaiN",
     "version": "1.4.9",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/rules-gui.1247",
+    "url": "https:\/\/oxidemod.org\/plugins\/rules-gui.1247",
     "games": [
         "rust"
     ],

@@ -3,9 +3,9 @@
     "description": "Allows you to Scale or Null all Damage types against Players",
     "author": "Colon Blow",
     "version": "1.2.3",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/damage-mod-players.1238",
+    "url": "https:\/\/oxidemod.org\/plugins\/damage-mod-players.1238",
     "games": [
         "rust"
     ],

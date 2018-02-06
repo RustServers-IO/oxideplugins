@@ -2,16 +2,17 @@
     "name": "Player Rankings",
     "description": "Automatically gives players ranks based on playtime",
     "author": "Ankawi",
-    "version": "2.0.3",
-    "configuration": true,
+    "version": "2.0.4",
+    "configuration": false,
     "suggest": {
-        "BetterChat": "*"
-    },
-    "require": {
+        "PlaytimeTracker": "*",
         "ConnectionDB": "*"
     },
+    "require": {
+        "BetterChat": "*"
+    },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/player-rankings.1469",
+    "url": "https:\/\/oxidemod.org\/plugins\/player-rankings.1469",
     "games": [
         "rust"
     ],

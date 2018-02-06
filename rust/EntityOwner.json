@@ -3,9 +3,9 @@
     "description": "Modify entity ownership and cupboard\/turret authorization",
     "author": "Calytic",
     "version": "3.1.7",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/entityowner.1255",
+    "url": "https:\/\/oxidemod.org\/plugins\/entityowner.1255",
     "games": [
         "rust"
     ],

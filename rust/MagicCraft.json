@@ -3,12 +3,12 @@
     "description": "Alternative crafting system",
     "author": "Norn",
     "version": "0.3.1",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "PopupNotifications": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/magic-craft.1347",
+    "url": "https:\/\/oxidemod.org\/plugins\/magic-craft.1347",
     "games": [
         "rust"
     ],

@@ -3,9 +3,9 @@
     "description": "Get owners of deployable, building structures and whitelist of tool cupboards",
     "author": "Reneb",
     "version": "2.2.9",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/prod-who-owns.683",
+    "url": "https:\/\/oxidemod.org\/plugins\/prod-who-owns.683",
     "games": [
         "rust"
     ],

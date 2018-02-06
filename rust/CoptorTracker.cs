@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Chopper Tracker", "Smoosher", "1.6.6", ResourceId = 1468)]
+    [Info("Chopper Tracker", "Smoosher", "1.6.7", ResourceId = 1468)]
     [Description("Spawns helicopters based on a timer, sets a lifetime, and announcements")]
 
     class CoptorTracker : RustPlugin
@@ -146,7 +146,7 @@ namespace Oxide.Plugins
 
         void SetChopperLifetimeMins()
         {
-            ConsoleSystem.Run.Server.Normal("heli.lifetimeminutes", new String[] { ChopperLifeTimeOriginal.ToString() });
+            ConsoleSystem.Run(ConsoleSystem.Option.Server, "heli.lifetimeminutes", new String[] { ChopperLifeTimeOriginal.ToString() });
         }
 
         void SpawnChopper()
@@ -204,7 +204,7 @@ namespace Oxide.Plugins
                     if (l.Minutes <= 2)
                     {
                         ChopperLifeTimeCurrent = ChopperLifeTimeCurrent + 5;
-                        ConsoleSystem.Run.Server.Normal("heli.lifetimeminutes", new String[] { ChopperLifeTimeCurrent.ToString() });
+                        ConsoleSystem.Run(ConsoleSystem.Option.Server, "heli.lifetimeminutes", new String[] { ChopperLifeTimeCurrent.ToString() });
                         PrintToChat("<color=Red> [Coptor Tracker]</color>  Helicopter Lifetime has been extended as has been engaged");
                     }
 

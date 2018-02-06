@@ -3,9 +3,9 @@
     "description": "Allows you to modify the time spend crafting and which items can be crafted",
     "author": "Mughisi",
     "version": "2.4.7",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/crafting-controller.695",
+    "url": "https:\/\/oxidemod.org\/plugins\/crafting-controller.695",
     "games": [
         "rust"
     ],

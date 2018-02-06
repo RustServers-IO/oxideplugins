@@ -3,9 +3,9 @@
     "description": "Allows you to set up a VIP trial group with a limited use-time",
     "author": "",
     "version": "1.3.5",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/vip-trial.2563",
+    "url": "https:\/\/oxidemod.org\/plugins\/vip-trial.2563",
     "games": [
         "rust"
     ],

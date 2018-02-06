@@ -3,9 +3,9 @@
     "description": "Chat through a player",
     "author": "LaserHydra",
     "version": "2.0.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/player-chatcontrol.866",
+    "url": "https:\/\/oxidemod.org\/plugins\/player-chatcontrol.866",
     "games": [
         "rust"
     ],

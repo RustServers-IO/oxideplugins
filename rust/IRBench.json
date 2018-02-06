@@ -1,11 +1,11 @@
 {
     "name": "IRBench",
     "description": "Repair items without durability loss",
-    "author": "",
+    "author": "Werkrat",
     "version": "0.1.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/irbench.2000",
+    "url": "https:\/\/oxidemod.org\/plugins\/irbench.2000",
     "games": [
         "rust"
     ],

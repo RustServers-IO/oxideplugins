@@ -14,7 +14,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NightVision", "Jake_Rich", "1.0.1")]
+    [Info("NightVision", "Jake_Rich", "1.0.3")]
     [Description("See at night")]
 
     public class NightVision : RustPlugin
@@ -77,7 +77,7 @@ namespace Oxide.Plugins
 
         void OnServerInitialized()
         {
-            label = new UILabel(new Vector2(0.01f, 0.80f), new Vector2(0.20f, 0.99f), "", 16, "1 1 1 1", null, TextAnchor.UpperLeft);
+            label = new UILabel(new Vector2(0.01f, 0.90f), new Vector2(0.08f, 0.99f), "", 16, "1 1 1 1", null, TextAnchor.UpperLeft);
             label.conditionalShow = delegate (BasePlayer player)
             {
                 return player.IsAdmin;
@@ -96,7 +96,7 @@ namespace Oxide.Plugins
                 $"{hour}:{minute.ToString("00")}{(TOD_Sky.Instance.Cycle.Hour < 12 ? "am" : "pm")}"; //I hate this bracketed statment, but I won't change it so it should be fine
             };
             label.AddOutline();
-            _timer = timer.Every(5f, TimerLoop);
+            _timer = timer.Every(10f, TimerLoop);
         }
 
         void Unload()
@@ -110,11 +110,11 @@ namespace Oxide.Plugins
             {
                 return null;
             }
-            if (!permission.UserHasPermission(player.UserIDString, permissionName))
+            if (!GetPlayerData(player).NightVisionActive)
             {
                 return null;
             }
-            if (!GetPlayerData(player).NightVisionActive)
+            if (!permission.UserHasPermission(player.UserIDString, permissionName))
             {
                 return null;
             }

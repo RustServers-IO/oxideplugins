@@ -3,9 +3,9 @@
     "description": "Prevents decay on items under a cupboard radius.",
     "author": "Dubz",
     "version": "1.0.5",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/cupboard-nodecay.2341",
+    "url": "https:\/\/oxidemod.org\/plugins\/cupboard-nodecay.2341",
     "games": [
         "rust"
     ],

@@ -1,28 +1,21 @@
-﻿// Requires: ConnectionDB
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Oxide.Core.Plugins;
 using System.Linq;
 using System;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerRankings", "Ankawi", "2.0.3", ResourceId = 1469)]
+    [Info("PlayerRankings", "Ankawi", "2.0.4", ResourceId = 1469)]
     [Description("Gives players ranks based on playtime on a server")]
     class PlayerRankings : RustPlugin
     {
         [PluginReference]
-        Plugin ConnectionDB;
-
-        [PluginReference]
-        Plugin BetterChat;
+        Plugin ConnectionDB, PlaytimeTracker, BetterChat;
 
         #region Plugin Related
 
         void Loaded()
         {
-            if (!ConnectionDB)
-                PrintWarning("You need to have ConnectionDB installed for this plugin to work. Get it here: http://oxidemod.org/plugins/1459/");
-
             if (!BetterChat)
                 PrintWarning("Its recommended to have BetterChat installed, to grant titles for playtime. Get it here: http://oxidemod.org/plugins/979/");
 
@@ -130,7 +123,6 @@ namespace Oxide.Plugins
         void UpdateGroups(BasePlayer player)
         {
             if (player.net.connection.authLevel != 0 && (bool)Config["Settings", "Ignore Admins"]) return;
-            if (!ConnectionDB) return;
 
             double playTime = GetPlayTime(player);
 
@@ -176,8 +168,22 @@ namespace Oxide.Plugins
             }
         }
 
-        double GetPlayTime(BasePlayer player) => Convert.ToDouble(ConnectionDB.Call("SecondsPlayed", player)) / 60 / 60;
-
+        double GetPlayTime(BasePlayer player)
+        {
+            double playTime;
+            if (ConnectionDB)
+            {
+                playTime = Convert.ToDouble(ConnectionDB.Call("SecondsPlayed", player)) / 60 / 60;
+                return playTime;
+            }
+            if (PlaytimeTracker)
+            {
+                playTime = Convert.ToDouble(PlaytimeTracker.Call("GetPlayTime", player.UserIDString)) / 60 / 60;
+                return playTime;
+            }
+            Puts("There is no plugin tracking the playtime for players");
+            return 0f;
+        }
         #endregion
     }
 }

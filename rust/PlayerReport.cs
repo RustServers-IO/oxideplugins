@@ -10,14 +10,13 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerReport", "hoppel", "1.0.7", ResourceId = 2635)]
+    [Info("PlayerReport", "hoppel", "1.0.8", ResourceId = 2635)]
     class PlayerReport : RustPlugin
     {
         #region Fields
 
         [PluginReference]
-        Plugin DiscordMessages;
-
+        private Plugin DiscordMessages;
         private List<string> openUI = new List<string>();
         private HashSet<ulong> cooldowns = new HashSet<ulong>();
         private const string Permname = "playerreport.use";
@@ -25,7 +24,15 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #region Oxide Hooks
+        #region Hooks/Functions
+
+        private void Cooldownhandling(BasePlayer player)
+        {
+            if (cooldowns.Contains(player.userID))
+                return;
+            cooldowns.Add(player.userID);
+            timer.Once(Cooldown, () => cooldowns.Remove(player.userID));
+        }
 
         private void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
         {
@@ -33,15 +40,11 @@ namespace Oxide.Plugins
             var killer = info?.Initiator?.ToPlayer();
             if (victim == null || killer == null)
                 return;
-
             if (killer == victim)
                 return;
-
             if (!permission.UserHasPermission(victim.UserIDString, Permname) || permission.UserHasPermission(victim.UserIDString, Permnameblock))
                 return;
-
             var killername = killer.displayName.Replace(" ", "_");
-
             var weaponName = "Unknown";
             if (info.Weapon != null)
             {
@@ -49,11 +52,9 @@ namespace Oxide.Plugins
                 if (usedItem != null)
                     weaponName = usedItem.info.displayName.english.Replace(" ", "_");
             }
-
             var distance = Mathf.Round(info.ProjectileDistance).ToString();
             if (string.IsNullOrEmpty(distance) || cooldowns.Contains(victim.userID))
                 return;
-
             DeathReportUI(victim, killer.UserIDString, distance, killername, weaponName);
             openUI.Add(victim.UserIDString);
         }
@@ -62,40 +63,25 @@ namespace Oxide.Plugins
         {
             if (player == null)
                 return;
-
             if (openUI.Contains(player.UserIDString))
                 DestroyUI(player);
         }
 
-        private void Loaded()
-        {
-            storedData = new StoredData();
-        }
+        private void Loaded() => storedData = new StoredData();
 
         private void Unload()
         {
             storedData.Save();
-
             foreach (var entry in openUI)
             {
                 var player = BasePlayer.Find(entry);
                 if (player == null)
                     continue;
-
                 DestroyUI(player);
             }
         }
 
         #endregion
-
-        private void Cooldownhandling(BasePlayer player)
-        {
-            if (cooldowns.Contains(player.userID))
-                return;
-
-            cooldowns.Add(player.userID);
-            timer.Once(Cooldown, () => cooldowns.Remove(player.userID));
-        }
 
         #region Commands
 
@@ -110,13 +96,9 @@ namespace Oxide.Plugins
             if (player == null)
                 return;
             if (!storedData.PlayerInformation.ContainsKey(player.UserIDString))
-            {
                 storedData.PlayerInformation.Add(player.UserIDString, new ReportInfo() { Reported = 0, Reports = 0 });
-            }
             if (!storedData.PlayerInformation.ContainsKey(killer))
-            {
                 storedData.PlayerInformation.Add(killer, new ReportInfo() { Reported = 0, Reports = 0 });
-            }
             storedData.PlayerInformation[killer].Reported++;
             storedData.PlayerInformation[player.UserIDString].Reports++;
             storedData.Save();
@@ -127,17 +109,11 @@ namespace Oxide.Plugins
             }
             Cooldownhandling(player);
             if (enableTickets)
-            {
                 player.SendConsoleCommand("ticket create " + msg("Button1Re", null, killer, distance, killername));
-            }
             if (enableDiscordMessages)
-            {
                 DiscordMessage(player.displayName, player.UserIDString, msg("DiscordButton1Field2"), killername, killer, distance, weapon, storedData.PlayerInformation[killer].Reported, storedData.PlayerInformation[killer].Reports);
-            }
             if (openUI.Contains(player.UserIDString))
-            {
                 DestroyUI(player);
-            }
         }
 
         [ConsoleCommand("ReportGroupLimit")]
@@ -151,13 +127,9 @@ namespace Oxide.Plugins
             if (player == null)
                 return;
             if (!storedData.PlayerInformation.ContainsKey(player.UserIDString))
-            {
                 storedData.PlayerInformation.Add(player.UserIDString, new ReportInfo() { Reported = 0, Reports = 0 });
-            }
             if (!storedData.PlayerInformation.ContainsKey(killer))
-            {
                 storedData.PlayerInformation.Add(killer, new ReportInfo() { Reported = 0, Reports = 0 });
-            }
             storedData.PlayerInformation[killer].Reported++;
             storedData.PlayerInformation[player.UserIDString].Reports++;
             storedData.Save();
@@ -186,13 +158,9 @@ namespace Oxide.Plugins
             if (player == null)
                 return;
             if (!storedData.PlayerInformation.ContainsKey(player.UserIDString))
-            {
                 storedData.PlayerInformation.Add(player.UserIDString, new ReportInfo() { Reported = 0, Reports = 0 });
-            }
             if (!storedData.PlayerInformation.ContainsKey(killer))
-            {
                 storedData.PlayerInformation.Add(killer, new ReportInfo() { Reported = 0, Reports = 0 });
-            }
             storedData.PlayerInformation[killer].Reported++;
             storedData.PlayerInformation[player.UserIDString].Reports++;
             storedData.Save();
@@ -221,8 +189,9 @@ namespace Oxide.Plugins
             fields.Add(new Fields(msg("DiscordButton1FieldName4"), $"{distance}m", true));
             fields.Add(new Fields(msg("DiscordButton1FieldName5"), $"{weapon}", true));
             var serializedObject = JsonConvert.SerializeObject(fields);
-            DiscordMessages?.Call("API_SendFancyMessage", webhookURL, Servername, 0, serializedObject);
-            if (Alert) DiscordMessages?.Call("API_SendTextMessage", webhookURL, "@here");
+            DiscordMessages?.Call("API_SendFancyMessage", webhookURL, Servername, serializedObject);
+            if (Alert)
+                DiscordMessages?.Call("API_SendTextMessage", webhookURL, "@here");
         }
 
         public class Fields

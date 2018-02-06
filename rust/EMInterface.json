@@ -3,12 +3,12 @@
     "description": "The control system for EventManager",
     "author": "k1lly0u",
     "version": "1.0.5",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "EventManager": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/eminterface.2258",
+    "url": "https:\/\/oxidemod.org\/plugins\/eminterface.2258",
     "games": [
         "rust"
     ],

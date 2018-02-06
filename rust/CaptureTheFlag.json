@@ -3,12 +3,12 @@
     "description": "Capture the flag event for EventManager",
     "author": "k1lly0u",
     "version": "0.1.63",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "EventManager": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/capture-the-flag.2259",
+    "url": "https:\/\/oxidemod.org\/plugins\/capture-the-flag.2259",
     "games": [
         "rust"
     ],

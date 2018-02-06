@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ComponentBlocker", "Calytic", "0.1.2", ResourceId = 1382)]
+    [Info("ComponentBlocker", "Calytic", "0.1.3", ResourceId = 1382)]
     class ComponentBlocker : RustPlugin
     {
         List<string> blockList = new List<string>();
@@ -212,7 +212,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("blocker")]
         void ccBlock(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null && arg.connection.authLevel < 1)
+            if (arg.Connection != null && arg.Connection.authLevel < 1)
             {
                 return;
             }

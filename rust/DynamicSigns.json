@@ -3,9 +3,9 @@
     "description": "Creates dynamic signs that show the server death count and more soon",
     "author": "Wulf",
     "version": "0.2.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/dynamicsigns.1462",
+    "url": "https:\/\/oxidemod.org\/plugins\/dynamicsigns.1462",
     "games": [
         "rust"
     ],

@@ -3,14 +3,14 @@
     "description": "Players who vote are rewarded with Economics, Server Rewards, Kits...",
     "author": "Frenk92",
     "version": "0.6.2",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Economics": "*",
         "ServerRewards": "*",
         "Kits": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/vote-for-money.2086",
+    "url": "https:\/\/oxidemod.org\/plugins\/vote-for-money.2086",
     "games": [
         "rust"
     ],

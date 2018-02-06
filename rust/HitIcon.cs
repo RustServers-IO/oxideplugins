@@ -7,7 +7,7 @@ using Oxide.Core;
 using Oxide.Core.Plugins;
 using System.IO;
 namespace Oxide.Plugins {
-    [Info("HitIcon", "serezhadelaet", "1.5.6", ResourceId = 1917)]
+    [Info("HitIcon", "serezhadelaet", "1.5.9", ResourceId = 1917)]
     [Description("Configurable precached icon when you hit player|friend|clanmate")]
     class HitIcon : RustPlugin {
 
@@ -20,8 +20,8 @@ namespace Oxide.Plugins {
         private bool _useSound;
         private bool _changed;
         private bool _showNpc;
-        private bool _friendAPI = false;
-        private bool _clansAPI = false;
+        private bool _friendAPI;
+        private bool _clansAPI;
         private bool _showDamage;
         private bool _showClanDamage;
         private bool _showFriendDamage;
@@ -33,14 +33,18 @@ namespace Oxide.Plugins {
         private string _colorBody;
         private string _colorClan;
         private string _colorDamage;
+        private string _colorHeadDamage;
         private string _mateSound;
+        private string _dmgFont;
+        private string _dmgOutlineDistance;
+        private string _dmgOutlineColor;
         [PluginReference]
         private Plugin Friends;
         [PluginReference]
         Plugin Clans;
         private ImageCache _imageAssets;
         private GameObject _hitObject;
-        private StoredData storedData;
+        private StoredData _storedData;
         private Dictionary<ulong, UIHandler> _playersUIHandler = new Dictionary<ulong, UIHandler>();
         #endregion
 
@@ -55,7 +59,7 @@ namespace Oxide.Plugins {
                 PrintWarning("Plugin Clans work with HitIcon");
             }
         }
-        private bool AreFriendsAPIFriend(string playerId, string friendId) {
+        private bool AreFriends(string playerId, string friendId) {
             try {
                 bool result = (bool)Friends?.CallHook("AreFriends", playerId, friendId);
                 return result;
@@ -64,8 +68,8 @@ namespace Oxide.Plugins {
             }
         }
         private bool AreClanMates(ulong playerID, ulong victimID) {
-            var playerTag = Clans.Call<string>("GetClanOf", playerID);
-            var victimTag = Clans.Call<string>("GetClanOf", victimID);
+            var playerTag = Clans?.Call<string>("GetClanOf", playerID);
+            var victimTag = Clans?.Call<string>("GetClanOf", victimID);
             if (playerTag != null)
                 if (victimTag != null)
                     if (playerTag == victimTag) return true;
@@ -103,7 +107,12 @@ namespace Oxide.Plugins {
             _colorNpc = Convert.ToString(GetConfig("Color", "Hit body color", "1 1 1 1"));
             _colorDeath = Convert.ToString(GetConfig("Color", "Hit body color", "1 0 0 1"));
             _colorDamage = Convert.ToString(GetConfig("Color", "Text damage color", "1 1 1 1"));
+            _colorHeadDamage = Convert.ToString(GetConfig("Color", "Text head damage color", "1 0 0 1"));
             _dmgTextSize = Convert.ToInt32(GetConfig("Configuration", "Damage text size", 15));
+            _dmgFont = Convert.ToString(GetConfig("Configuration", "Text Font", "robotocondensed-regular.ttf"));
+            _dmgOutlineColor = Convert.ToString(GetConfig("Configuration", "Text Outline Color", "0 0 0 1"));
+            _dmgOutlineDistance = Convert.ToString(GetConfig("Configuration", "Text Outline Distance", "-0.4 0.4"));
+            _dmgFont = Convert.ToString(GetConfig("Configuration", "Text Font", "robotocondensed-regular.ttf"));
             _useFriends = Convert.ToBoolean(GetConfig("Configuration", "Use Friends", true));
             _useClans = Convert.ToBoolean(GetConfig("Configuration", "Use Clans", true));
             _useSound = Convert.ToBoolean(GetConfig("Configuration", "Use sound when mate get attacked", true));
@@ -128,12 +137,12 @@ namespace Oxide.Plugins {
         private class StoredData {
             public List<ulong> DisabledUsers = new List<ulong>();
         }
-        private void SaveData() => Interface.GetMod().DataFileSystem.WriteObject("HitIcon", storedData);
+        private void SaveData() => Interface.GetMod().DataFileSystem.WriteObject("HitIcon", _storedData);
         private void LoadData() {
             try {
-                storedData = Interface.GetMod().DataFileSystem.ReadObject<StoredData>("HitIcon");
+                _storedData = Interface.GetMod().DataFileSystem.ReadObject<StoredData>("HitIcon");
             } catch {
-                storedData = new StoredData();
+                _storedData = new StoredData();
             }
         }
         #endregion
@@ -141,11 +150,11 @@ namespace Oxide.Plugins {
         #region ChatCommand
         [ChatCommand("hit")]
         private void ToggleHit(BasePlayer player) {
-            if (!storedData.DisabledUsers.Contains(player.userID)) {
-                storedData.DisabledUsers.Add(player.userID);
+            if (!_storedData.DisabledUsers.Contains(player.userID)) {
+                _storedData.DisabledUsers.Add(player.userID);
                 PrintToChat(player, lang.GetMessage("Disabled", this, player.UserIDString));
             } else {
-                storedData.DisabledUsers.Remove(player.userID);
+                _storedData.DisabledUsers.Remove(player.userID);
                 PrintToChat(player, lang.GetMessage("Enabled", this, player.UserIDString));
             }
         }
@@ -206,14 +215,14 @@ namespace Oxide.Plugins {
         #endregion
 
         #region CUI
-        private void Png(BasePlayer player, string uiname, string image, string start, string end, string colour) {
+        private void Png(BasePlayer player, string name, string image, string start, string end, string color) {
             CuiElementContainer container = new CuiElementContainer();
             container.Add(new CuiElement {
-                Name = uiname,
+                Name = name,
                 Components = {
                     new CuiRawImageComponent {
                         Png = image,
-                        Color = colour,
+                        Color = color,
                         Sprite = "assets/content/textures/generic/fulltransparent.tga"
                     },
                     new CuiRectTransformComponent {
@@ -224,21 +233,25 @@ namespace Oxide.Plugins {
             });
             CuiHelper.AddUi(player, container);
         }
-        private void Dmg(BasePlayer player, string uiname, string uitext, string start, string end, string uicolor, int uisize) {
+        private void Dmg(BasePlayer player, string name, string text, string start, string end, string color, int size) {
             CuiElementContainer container = new CuiElementContainer();
             container.Add(new CuiElement {
-                Name = uiname,
+                Name = name,
                 Components = {
                         new CuiTextComponent {
-                            Text = uitext,
-                            FontSize = uisize,
-                            Font = "robotocondensed-regular.ttf",
-                            Color = uicolor,
+                            Text = text,
+                            FontSize = size,
+                            Font = _dmgFont,
+                            Color = color,
                             Align = TextAnchor.MiddleCenter
                         },
                         new CuiRectTransformComponent {
                             AnchorMin = start,
                             AnchorMax = end
+                        },
+                        new CuiOutlineComponent {
+                            Color = _dmgOutlineColor,
+                            Distance = _dmgOutlineDistance
                         }
                     }
             });
@@ -256,6 +269,8 @@ namespace Oxide.Plugins {
         private void OnPlayerAttack(BasePlayer attacker, HitInfo hitinfo) => SendHit(attacker, hitinfo);
         private void OnEntityDeath(BaseCombatEntity entity, HitInfo info) => SendDeath(entity, info);
         private void OnServerInitialized() {
+            if (!_showDeathSkull && !_showNpc)
+                Unsubscribe("OnEntityDeath");
             CacheImage();
             InitializeAPI();
             foreach (var player in BasePlayer.activePlayerList)
@@ -302,70 +317,73 @@ namespace Oxide.Plugins {
         #endregion
 
         #region Helpers
-        private void SendHit(BasePlayer attacker, HitInfo hitinfo) {
-            if (hitinfo == null || attacker == null || !attacker.IsConnected) return;
-            if (storedData.DisabledUsers.Contains(attacker.userID)) return;
-            if (hitinfo.HitEntity is BaseNpc && _showNpc) {
-                GuiDisplay(attacker, _colorNpc, hitinfo);
+        private void SendHit(BasePlayer attacker, HitInfo info) {
+            if (info == null || attacker == null || !attacker.IsConnected) return;
+            if (_storedData.DisabledUsers.Contains(attacker.userID)) return;
+            if (info.HitEntity is BaseNpc && _showNpc) {
+                GuiDisplay(attacker, _colorNpc, info);
                 return;
             }
-            var victim = hitinfo.HitEntity as BasePlayer;
+            var victim = info.HitEntity as BasePlayer;
             if (victim == null) return;
             if (victim == attacker) return;
             if (_useClans && _clansAPI) {
                 if (AreClanMates(attacker.userID, victim.userID)) {
-                    GuiDisplay(attacker, _colorClan, hitinfo, false, "clans");
+                    GuiDisplay(attacker, _colorClan, info, false, "clans");
                     if (_useSound)
                         EffectNetwork.Send(new Effect(_mateSound, attacker.transform.position, Vector3.zero), attacker.net.connection);
                     return;
                 }
             }
-            if (_friendAPI && _useFriends && AreFriendsAPIFriend(victim.userID.ToString(), attacker.userID.ToString())) {
-                GuiDisplay(attacker, _colorFriend, hitinfo, false, "friends");
+            if (_friendAPI && _useFriends && AreFriends(victim.userID.ToString(), attacker.userID.ToString())) {
+                GuiDisplay(attacker, _colorFriend, info, false, "friends");
                 if (_useSound)
                     EffectNetwork.Send(new Effect(_mateSound, attacker.transform.position, Vector3.zero), attacker.net.connection);
                 return;
             }
-            if (hitinfo.isHeadshot) {
-                GuiDisplay(attacker, _colorHead, hitinfo);
+            if (info.isHeadshot) {
+                GuiDisplay(attacker, _colorHead, info, false, "", true);
                 return;
             }
-            GuiDisplay(attacker, _colorBody, hitinfo);
+            GuiDisplay(attacker, _colorBody, info);
         }
         private void SendDeath(BaseCombatEntity entity, HitInfo info) {
             if (info == null || entity == null) return;
             if (!_showDeathSkull) return;
             var initiator = (info?.Initiator as BasePlayer);
             if (initiator == null) return;
-            if (storedData.DisabledUsers.Contains(initiator.userID)) return;
+            if (_storedData.DisabledUsers.Contains(initiator.userID)) return;
             var npc = (entity as BaseNpc);
             if (npc != null) {
                 if (_showNpc) {
-                    NextTick(() => GuiDisplay(initiator, _colorBody, info, true)); //npc death
+                    NextTick(() => GuiDisplay(initiator, _colorBody, info, true));
                     return;
                 }
             }
             var player = entity as BasePlayer;
             if (player == null) return;
             if (player == initiator) return;
-            NextTick(() => GuiDisplay(initiator, _colorBody, info, true)); //death
+            NextTick(() => GuiDisplay(initiator, _colorBody, info, true));
         }
-        private void GuiDisplay(BasePlayer player, string color, HitInfo hitinfo, bool isKill = false, string whatIsIt = "") {
+        private void GuiDisplay(BasePlayer player, string color, HitInfo hitinfo, bool isKill = false, string whatIsIt = "", bool isHead = false) {
             var uiHandler = GetUIHandler(player);
             uiHandler.isDestroyed = false;
             uiHandler.DestroyUI();
-            if (isKill)
-                Png(player, "hitpng", FetchImage("deathimage"), "0.487 0.482", "0.513 0.518", _colorDeath); //death png
+            if (isKill) {
+                CuiHelper.DestroyUi(player, "hitdmg");
+                Png(player, "hitpng", FetchImage("deathimage"), "0.487 0.482", "0.513 0.518", _colorDeath);
+            }
             if (_showHit && !isKill)
-                Png(player, "hitpng", FetchImage("hitimage"), "0.492 0.4905", "0.506 0.5095", color); // hit png
+                Png(player, "hitpng", FetchImage("hitimage"), "0.492 0.4905", "0.506 0.5095", color);
             if (_showDamage) {
                 NextTick(() => {
+                    if (hitinfo.HitEntity == null) return;
+                    if ((hitinfo.HitEntity as BaseCombatEntity).IsDead()) return;
                     if (whatIsIt == "clans" && !_showClanDamage) return;
                     if (whatIsIt == "friends" && !_showFriendDamage) return;
                     if (!isKill && !_showDeathSkull || !isKill) {
                         CuiHelper.DestroyUi(player, "hitdmg");
-                        float damage = (int)hitinfo.damageTypes.Total();
-                        Dmg(player, "hitdmg", damage.ToString(), "0.45 0.45", "0.55 0.50", _colorDamage, _dmgTextSize);
+                        Dmg(player, "hitdmg", $"-{(int)hitinfo.damageTypes.Total()}", "0.45 0.45", "0.55 0.50", !isHead ? _colorDamage : _colorHeadDamage, _dmgTextSize);
                     }
                 });
             }

@@ -7,10 +7,9 @@ using UnityEngine;
 
 using Oxide.Core.Plugins;
 
-// TODO: Handle Bradley respawn length and despawn times.
 namespace Oxide.Plugins
 {
-	[Info("BradleyControl", "Mattparks", "0.1.8", ResourceId = 2611)]
+	[Info("BradleyControl", "Mattparks", "0.1.9", ResourceId = 2611)]
 	[Description("A plugin that controls Bradley properties.")]
 	class BradleyControl : RustPlugin 
 	{
@@ -32,9 +31,7 @@ namespace Oxide.Plugins
         public class Options
 		{	 
 			public bool bradleyEnabled = true; // Enables Bradley spawning.
-            public int bradleyAverage = 1; // The average count of Bradleys that can exist at one time.
-			public float respawnDelay = -1.0f; // The delay before respawning the Bradley after its death.
-			public float despawnDelay = -1.0f; // How long a Bradley can be inactive before despawning.
+			public float respawnDelay = 5.0f; // The delay (minutes) before respawning the Bradley after its death.
 			public float startHealth = 1000.0f; // How much health the Bradley starts with.
 			public float maxTurretRange = 100.0f; // The range of the turrets.
 			public float gunAccuracy = 1.0f; // The guns accuracy (scale of 0 to 1).
@@ -158,7 +155,7 @@ namespace Oxide.Plugins
 			// English messages.
 			lang.RegisterMessages(new Dictionary<string, string>
 			{
-				["BRADLEY_ABOUT"] = "<color=#ff3b3b>Bradley Control {Version}</color>: by <color=green>mattparks</color>. Bradley Control is a plugin that controls Bradley properties. Use the /bradley command as follows: \n <color=#1586db>•</color> /bradley - Displays Bradley Control about and help. \n <color=#1586db>•</color> /bradley reset - Resets the Bradley in the area.. \n <color=#1586db>•</color> /bradley clearGibs - Clears all Bradley gibs/parts. \n <color=#1586db>•</color> /bradley clearFire - Clears all Bradley fire. \n <color=#1586db>•</color> /bradley clearCrates - Clears all Bradley crates. \n <color=#1586db>•</color> /bradley unlockCrates - Unlocks all Bradley crates. \n <color=#1586db>•</color> /bradley clearAll - Clears all Bradley stuff.",
+				["BRADLEY_ABOUT"] = "<color=#ff3b3b>Bradley Control {Version}</color>: by <color=green>mattparks</color>. Bradley Control is a plugin that controls Bradley properties. Use the /bradley command as follows: \n <color=#1586db>•</color> /bradley - Displays Bradley Control about and help. \n <color=#1586db>•</color> /bradley reset - Resets the Bradley in the area. \n <color=#1586db>•</color> /bradley clearGibs - Clears all Bradley gibs/parts. \n <color=#1586db>•</color> /bradley clearFire - Clears all Bradley fire. \n <color=#1586db>•</color> /bradley clearCrates - Clears all Bradley crates. \n <color=#1586db>•</color> /bradley unlockCrates - Unlocks all Bradley crates. \n <color=#1586db>•</color> /bradley clearAll - Clears all Bradley stuff.",
                 ["BRADLEY_RESET"] = "<color=#ff3b3b>Resetting the Bradley!</color>",
                 ["BRADLEY_RESET_FAIL"] = "<color=#ff3b3b>Failed to reset the Bradley!</color>",
                 ["BRADLEY_REMOVE_GIBS"] = "<color=#ff3b3b>Removing Bradley gibs from the world!</color>",
@@ -221,6 +218,12 @@ namespace Oxide.Plugins
                     }
                // }
             }
+			
+			if (BradleySpawner.singleton != null && configs.options.respawnDelay != -1.0f)
+			{
+				BradleySpawner.singleton.minRespawnTimeMinutes = configs.options.respawnDelay;
+				BradleySpawner.singleton.maxRespawnTimeMinutes = configs.options.respawnDelay;
+			}
         }
 
 		private void OnEntitySpawned(BaseNetworkable entity)
@@ -305,7 +308,7 @@ namespace Oxide.Plugins
                 var loot = entity?.GetComponent<LootContainer>() ?? null;
                 lockedCrates.Add(entity?.GetComponent<LockedByEntCrate>() ?? null);
 
-                if (configs.options.customLootTables || configs.lootTables.bradleyCrate.Count == 0)
+                if (configs.options.customLootTables && configs.lootTables.bradleyCrate.Count != 0)
 				{
 					loot.inventory.itemList.Clear();
 
@@ -431,25 +434,10 @@ namespace Oxide.Plugins
             bradley.DoSimpleAI();
             bradley.InstallPatrolPath(BradleySpawner.singleton.path);
 
-            if (!configs.options.bradleyEnabled || bradleys.Count > configs.options.bradleyAverage)
+            if (!configs.options.bradleyEnabled)
 			{
 				bradley.Kill(); 
 			}
-            else
-            {
-                if (configs.options.respawnDelay != -1.0f)
-                {
-                    timer.Once(configs.options.respawnDelay, () =>
-                    {
-                        if (bradley == null || !bradley.IsAlive())
-                        {
-                            return;
-                        }
-
-                        ResetBradley();
-                    });
-                }
-            }
 		}
 		
 		private object CanBradleyApcTarget(BradleyAPC bradley, BaseEntity target)

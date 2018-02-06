@@ -3,9 +3,9 @@
     "description": "Limits which structure grades players can build",
     "author": "Wulf",
     "version": "1.0.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/structuregrades.1511",
+    "url": "https:\/\/oxidemod.org\/plugins\/structuregrades.1511",
     "games": [
         "rust"
     ],

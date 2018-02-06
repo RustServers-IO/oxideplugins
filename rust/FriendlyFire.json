@@ -1,14 +1,12 @@
 {
-    "name": "FriendlyFire",
-    "description": "Toggle friendly fire on\/off for Friends API",
-    "author": "Nogrod",
-    "version": "2.0.3",
-    "configuration": true,
-    "require": {
-        "Friends": "*"
-    },
+    "name": "Rust:IO FriendlyFire",
+    "description": "Disables friendly fire for Rust:IO friends",
+    "author": "dcode",
+    "version": "1.6.0",
+    "configuration": false,
+    "require": {},
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/friendlyfire.687",
+    "url": "https:\/\/oxidemod.org\/plugins\/rust-io-friendlyfire.840",
     "games": [
         "rust"
     ],

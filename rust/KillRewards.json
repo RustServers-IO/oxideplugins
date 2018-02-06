@@ -3,9 +3,9 @@
     "description": "Receive items, weapons with ammo and full health when killing players.",
     "author": "CodeHarbour",
     "version": "1.1.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/killrewards.2462",
+    "url": "https:\/\/oxidemod.org\/plugins\/killrewards.2462",
     "games": [
         "rust"
     ],

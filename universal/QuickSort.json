@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Adds a GUI that allows players to quickly sort items into containers",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/quicksort.1263",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

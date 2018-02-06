@@ -3,9 +3,9 @@
     "description": "API for sending email messages via supported transactional email services",
     "author": "Wulf",
     "version": "0.3.2",
-    "configuration": true,
+    "configuration": false,
     "language": "lua",
-    "url": "http:\/\/oxidemod.org\/plugins\/email-api.712",
+    "url": "https:\/\/oxidemod.org\/plugins\/email-api.712",
     "games": [
         "rust"
     ],

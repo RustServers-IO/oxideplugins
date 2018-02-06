@@ -3,14 +3,14 @@
     "description": "Plugin Runnung Man",
     "author": "sami37",
     "version": "1.5.9",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Economics": "*",
         "KarmaSystem": "*",
         "ServerRewards": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/running-man.777",
+    "url": "https:\/\/oxidemod.org\/plugins\/running-man.777",
     "games": [
         "rust"
     ],

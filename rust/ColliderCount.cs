@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Collider Count", "Cheeze www.ukwasteland.co.uk", "0.0.3", ResourceId = 1306)]
+    [Info("Collider Count", "Cheeze", "0.0.4", ResourceId = 1306)]
     class ColliderCount : RustPlugin
     {
 
@@ -42,7 +42,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("wipeinfo")]
         private void WipeInfoConsole(ConsoleSystem.Arg arg)
         {
-            if (arg.Player() != null && !arg.Player().IsAdmin())
+            if (arg.Player() != null && !arg.Player().IsAdmin)
             {
                 string NotAllowed = null;
                 arg.ReplyWith(NotAllowed);
@@ -58,7 +58,7 @@ namespace Oxide.Plugins
             return colliders;
         }
 
-        
+
         private int GetMaxColliders()
         {
             var maxColliders = int.Parse(Config["Settings", "MaxColliders"].ToString());
@@ -66,9 +66,9 @@ namespace Oxide.Plugins
         }
 
         private string GetColor1()
-        {   
+        {
            string color1 = (Config["Settings", "Color1"].ToString());
-           return color1;        
+           return color1;
         }
 
         private string GetColor2()

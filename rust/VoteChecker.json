@@ -1,0 +1,16 @@
+{
+    "name": "Vote Checker & Rewarder",
+    "description": "Give rewards to users for voting on game-servers.top & rust-servers.net",
+    "author": "Pho3niX90",
+    "version": "2.2.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/vote-checker-rewarder.1216",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

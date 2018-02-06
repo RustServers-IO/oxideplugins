@@ -3,9 +3,9 @@
     "description": "Building blocks in the rocks, terrain and icebergs. Sets a limit build in height and depth in water.",
     "author": "",
     "version": "1.0.5",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/blockstructure.2092",
+    "url": "https:\/\/oxidemod.org\/plugins\/blockstructure.2092",
     "games": [
         "rust"
     ],

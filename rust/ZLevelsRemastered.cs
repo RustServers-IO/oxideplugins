@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.9.3", ResourceId = 1453)]
+    [Info("ZLevelsRemastered", "Fujikura/Visagalis", "2.9.4", ResourceId = 1453)]
     [Description("Lets players level up as they harvest different resources and when crafting")]
 
 	
@@ -136,10 +136,10 @@ namespace Oxide.Plugins
             });
 			
 			resourceMultipliers = (Dictionary<string, object>)GetConfig("Settings", "ResourcePerLevelMultiplier", new Dictionary<string, object>{
-                {Skills.WOODCUTTING, 2.0d},
-                {Skills.MINING, 2.0d},
-                {Skills.SKINNING, 2.0d},
-				{Skills.ACQUIRE, 2.0d}
+                {Skills.WOODCUTTING, 2},
+                {Skills.MINING, 2},
+                {Skills.SKINNING, 2},
+				{Skills.ACQUIRE, 2}
             });
 			levelCaps = (Dictionary<string, object>)GetConfig("Settings", "LevelCaps", new Dictionary<string, object>{
                 {Skills.WOODCUTTING, 200},
@@ -206,10 +206,10 @@ namespace Oxide.Plugins
 				{Skills.ACQUIRE, 60}
             });
 			resourceMultipliersAtNight = (Dictionary<string, object>)GetConfig("NightBonus", "ResourcePerLevelMultiplierAtNight", new Dictionary<string, object>{
-                {Skills.WOODCUTTING, 2.0d},
-                {Skills.MINING, 2.0d},
-                {Skills.SKINNING, 2.0d},
-				{Skills.ACQUIRE, 2.0d}
+                {Skills.WOODCUTTING, 2},
+                {Skills.MINING, 2},
+                {Skills.SKINNING, 2},
+				{Skills.ACQUIRE, 2}
             });
 			enableNightBonus = Convert.ToBoolean(GetConfig("NightBonus", "enableNightBonus", false));
 			logEnabledBonusConsole = Convert.ToBoolean(GetConfig("NightBonus", "logEnabledBonusConsole", false));
@@ -265,25 +265,21 @@ namespace Oxide.Plugins
 					skillIndex.Add(skill, ++index);
 		}
 		
-		void Loaded()
-		{
-			zLevels = this;
-		}
+		void Loaded() => zLevels = this;
 
 		void OnServerSave()
 		{
 			if (initialized)
-				Interface.Oxide.DataFileSystem.WriteObject(this.Title, playerPrefs);
+				SaveData();
 		}
 
         void Unload()
         {
 			if (!initialized)
 				return;
-			Interface.Oxide.DataFileSystem.WriteObject(this.Title, playerPrefs);
+			SaveData();
 			foreach (var player in BasePlayer.activePlayerList)
 				DestroyGUI(player);
-				
 			var objs = UnityEngine.Object.FindObjectsOfType<FinishBonusClass>().ToList();
 			if (objs.Count > 0)
 				foreach (var obj in objs)
@@ -295,15 +291,17 @@ namespace Oxide.Plugins
 			if (wipeDataOnNewSave)
 				newSaveDetected = true;
 		}
+		
+		void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(this.Title, playerPrefs);
 
 		void OnServerInitialized()
 		{
 			CheckCollectible();
-			playerPrefs = Interface.GetMod().DataFileSystem.ReadObject<PlayerData>(this.Title);
+			playerPrefs = Interface.GetMod().DataFileSystem.ReadObject<PlayerData>(this.Title) ?? new PlayerData();
 			if (newSaveDetected || (playerPrefs == null || playerPrefs.PlayerInfo == null || playerPrefs.PlayerInfo.Count == 0))
 			{
 				playerPrefs = new PlayerData();
-				Interface.Oxide.DataFileSystem.WriteObject(this.Title, playerPrefs);
+				SaveData();
 			}
 			pointsPerHitCurrent = pointsPerHit;
 			resourceMultipliersCurrent = resourceMultipliers;
@@ -319,9 +317,16 @@ namespace Oxide.Plugins
 				if (player != null)
 				{
 					UpdatePlayer(player);
-					if (cuiEnabled) CreateGUI(player);
+					if (cuiEnabled)
+						CreateGUI(player);
 				}
 			}
+			foreach (var player in BasePlayer.sleepingPlayerList)
+			{
+				if (player != null)
+					UpdatePlayer(player);
+			}
+			SaveData();			
 		}
 		
 		void CheckCollectible()
@@ -444,6 +449,13 @@ namespace Oxide.Plugins
 				p.LLD = ToEpochTime(DateTime.UtcNow);
         }
 
+		void CheckPlayer(BasePlayer player)
+        {
+			PlayerInfo p = null;
+			if (!playerPrefs.PlayerInfo.TryGetValue(player.userID, out p))
+				UpdatePlayer(player);
+        }		
+
 		void OnPlayerSleepEnded(BasePlayer player)
         {
             if (!initialized || player == null) return;
@@ -478,6 +490,7 @@ namespace Oxide.Plugins
             if (!initialized || !penaltyOnDeath || entity == null || !(entity is BasePlayer) || !IsValid(entity as BasePlayer))
 				return;
 			var player = entity as BasePlayer;
+			CheckPlayer(player);
 			if (!playerPrefs.PlayerInfo[player.userID].ONOFF)
 				return;
 			if (Interface.CallHook("CanBePenalized", player) != null)
@@ -512,6 +525,7 @@ namespace Oxide.Plugins
             if (!initialized || !enableDispenserGather || entity == null || !(entity is BasePlayer) || item == null || dispenser == null)
 				return;
 			var player = entity as BasePlayer;
+			CheckPlayer(player);
 			if (!playerPrefs.PlayerInfo[player.userID].ONOFF || exludeWeaponsOnGather && player.GetActiveItem()?.info?.category == ItemCategory.Weapon)
 				return;
 			if (dispenser.gameObject.GetComponent<FinishBonusClass>())
@@ -548,7 +562,11 @@ namespace Oxide.Plugins
 		
         void OnCollectiblePickup(Item item, BasePlayer player, CollectibleEntity entity)
         {
-            if (!initialized || !enableCollectiblePickup || item == null || player == null || !hasRights(player.UserIDString) || !playerPrefs.PlayerInfo[player.userID].ONOFF) return;
+            if (!initialized || !enableCollectiblePickup || item == null || player == null || !hasRights(player.UserIDString))
+				return;
+			CheckPlayer(player);
+			if (!playerPrefs.PlayerInfo[player.userID].ONOFF)
+				return;
 			if (enabledCollectibleEntity.ContainsKey(entity.ShortPrefabName) && (bool)enabledCollectibleEntity[entity.ShortPrefabName] == false)
 				return;
 			var skillName = string.Empty;

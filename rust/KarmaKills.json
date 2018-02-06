@@ -3,12 +3,12 @@
     "description": "Rewards players on karma on kill, or takes karma away from them",
     "author": "Ryan",
     "version": "1.0.2",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "KarmaSystem": "*"
     },
-    "language": "cs\r\n",
-    "url": "http:\/\/oxidemod.org\/plugins\/karmakills.2529",
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/karmakills.2529",
     "games": [
         "rust"
     ],

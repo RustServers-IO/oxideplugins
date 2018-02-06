@@ -3,9 +3,9 @@
     "description": "Custom gamemode that changes values of gathering\/smelting\/crafting based on a current phase.",
     "author": "Ryan",
     "version": "2.0.0",
-    "configuration": true,
-    "language": "cs\r\n",
-    "url": "http:\/\/oxidemod.org\/plugins\/fortwars.1618",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/fortwars.1618",
     "games": [
         "rust"
     ],

@@ -1,32 +1,30 @@
-﻿using System.Collections.Generic;
-using System;
-using System.Linq;
-using UnityEngine;
-using Oxide.Core.Plugins;
+﻿using Oxide.Core;
 using Oxide.Core.Configuration;
+using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
-using Oxide.Core;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("AbsolutMarket", "Absolut", "1.8.3", ResourceId = 2118)]
-
-    class AbsolutMarket : RustPlugin
+    [Info("AbsolutMarket", "Absolut", "1.8.4", ResourceId = 2118)]
+    public class AbsolutMarket : RustPlugin
     {
-
         [PluginReference]
-        Plugin ServerRewards, Economics, ImageLibrary;
+        private Plugin ServerRewards, Economics, ImageLibrary;
 
-        MarketData mData;
+        private MarketData mData;
         private DynamicConfigFile MData;
 
-        string TitleColor = "<color=orange>";
-        string MsgColor = "<color=#A9A9A9>";
+        private string TitleColor = "<color=orange>";
+        private string MsgColor = "<color=#A9A9A9>";
         private Vector3 eyesAdjust;
         private FieldInfo serverinput;
 
-        bool initialized;
+        private bool initialized;
 
         private List<ulong> MenuState = new List<ulong>();
         private Dictionary<string, Timer> timers = new Dictionary<string, Timer>();
@@ -35,7 +33,8 @@ namespace Oxide.Plugins
         private Dictionary<ulong, List<Item>> PlayerInventory = new Dictionary<ulong, List<Item>>();
         private Dictionary<ulong, List<Item>> ItemsToTransfer = new Dictionary<ulong, List<Item>>();
         private Dictionary<ulong, existence> UIInfo = new Dictionary<ulong, existence>();
-        class existence
+
+        private class existence
         {
             public StorageContainer box = null;
             public int page;
@@ -45,13 +44,13 @@ namespace Oxide.Plugins
 
         #region Server Hooks
 
-        void Loaded()
+        private void Loaded()
         {
             MData = Interface.Oxide.DataFileSystem.GetFile("AbsolutMarket_Data");
             lang.RegisterMessages(messages, this);
         }
 
-        void Unload()
+        private void Unload()
         {
             foreach (var entry in timers)
                 entry.Value.Destroy();
@@ -98,7 +97,7 @@ namespace Oxide.Plugins
         {
             if (player != null)
             {
-                player.Command($"bind {configData.MarketMenuKeyBinding} \"UI_ToggleMarketScreen\"");
+                //player.Command($"bind {configData.MarketMenuKeyBinding} \"UI_ToggleMarketScreen\"");
                 GetSendMSG(player, "AMInfo", configData.MarketMenuKeyBinding);
                 if (!mData.names.ContainsKey(player.userID))
                     mData.names.Add(player.userID, player.displayName);
@@ -130,11 +129,10 @@ namespace Oxide.Plugins
                     }
                 }
                 SaveData();
-
             }
         }
 
-        void OnServerInitialized()
+        private void OnServerInitialized()
         {
             timer.Once(10, () =>
             {
@@ -181,7 +179,6 @@ namespace Oxide.Plugins
                 permission.RegisterPermission("AbsolutMarket.admin", this);
                 LoadData();
                 eyesAdjust = new Vector3(0f, 1.5f, 0f);
-                serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
                 timers.Add("info", timer.Once(configData.InfoInterval, () => InfoLoop()));
                 timers.Add("save", timer.Once(600, () => SaveLoop()));
                 timers.Add("listings", timer.Once(600, () => CheckListings()));
@@ -193,9 +190,10 @@ namespace Oxide.Plugins
             });
         }
 
-        #endregion
+        #endregion Server Hooks
 
         #region Player Hooks
+
         private void OnEntityDeath(BaseEntity entity, HitInfo hitInfo)
         {
             if (entity is StorageContainer)
@@ -223,7 +221,7 @@ namespace Oxide.Plugins
             }
         }
 
-        object OnServerCommand(ConsoleSystem.Arg arg)
+        private object OnServerCommand(ConsoleSystem.Arg arg)
         {
             var player = arg.Connection?.player as BasePlayer;
             if (player == null || !SalesItemPrep.ContainsKey(player.userID)) return null;
@@ -250,9 +248,11 @@ namespace Oxide.Plugins
             }
             return null;
         }
-        #endregion
+
+        #endregion Player Hooks
 
         #region Functions
+
         private StorageContainer GetTradeBox(ulong Buyer)
         {
             List<StorageContainer> Containers = new List<StorageContainer>();
@@ -269,7 +269,7 @@ namespace Oxide.Plugins
             return null;
         }
 
-        Vector3 GetVector3(XYZ xyz)
+        private Vector3 GetVector3(XYZ xyz)
         {
             return new Vector3 { x = xyz.x, y = xyz.y, z = xyz.z };
         }
@@ -283,7 +283,7 @@ namespace Oxide.Plugins
             bool SRAllowed = false;
             if (ServerRewards && configData.ServerRewards && !mData.Blacklist.Contains("SR")) SRAllowed = true;
             if (box != null)
-            {               
+            {
                 if (GetItems(box.inventory).Count() == 0)
                 {
                     if (!SRAllowed && !EcoAllowed)
@@ -297,7 +297,7 @@ namespace Oxide.Plugins
                         if (SRAllowed)
                             if (CheckPoints(player.userID) is int)
                                 amount += (int)CheckPoints(player.userID);
-                        if(EcoAllowed)
+                        if (EcoAllowed)
                             amount += CheckEco(player.userID);
                         if (amount == 0)
                         {
@@ -327,24 +327,24 @@ namespace Oxide.Plugins
                 }
                 if (bl == c)
                 {
-                        double amount = 0;
-                        var msg = "";
-                        if (SRAllowed)
-                        {
-                            msg = msg + GetMSG("SRInclusion", player);
-                            if (CheckPoints(player.userID) is int)
-                                amount += (int)CheckPoints(player.userID);
-                        }
-                        if (EcoAllowed)
-                        {
-                            msg = msg + GetMSG("ECOInclusion", player);
+                    double amount = 0;
+                    var msg = "";
+                    if (SRAllowed)
+                    {
+                        msg = msg + GetMSG("SRInclusion", player);
+                        if (CheckPoints(player.userID) is int)
+                            amount += (int)CheckPoints(player.userID);
+                    }
+                    if (EcoAllowed)
+                    {
+                        msg = msg + GetMSG("ECOInclusion", player);
                         amount += CheckEco(player.userID);
-                        }
-                        if (amount <= 0)
-                        {
-                            GetSendMSG(player, "AllItemsAreBL", msg);
-                            return false;
-                        }
+                    }
+                    if (amount <= 0)
+                    {
+                        GetSendMSG(player, "AllItemsAreBL", msg);
+                        return false;
+                    }
                 }
                 if (c == listed)
                 {
@@ -365,7 +365,7 @@ namespace Oxide.Plugins
                     }
                     if (EcoAllowed && alllisted)
                     {
-                       msg = msg + GetMSG("ECOInclusionListed", player);
+                        msg = msg + GetMSG("ECOInclusionListed", player);
                         var total = CheckEco(player.userID);
                         var totalListed = 0;
                         foreach (var entry in mData.MarketListings.Where(kvp => kvp.Value.seller == player.userID && kvp.Value.shortname == "ECO"))
@@ -412,7 +412,7 @@ namespace Oxide.Plugins
             {
                 BasePlayer Online = BasePlayer.FindByID(player);
                 if (BasePlayer.activePlayerList.Contains(Online))
-                    GetSendMSG(Online, message, arg1,arg2, arg3, arg4);
+                    GetSendMSG(Online, message, arg1, arg2, arg3, arg4);
             }
             catch
             {
@@ -429,7 +429,7 @@ namespace Oxide.Plugins
             {
                 foreach (var entry in mData.OutstandingMessages[player.userID])
                 {
-                    GetSendMSG(player, entry.message, entry.arg1,entry.arg2, entry.arg3, entry.arg4);
+                    GetSendMSG(player, entry.message, entry.arg1, entry.arg2, entry.arg3, entry.arg4);
                 }
                 mData.OutstandingMessages.Remove(player.userID);
             }
@@ -447,7 +447,6 @@ namespace Oxide.Plugins
         public bool AddImage(string url, string shortname, ulong skin = 0) => (bool)ImageLibrary?.Call("AddImage", url, shortname.ToLower(), skin);
         public List<ulong> GetImageList(string shortname) => (List<ulong>)ImageLibrary.Call("GetImageList", shortname.ToLower());
         public bool isReady() => (bool)ImageLibrary?.Call("IsReady");
-
 
         private IEnumerable<AMItem> GetItems(ItemContainer container)
         {
@@ -520,7 +519,7 @@ namespace Oxide.Plugins
             return null;
         }
 
-        void OnItemRemovedFromContainer(ItemContainer cont, Item item)
+        private void OnItemRemovedFromContainer(ItemContainer cont, Item item)
         {
             if (mData.MarketListings == null || mData.MarketListings.Count < 1) return;
             if (mData.TradeBox == null || mData.TradeBox.Count < 1) return;
@@ -566,12 +565,12 @@ namespace Oxide.Plugins
         private void ECOAction(ulong ID, int amount, string action)
         {
             if (action == "ADD")
-                Economics.Call("DepositS", ID.ToString(), amount);
+                Economics.Call("Deposit", ID, amount);
             if (action == "REMOVE")
-                Economics.Call("WithdrawS", ID.ToString(), amount);
+                Economics.Call("Withdraw", ID, amount);
         }
 
-        private double CheckEco(ulong ID) => (double)Economics.CallHook("GetPlayerMoney", ID);
+        private double CheckEco(ulong ID) => (double)Economics.Call("Balance", ID);
 
         private void NumberPad(BasePlayer player, string cmd)
         {
@@ -657,7 +656,7 @@ namespace Oxide.Plugins
             MarketMainScreen(player, 0, Category.All);
         }
 
-        bool isAuth(BasePlayer player)
+        private bool isAuth(BasePlayer player)
         {
             if (player.net.connection != null)
                 if (player.net.connection.authLevel < 2 && !permission.UserHasPermission(player.UserIDString, "AbsolutMarket.admin"))
@@ -665,7 +664,7 @@ namespace Oxide.Plugins
             return true;
         }
 
-        #endregion
+        #endregion Functions
 
         #region UI Creation
 
@@ -776,7 +775,6 @@ namespace Oxide.Plugins
                     RectTransform = { AnchorMin = aMin, AnchorMax = aMax }
                 },
                 panel);
-
             }
             static public void CreateTextOutline(ref CuiElementContainer element, string panel, string colorText, string colorOutline, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
             {
@@ -815,11 +813,12 @@ namespace Oxide.Plugins
             {"buttongrey", "0.8 0.8 0.8 0.9" },
             {"CSorange", "1.0 0.64 0.10 1.0" }
         };
-        #endregion
+
+        #endregion UI Creation
 
         #region UI Panels
 
-        void MarketMainScreen(BasePlayer player, int page = 0, Category cat = Category.All)
+        private void MarketMainScreen(BasePlayer player, int page = 0, Category cat = Category.All)
         {
             CuiHelper.DestroyUi(player, PanelMarket);
             if (!mData.mode.ContainsKey(player.userID))
@@ -840,7 +839,7 @@ namespace Oxide.Plugins
             if (mData.mode[player.userID] == false && !configData.ForceSimpleUI)
             {
                 if (mData.background.ContainsKey(player.userID))
-                        Background = TryForImage(mData.background[player.userID]);
+                    Background = TryForImage(mData.background[player.userID]);
                 UI.LoadImage(ref element, PanelMarket, Background, "0 0", "1 1");
                 if (page <= totalpages - 1)
                 {
@@ -867,27 +866,25 @@ namespace Oxide.Plugins
                 foreach (Category ct in Enum.GetValues(typeof(Category)))
                 {
                     var loc = FilterButton(c);
-                        if (cat == ct)
-                        {
-                            UI.LoadImage(ref element, PanelMarket, TryForImage("UFILTER"), $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}");
-                            UI.CreateLabel(ref element, PanelMarket, UIColors["dark"], Enum.GetName(typeof(Category), ct), 12, $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}", TextAnchor.MiddleCenter);
-                            UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}", $"UI_MarketMainScreen {0} {Enum.GetName(typeof(Category), ct)}");
-                            c++;
-                        }
-                        else
-                        {
-                            UI.LoadImage(ref element, PanelMarket, TryForImage("OFILTER"), $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}");
-                            UI.CreateLabel(ref element, PanelMarket, UIColors["dark"], Enum.GetName(typeof(Category), ct), 12, $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}", TextAnchor.MiddleCenter);
-                            UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}", $"UI_MarketMainScreen {0} {Enum.GetName(typeof(Category), ct)}");
-                            c++;
-                        }
+                    if (cat == ct)
+                    {
+                        UI.LoadImage(ref element, PanelMarket, TryForImage("UFILTER"), $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}");
+                        UI.CreateLabel(ref element, PanelMarket, UIColors["dark"], Enum.GetName(typeof(Category), ct), 12, $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}", TextAnchor.MiddleCenter);
+                        UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}", $"UI_MarketMainScreen {0} {Enum.GetName(typeof(Category), ct)}");
+                        c++;
+                    }
+                    else
+                    {
+                        UI.LoadImage(ref element, PanelMarket, TryForImage("OFILTER"), $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}");
+                        UI.CreateLabel(ref element, PanelMarket, UIColors["dark"], Enum.GetName(typeof(Category), ct), 12, $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}", TextAnchor.MiddleCenter);
+                        UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{loc[0]} {loc[1]}", $"{loc[2]} {loc[3]}", $"UI_MarketMainScreen {0} {Enum.GetName(typeof(Category), ct)}");
+                        c++;
+                    }
                 }
                 UI.LoadImage(ref element, PanelMarket, TryForImage("box.wooden.large", 0), $"0.05 0.9", "0.15 1");
                 UI.CreateLabel(ref element, PanelMarket, UIColors["dark"], "", 12, $"0.05 0.9", "0.15 1", TextAnchor.MiddleCenter);
 
                 UI.CreateButton(ref element, PanelMarket, "0 0 0 0", GetMSG("TradeBoxAssignment", player), 12, $"0.05 0.9", "0.15 1", $"UI_SetTradeBox");
-
-
 
                 UI.LoadImage(ref element, PanelMarket, TryForImage("SELL"), $"0.35 0.9", "0.65 1.0");
                 UI.CreateLabel(ref element, PanelMarket, UIColors["dark"], GetMSG("ListItem", player), 12, $"0.35 0.9", "0.65 1.0", TextAnchor.MiddleCenter);
@@ -922,7 +919,7 @@ namespace Oxide.Plugins
                             {
                                 seller = true;
                             }
-                            CreateMarketListingButton(ref element, PanelMarket,player, item.Value, seller, n);
+                            CreateMarketListingButton(ref element, PanelMarket, player, item.Value, seller, n);
 
                             n++;
                         }
@@ -940,7 +937,7 @@ namespace Oxide.Plugins
                             {
                                 seller = true;
                             }
-                            CreateMarketListingButton(ref element, PanelMarket,player, item.Value, seller, n);
+                            CreateMarketListingButton(ref element, PanelMarket, player, item.Value, seller, n);
                             n++;
                         }
                     }
@@ -968,18 +965,18 @@ namespace Oxide.Plugins
                 foreach (Category ct in Enum.GetValues(typeof(Category)))
                 {
                     var loc = FilterButton(c);
-                        if (cat == ct)
-                        {
-                            UI.CreateButton(ref element, PanelMarket, UIColors["red"], Enum.GetName(typeof(Category), ct), 12, $"{loc[0]} {loc[1] + .02f}", $"{loc[2]} {loc[3] + .02f}", $"UI_MarketMainScreen {0} {Enum.GetName(typeof(Category), ct)}");
-                            c++;
-                        }
-                        else
-                        {
-                            UI.CreateButton(ref element, PanelMarket, UIColors["header"], Enum.GetName(typeof(Category), ct), 12, $"{loc[0]} {loc[1] + .02f}", $"{loc[2]} {loc[3] + .02f}", $"UI_MarketMainScreen {0} {Enum.GetName(typeof(Category), ct)}");
-                            c++;
-                        }
+                    if (cat == ct)
+                    {
+                        UI.CreateButton(ref element, PanelMarket, UIColors["red"], Enum.GetName(typeof(Category), ct), 12, $"{loc[0]} {loc[1] + .02f}", $"{loc[2]} {loc[3] + .02f}", $"UI_MarketMainScreen {0} {Enum.GetName(typeof(Category), ct)}");
+                        c++;
+                    }
+                    else
+                    {
+                        UI.CreateButton(ref element, PanelMarket, UIColors["header"], Enum.GetName(typeof(Category), ct), 12, $"{loc[0]} {loc[1] + .02f}", $"{loc[2]} {loc[3] + .02f}", $"UI_MarketMainScreen {0} {Enum.GetName(typeof(Category), ct)}");
+                        c++;
+                    }
                 }
-                    UI.CreateButton(ref element, PanelMarket, UIColors["header"], GetMSG("TradeBoxAssignment", player), 12, $"0.05 0.92", "0.15 .98", $"UI_SetTradeBox");
+                UI.CreateButton(ref element, PanelMarket, UIColors["header"], GetMSG("TradeBoxAssignment", player), 12, $"0.05 0.92", "0.15 .98", $"UI_SetTradeBox");
 
                 UI.CreateButton(ref element, PanelMarket, UIColors["header"], GetMSG("ListItem", player), 12, $"0.35 0.92", "0.65 .98", $"UI_MarketSellScreen {0}");
 
@@ -1007,7 +1004,7 @@ namespace Oxide.Plugins
                             {
                                 seller = true;
                             }
-                            CreateMarketListingButtonSimple(ref element, PanelMarket,player, item.Value, seller, n);
+                            CreateMarketListingButtonSimple(ref element, PanelMarket, player, item.Value, seller, n);
                             n++;
                         }
                     }
@@ -1024,7 +1021,7 @@ namespace Oxide.Plugins
                             {
                                 seller = true;
                             }
-                            CreateMarketListingButtonSimple(ref element, PanelMarket,player, item.Value, seller, n);
+                            CreateMarketListingButtonSimple(ref element, PanelMarket, player, item.Value, seller, n);
                             n++;
                         }
                     }
@@ -1100,12 +1097,12 @@ namespace Oxide.Plugins
             if (mData.names.ContainsKey(item.seller))
                 name = mData.names[item.seller];
             else name = "NONE";
-            UI.CreateLabel(ref container, panelName, UIColors["dark"], GetMSG("Seller",player, name), 12, $"{pos[0] + .001f} {pos[3] - .2f}", $"{pos[2] - .1f} {pos[3] - .14f}", TextAnchor.MiddleLeft);
+            UI.CreateLabel(ref container, panelName, UIColors["dark"], GetMSG("Seller", player, name), 12, $"{pos[0] + .001f} {pos[3] - .2f}", $"{pos[2] - .1f} {pos[3] - .14f}", TextAnchor.MiddleLeft);
 
             if (seller == true)
             {
                 UI.LoadImage(ref container, PanelMarket, TryForImage("UFILTER"), $"{pos[0] + .02f} {pos[3] - .15f}", $"{pos[0] + .08f} {pos[3] - .1f}");
-                UI.CreateLabel(ref container, panelName, UIColors["dark"], GetMSG("removelisting",player), 10, $"{pos[0] + .02f} {pos[3] - .15f}", $"{pos[0] + .08f} {pos[3] - .1f}", TextAnchor.MiddleCenter);
+                UI.CreateLabel(ref container, panelName, UIColors["dark"], GetMSG("removelisting", player), 10, $"{pos[0] + .02f} {pos[3] - .15f}", $"{pos[0] + .08f} {pos[3] - .1f}", TextAnchor.MiddleCenter);
                 UI.CreateButton(ref container, panelName, "0 0 0 0", "", 40, $"{pos[0] + .02f} {pos[3] - .15f}", $"{pos[0] + .08f} {pos[3] - .1f}", $"UI_RemoveListing {item.ID}");
             }
             else
@@ -1135,7 +1132,7 @@ namespace Oxide.Plugins
             //SALE ITEM
             UI.LoadImage(ref container, panelName, TryForImage(item.shortname, item.skin), $"{pos[0] + 0.001f} {pos[3] - 0.125f}", $"{pos[0] + 0.1f} {pos[3] - 0.005f}");
             UI.CreateLabel(ref container, panelName, UIColors["dark"], name, 12, $"{pos[0] + .1f} {pos[3] - .04f}", $"{pos[2] - .001f} {pos[3] - .001f}", TextAnchor.MiddleLeft);
-            UI.CreateLabel(ref container, panelName, UIColors["dark"], GetMSG("Amount",player, item.amount.ToString()), 12, $"{pos[0] + .1f} {pos[3] - .07f}", $"{pos[2] - .001f} {pos[3] - .041f}", TextAnchor.MiddleLeft);
+            UI.CreateLabel(ref container, panelName, UIColors["dark"], GetMSG("Amount", player, item.amount.ToString()), 12, $"{pos[0] + .1f} {pos[3] - .07f}", $"{pos[2] - .001f} {pos[3] - .041f}", TextAnchor.MiddleLeft);
 
             if (item.cat != Category.Money)
             {
@@ -1147,7 +1144,7 @@ namespace Oxide.Plugins
                     var ymin = pos[3] - .12f;
                     var ymax = pos[3] - .07f;
                     if (percent * 100 > 75)
-                        UI.CreateLabel(ref container, panelName, UIColors["green"], GetMSG("ItemCondition",player, Math.Round(percent * 100).ToString()), 12, $"{pos[0] + .1f} {ymin}", $"{pos[0] + .275f} {ymax}", TextAnchor.MiddleLeft);
+                        UI.CreateLabel(ref container, panelName, UIColors["green"], GetMSG("ItemCondition", player, Math.Round(percent * 100).ToString()), 12, $"{pos[0] + .1f} {ymin}", $"{pos[0] + .275f} {ymax}", TextAnchor.MiddleLeft);
                     else if (percent * 100 > 25 && percent * 100 < 76)
                         UI.CreateLabel(ref container, panelName, UIColors["yellow"], GetMSG("ItemCondition", player, Math.Round(percent * 100).ToString()), 12, $"{pos[0] + .1f} {ymin}", $"{pos[0] + .275f} {ymax}", TextAnchor.MiddleLeft);
                     else if (percent * 100 > 0 && percent * 100 < 26)
@@ -1192,7 +1189,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void MarketSellScreen(BasePlayer player, int page = 0)
+        private void MarketSellScreen(BasePlayer player, int page = 0)
         {
             CuiHelper.DestroyUi(player, PanelMarket);
             StorageContainer box = UIInfo[player.userID].box;
@@ -1228,21 +1225,21 @@ namespace Oxide.Plugins
                 }
             }
             if (configData.ServerRewards && ServerRewards && !mData.Blacklist.Contains("SR"))
-                    if (CheckPoints(player.userID) is int && (int)CheckPoints(player.userID) > 0)
-                        {
-                            pos = CalcButtonPos(i);
-                            UI.CreatePanel(ref element, PanelMarket, "1 1 1 1", $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
-                            UI.LoadImage(ref element, PanelMarket, TryForImage("SR"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
-                            UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectMoney SR"); i++;
-                        }
+                if (CheckPoints(player.userID) is int && (int)CheckPoints(player.userID) > 0)
+                {
+                    pos = CalcButtonPos(i);
+                    UI.CreatePanel(ref element, PanelMarket, "1 1 1 1", $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                    UI.LoadImage(ref element, PanelMarket, TryForImage("SR"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                    UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectMoney SR"); i++;
+                }
             if (configData.Economics && Economics && !mData.Blacklist.Contains("ECO"))
-                    if (CheckEco(player.userID) > 0)
-                        {
-                            pos = CalcButtonPos(i);
-                            UI.CreatePanel(ref element, PanelMarket, "1 1 1 1", $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
-                            UI.LoadImage(ref element, PanelMarket, TryForImage("ECO"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
-                            UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectMoney ECO"); i++;
-                        }
+                if (CheckEco(player.userID) > 0)
+                {
+                    pos = CalcButtonPos(i);
+                    UI.CreatePanel(ref element, PanelMarket, "1 1 1 1", $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                    UI.LoadImage(ref element, PanelMarket, TryForImage("ECO"), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                    UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_SelectMoney ECO"); i++;
+                }
             UI.CreateButton(ref element, PanelMarket, UIColors["buttonred"], GetMSG("Back", player), 16, "0.03 0.02", "0.13 0.075", $"UI_MarketMainScreen {0} {Enum.GetName(typeof(Category), Category.All)}");
             CuiHelper.AddUi(player, element);
         }
@@ -1262,6 +1259,7 @@ namespace Oxide.Plugins
                     if (SalesItem == null) return;
                     UI.CreateTextOutline(ref element, PanelMarket, UIColors["white"], UIColors["black"], GetMSG("SetName", player, SalesItem.shortname), 20, "0.05 0", ".95 1", TextAnchor.MiddleCenter);
                     break;
+
                 case 1:
                     CuiHelper.DestroyUi(player, PanelMarket);
                     SalesItem = SalesItemPrep[player.userID];
@@ -1335,6 +1333,7 @@ namespace Oxide.Plugins
                     }
                     UI.CreateButton(ref element, PanelMarket, UIColors["buttonred"], GetMSG("Quit", player), 16, "0.03 0.02", "0.13 0.075", $"UI_MarketMainScreen {0} {Enum.GetName(typeof(Category), Category.All)}");
                     break;
+
                 default:
                     CuiHelper.DestroyUi(player, PanelMarket);
                     SalesItem = SalesItemPrep[player.userID];
@@ -1492,19 +1491,19 @@ namespace Oxide.Plugins
             if (action == "add")
             {
                 UI.CreateTextOutline(ref element, PanelMarket, UIColors["white"], UIColors["black"], GetMSG("SelectItemToBlacklist", player), 20, "0.05 0.9", ".95 1", TextAnchor.MiddleCenter);
-                    foreach (var entry in ItemManager.itemList.Where(bl => !mData.Blacklist.Contains(bl.shortname)).OrderBy(kvp => kvp.shortname))
+                foreach (var entry in ItemManager.itemList.Where(bl => !mData.Blacklist.Contains(bl.shortname)).OrderBy(kvp => kvp.shortname))
+                {
+                    i++;
+                    if (i < shownentries + 1) continue;
+                    else if (i <= shownentries + entriesallowed)
                     {
-                        i++;
-                        if (i < shownentries + 1) continue;
-                        else if (i <= shownentries + entriesallowed)
-                        {
-                            var pos = CalcButtonPos(n);
-                            UI.LoadImage(ref element, PanelMarket, TryForImage(entry.shortname, 0), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                        var pos = CalcButtonPos(n);
+                        UI.LoadImage(ref element, PanelMarket, TryForImage(entry.shortname, 0), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
                         if (!HasImage(entry.shortname, 0)) UI.CreateLabel(ref element, PanelMarket, UIColors["white"], entry.shortname, 14, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", TextAnchor.MiddleCenter);
                         UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_BackListItem add {entry.shortname}");
-                            n++;
-                        }
+                        n++;
                     }
+                }
             }
             else if (action == "remove")
             {
@@ -1516,19 +1515,19 @@ namespace Oxide.Plugins
                     return;
                 }
                 UI.CreateTextOutline(ref element, PanelMarket, UIColors["white"], UIColors["black"], GetMSG("SelectItemToUnBlacklist", player), 20, "0.05 0.9", ".95 1", TextAnchor.MiddleCenter);
-                    foreach (var entry in mData.Blacklist.OrderBy(kvp => kvp))
+                foreach (var entry in mData.Blacklist.OrderBy(kvp => kvp))
+                {
+                    i++;
+                    if (i < shownentries + 1) continue;
+                    else if (i <= shownentries + entriesallowed)
                     {
-                        i++;
-                        if (i < shownentries + 1) continue;
-                        else if (i <= shownentries + entriesallowed)
-                        {
-                            var pos = CalcButtonPos(n);
-                            UI.LoadImage(ref element, PanelMarket, TryForImage(entry, 0), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
+                        var pos = CalcButtonPos(n);
+                        UI.LoadImage(ref element, PanelMarket, TryForImage(entry, 0), $"{pos[0] + 0.005f} {pos[1] + 0.005f}", $"{pos[2] - 0.005f} {pos[3] - 0.005f}");
                         if (!HasImage(entry, 0)) UI.CreateLabel(ref element, PanelMarket, UIColors["white"], entry, 14, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", TextAnchor.MiddleCenter);
                         UI.CreateButton(ref element, PanelMarket, "0 0 0 0", "", 12, $"{pos[0]} {pos[1]}", $"{pos[2]} {pos[3]}", $"UI_BackListItem remove {entry}");
-                            n++;
-                        }
+                        n++;
                     }
+                }
             }
             double remainingentries = count - (page * (entriesallowed - 1));
             double totalpages = (Math.Floor(count / (entriesallowed - 1)));
@@ -1546,7 +1545,7 @@ namespace Oxide.Plugins
             CuiHelper.AddUi(player, element);
         }
 
-        #endregion
+        #endregion UI Panels
 
         #region UI Calculations
 
@@ -1712,9 +1711,10 @@ namespace Oxide.Plugins
             return new float[] { posMin.x, posMin.y, posMax.x, posMax.y };
         }
 
-        #endregion
+        #endregion UI Calculations
 
         #region UI Commands
+
         [ConsoleCommand("UI_DestroyMarketPanel")]
         private void cmdUI_DestroyBoxConfirmation(ConsoleSystem.Arg arg)
         {
@@ -1839,29 +1839,27 @@ namespace Oxide.Plugins
             int amount = Convert.ToInt32(arg.Args[0]);
             var ECOListedAmount = 0;
             if (CheckEco(player.userID) >= amount)
-                {
-                    foreach (var entry in mData.MarketListings.Where(kvp => kvp.Value.seller == player.userID && kvp.Value.shortname == "ECO"))
+            {
+                foreach (var entry in mData.MarketListings.Where(kvp => kvp.Value.seller == player.userID && kvp.Value.shortname == "ECO"))
                     ECOListedAmount += entry.Value.amount;
-                    if (CheckEco(player.userID) - ECOListedAmount >= amount)
+                if (CheckEco(player.userID) - ECOListedAmount >= amount)
+                {
+                    SalesItemPrep[player.userID].amount = amount;
+                    DestroyMarketPanel(player);
+                    if (configData.UseUniqueNames)
                     {
-                        SalesItemPrep[player.userID].amount = amount;
-                        DestroyMarketPanel(player);
-                        if (configData.UseUniqueNames)
-                        {
-                            SellItems(player);
-                            return;
-                        }
-                        else
-                        {
-                            SellItems(player, 1);
-                            return;
-                        }
+                        SellItems(player);
+                        return;
+                    }
+                    else
+                    {
+                        SellItems(player, 1);
+                        return;
                     }
                 }
+            }
             GetSendMSG(player, "NotEnoughECOPoints");
         }
-
-
 
         [ConsoleCommand("UI_SelectpriceItemshortname")]
         private void cmdUI_SelectpriceItemshortname(ConsoleSystem.Arg arg)
@@ -1899,7 +1897,6 @@ namespace Oxide.Plugins
             DestroyMarketPanel(player);
             SellItems(player, 99);
         }
-
 
         private uint GetRandomNumber()
         {
@@ -2057,8 +2054,6 @@ namespace Oxide.Plugins
             MarketMainScreen(player);
         }
 
-
-
         [ConsoleCommand("UI_SetTradeBox")]
         private void cmdUI_SetBoxMode(ConsoleSystem.Arg arg)
         {
@@ -2079,19 +2074,18 @@ namespace Oxide.Plugins
                     listings.Clear();
                     mData.TradeBox.Remove(player.userID);
                 }
-                mData.TradeBox.Add(player.userID, new XYZ {x = box.transform.localPosition.x, y = box.transform.localPosition.y, z = box.transform.localPosition.z });
+                mData.TradeBox.Add(player.userID, new XYZ { x = box.transform.localPosition.x, y = box.transform.localPosition.y, z = box.transform.localPosition.z });
                 if (!UIInfo.ContainsKey(player.userID))
                     UIInfo.Add(player.userID, new existence());
                 UIInfo[player.userID].box = box;
                 OnScreen(player, "NewTradeBox");
                 SaveData();
             }
-
         }
 
-        object FindEntityFromRay(BasePlayer player)
+        private object FindEntityFromRay(BasePlayer player)
         {
-            var input = serverinput.GetValue(player) as InputState;
+            var input = player.serverInput;
             Ray ray = new Ray(player.eyes.position, Quaternion.Euler(input.current.aimAngles) * Vector3.forward);
             RaycastHit hit;
             if (!Physics.Raycast(ray, out hit, 20))
@@ -2105,7 +2099,7 @@ namespace Oxide.Plugins
             return null;
         }
 
-        void OnScreen(BasePlayer player, string msg, string arg1 = "", string arg2 = "", string arg3 = "")
+        private void OnScreen(BasePlayer player, string msg, string arg1 = "", string arg2 = "", string arg3 = "")
         {
             if (timers.ContainsKey(player.userID.ToString()))
             {
@@ -2242,7 +2236,6 @@ namespace Oxide.Plugins
                     GetSendMSG(player, "SellerNoTradeBoxBuying");
             }
         }
-
 
         [ConsoleCommand("UI_ProcessMoney")]
         private void cmdUI_ProcessMoney(ConsoleSystem.Arg arg)
@@ -2461,7 +2454,7 @@ namespace Oxide.Plugins
             AdminPanel(player);
         }
 
-        #endregion
+        #endregion UI Commands
 
         #region Timers
 
@@ -2522,16 +2515,16 @@ namespace Oxide.Plugins
             timers.Add("listings", timer.Once(600, () => CheckListings()));
         }
 
-
         private void SetBoxFullNotification(string ID)
         {
             timers.Add(ID, timer.Once(5 * 60, () => timers.Remove(ID)));
         }
 
-        #endregion
+        #endregion Timers
 
         #region Classes
-        class MarketData
+
+        private class MarketData
         {
             public Dictionary<uint, AMItem> MarketListings = new Dictionary<uint, AMItem>();
             public Dictionary<ulong, XYZ> TradeBox = new Dictionary<ulong, XYZ>();
@@ -2542,14 +2535,14 @@ namespace Oxide.Plugins
             public Dictionary<ulong, string> names = new Dictionary<ulong, string>();
         }
 
-        class XYZ
+        private class XYZ
         {
             public float x;
             public float y;
             public float z;
         }
 
-        class Unsent
+        private class Unsent
         {
             public string message;
             public string arg1;
@@ -2558,7 +2551,7 @@ namespace Oxide.Plugins
             public string arg4;
         }
 
-        enum Category
+        private enum Category
         {
             Weapons,
             Armor,
@@ -2575,7 +2568,7 @@ namespace Oxide.Plugins
             Components,
         }
 
-        class AMItem
+        private class AMItem
         {
             public string name;
             public string shortname;
@@ -2593,14 +2586,14 @@ namespace Oxide.Plugins
             public float condition;
         }
 
-        #endregion
+        #endregion Classes
 
         #region Backgrounds
 
         private void AddNeededImages()
         {
             foreach (var entry in UIElements)
-                    AddImage(entry.Value, entry.Key, (ulong)ResourceId);
+                AddImage(entry.Value, entry.Key, (ulong)ResourceId);
         }
 
         private void RefreshBackgrounds()
@@ -2612,10 +2605,10 @@ namespace Oxide.Plugins
                 AddImage(entry.Value, entry.Key, (ulong)ResourceId);
             }
             if (i > 0)
-                Puts(GetMSG("BckAdded",null, i.ToString()));
+                Puts(GetMSG("BckAdded", null, i.ToString()));
         }
 
-        #endregion
+        #endregion Backgrounds
 
         #region Absolut Market Data Management
 
@@ -2766,7 +2759,6 @@ namespace Oxide.Plugins
             { "antiradpills"},
             }
             },
-
 
             {Category.Building, new List<string>
             {
@@ -2934,7 +2926,6 @@ namespace Oxide.Plugins
             }
             },
 
-
             {Category.Food, new List<string>
             {
             { "wolfmeat.cooked"},
@@ -2961,12 +2952,12 @@ namespace Oxide.Plugins
             }
         };
 
-        void SaveData()
+        private void SaveData()
         {
             MData.WriteObject(mData);
         }
 
-        void LoadData()
+        private void LoadData()
         {
             try
             {
@@ -2996,11 +2987,13 @@ namespace Oxide.Plugins
             initialized = true;
         }
 
-        #endregion
+        #endregion Absolut Market Data Management
 
-        #region Config        
+        #region Config
+
         private ConfigData configData;
-        class ConfigData
+
+        private class ConfigData
         {
             public string MarketMenuKeyBinding { get; set; }
             public bool UseUniqueNames { get; set; }
@@ -3008,12 +3001,11 @@ namespace Oxide.Plugins
             public int InfoInterval { get; set; }
             public bool Economics { get; set; }
             public bool ForceSimpleUI { get; set; }
-            public Dictionary<string, string> CustomBackgrounds {get;set;}
+            public Dictionary<string, string> CustomBackgrounds { get; set; }
             public Dictionary<Category, List<string>> Categorization { get; set; }
             public List<ulong> BanSteamIDs { get; set; }
-
-
         }
+
         private void LoadVariables()
         {
             LoadConfigVariables();
@@ -3025,7 +3017,7 @@ namespace Oxide.Plugins
         {
             var config = new ConfigData
             {
-                MarketMenuKeyBinding = "b",
+                //MarketMenuKeyBinding = "b",
                 UseUniqueNames = false,
                 InfoInterval = 15,
                 ServerRewards = false,
@@ -3049,16 +3041,17 @@ namespace Oxide.Plugins
             { "default14", "http://www.intrawallpaper.com/static/images/maxresdefault15.jpg" },
                 },
                 Categorization = Categorization,
-                
-        };
+            };
             SaveConfig(config);
         }
         private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
-        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
-        #endregion
+        private void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+
+        #endregion Config
 
         #region Messages
-        Dictionary<string, string> messages = new Dictionary<string, string>()
+
+        private Dictionary<string, string> messages = new Dictionary<string, string>()
         {
             {"title", "Absolut Market: " },
             {"AMInfo", "This server is running Absolut Market. Press '{0}' to access the Market Menu and to set a Trade Box. Happy Trading!"},
@@ -3144,6 +3137,7 @@ namespace Oxide.Plugins
             {"NotyourBox", "This box was not built by you. Unable to set it as your new Trade Box." },
             {"BanFromMarket", "You are not allowed to use the Market. Speak with an admin." }
         };
-        #endregion
+
+        #endregion Messages
     }
 }

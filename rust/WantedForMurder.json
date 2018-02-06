@@ -3,9 +3,9 @@
     "description": "Players can punish unwanted PvP.",
     "author": "",
     "version": "1.0.7",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/wanted-for-murder.2033",
+    "url": "https:\/\/oxidemod.org\/plugins\/wanted-for-murder.2033",
     "games": [
         "rust"
     ],

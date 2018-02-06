@@ -1,11 +1,11 @@
 {
-    "name": "Random Spawner",
+    "name": "RandomSpawner",
     "description": "Randomly spawn a specific amount of an entity on the map",
     "author": "Wulf",
     "version": "1.2.1",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/random-spawner.1456",
+    "url": "https:\/\/oxidemod.org\/plugins\/randomspawner.1456",
     "games": [
         "rust"
     ],

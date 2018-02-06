@@ -1,0 +1,16 @@
+{
+    "name": "VoteKick",
+    "description": "Let players with permission call votes to kick others.",
+    "author": "Kappasaurus",
+    "version": "1.0.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/votekick.2511",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

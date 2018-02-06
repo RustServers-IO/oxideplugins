@@ -3,9 +3,9 @@
     "description": "Easily reset\/replenish loot in storage boxes and containers after a certain amount of time.",
     "author": "Wulf",
     "version": "1.3.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/replenish.1956",
+    "url": "https:\/\/oxidemod.org\/plugins\/replenish.1956",
     "games": [
         "rust"
     ],

@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "configuration": false,
     "language": "lua",
-    "url": "http:\/\/oxidemod.org\/plugins\/remove-parachutes.786",
+    "url": "https:\/\/oxidemod.org\/plugins\/remove-parachutes.786",
     "games": [
         "rust"
     ],

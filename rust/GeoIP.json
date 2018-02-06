@@ -5,7 +5,7 @@
     "version": "0.1.3",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/geoip.1365",
+    "url": "https:\/\/oxidemod.org\/plugins\/geoip.1365",
     "games": [
         "rust"
     ],

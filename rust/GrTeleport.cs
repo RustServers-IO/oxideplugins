@@ -2,10 +2,11 @@
 using System;
 using UnityEngine;
 using Oxide.Core.Plugins;
+using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("GrTeleport", "carny666", "1.1.4", ResourceId = 2665)]
+    [Info("GrTeleport", "carny666", "1.1.6", ResourceId = 2665)]
     class GrTeleport : RustPlugin
     {
         #region permissions
@@ -64,7 +65,7 @@ namespace Oxide.Plugins
             {
                 RaycastHit hitInfo;
                 if (Physics.Raycast(sourcePos, Vector3.down, out hitInfo))
-                        sourcePos.y = hitInfo.point.y;
+                    sourcePos.y = hitInfo.point.y;
 
                 sourcePos.y = Mathf.Max(sourcePos.y, TerrainMeta.HeightMap.GetHeight(sourcePos));
 
@@ -129,6 +130,7 @@ namespace Oxide.Plugins
                 lang.RegisterMessages(new Dictionary<string, string>
                 {
                     { "buildingblocked", "You cannot grTeleport into or out from a building blocked area." },
+                    { "CannotGridTeleport", "You cannot grTeleport to this position." },
                     { "noinit", "spawnGrid was not initialized. 0 spawn points available." },
                     { "teleported", "You have GrTeleported to {gridreference}, {position}. You're {groupname}, so you have a {cooldown} second cooldown between uses and {limit} grTeleports." }, // {gridreference}
                     { "teleportlimit", "You have {teleportsremaining} remaining." }, // {teleportsremaining}
@@ -147,7 +149,7 @@ namespace Oxide.Plugins
                     { "cupboard", "Sorry, you cannot teleport within {distance} of a cupboard." },
                     { "zoneadded", "Restricted Zone ({zone}) has been added, you now have {zones}." },
                     { "zonenotadded", "You need to enter a zone (or a comma seperated list of zones) as well." },
-                    { "restrictedzone", "You cannot teleport her, {zone} is restricted." },
+                    { "restrictedzone", "You cannot teleport here, {zone} is restricted." },
                     { "zonecomma", "You need to supply a commaseperated list of zones." },
                     { "zonesadded", "Restricted Zones ({zone}) have been added, you now have {zones}." },
                     { "zonenotremoved", "Restricted Zone ({zone}) has not been removed, you now have {zones}." },
@@ -160,7 +162,9 @@ namespace Oxide.Plugins
                     { "setgroupusageerror", "Must have 3 arguments. /setgroup groupName 30 10" },
                     { "setwaterdepthreply", "Allowable water depth has been set to {waterdepth}" },
                     { "setwaterdeptherror", "usage: /setwaterdepth 1.0" },
-                    { "toggleDeathMessagereply", "Death message has been toggled to {displayDeath}" }
+                    { "toggleDeathMessagereply", "Death message has been toggled to {displayDeath}" },
+                    { "clearingallzones", "Clearing all zones from restricted." },
+                    { "addingallzones", "Adding all zones as restricted." }
                 }, this, "en");
             }
             catch (Exception ex)
@@ -208,6 +212,37 @@ namespace Oxide.Plugins
             };
             Config.WriteObject(data, true);
         }
+
+        void OnEntityDeath(BaseEntity entity, HitInfo info)
+        {
+            try
+            {
+                if (!grTeleportData.DisplayDeathLocation) return;
+
+                if (entity is BasePlayer)
+                    pendingDeathNotice.Add(new DeathNotice { Player = entity.ToPlayer(), DeathLocation = entity.transform.position, DeathGridReference = GetGridReference(entity.transform.position) });
+
+            }
+            catch (Exception ex)
+            {
+                PrintError("Error OnEntityDeath " + ex.StackTrace);
+            }
+        }
+
+        void OnPlayerRespawned(BasePlayer player)
+        {
+            if (!grTeleportData.DisplayDeathLocation) return;
+
+            //pendingDeathNotice.
+            var deathNotice = pendingDeathNotice.Find(x => x.Player == player);
+            if (deathNotice != null)
+            {
+                pendingDeathNotice.Remove(deathNotice);
+                PrintToChat(player, "You died " + deathNotice.DeathGridReference);
+            }
+
+        }
+
         #endregion
 
         #region commands
@@ -245,6 +280,11 @@ namespace Oxide.Plugins
                         return;
                     }
 
+                    if (Interface.CallHook("CanGridTeleport", player, spawnGrid[index].GroundPosition) != null)
+                    {
+                        player.ChatMessage(lang.GetMessage("CannotGridTeleport", this, player.UserIDString));
+                        return;
+                    }
 
                     if (player.IsBuildingBlocked(spawnGrid[index].GroundPosition, new Quaternion(0, 0, 0, 0), new Bounds(Vector3.zero, Vector3.zero)) && !grTeleportData.AllowBuildingBlocked)
                     {
@@ -254,7 +294,7 @@ namespace Oxide.Plugins
 
                     if (spawnGrid[index].isPositionAboveWater() && grTeleportData.AvoidWater && (spawnGrid[index].WaterDepthAtPosition() > grTeleportData.AllowableWaterDepth))
                     {
-                        PrintToChat($"{spawnGrid[index].WaterDepthAtPosition().ToString("0.00")} meters. deep");
+                        //PrintToChat($"{spawnGrid[index].WaterDepthAtPosition().ToString("0.00")} meters. deep");
                         PrintToChat(player, lang.GetMessage("overwater", this, player.UserIDString).Replace("{depth}", spawnGrid[index].WaterDepthAtPosition().ToString("0.00")));
                         return;
                     }
@@ -480,13 +520,14 @@ namespace Oxide.Plugins
                 if (args.Length > 0)
                     grTeleportData.LimitPerDay = int.Parse(args[0]);
 
-                rustUsers.Clear();
+                rustUsers.Clear(); // This is suspect.. ??
+
                 Config.WriteObject(grTeleportData, true);
                 PrintToChat(player, lang.GetMessage("dailylimitreply", this, player.UserIDString).Replace("{dailylimit}", grTeleportData.LimitPerDay.ToString()));
             }
             catch (Exception ex)
             {
-                throw new Exception($"chmSetCooldown {ex.Message}");
+                throw new Exception($"chmSetDailyLimit {ex.Message}");
             }
         }
 
@@ -588,6 +629,43 @@ namespace Oxide.Plugins
                 throw new Exception($"chmSetCooldown {ex.Message}");
             }
         }
+
+        [ChatCommand("clearzones")]
+        void chmClearZones(BasePlayer player, string command, string[] args)
+        {
+            try
+            {
+                if (!CheckAccess(player, "chmClearZones", adminPermission)) return;
+
+                List<string> tmpZoneList = new List<string>(grTeleportData.RestrictedZones.Split(','));
+
+                if (string.IsNullOrEmpty(grTeleportData.RestrictedZones) || grTeleportData.RestrictedZones == "ZZZ123,YYY666")
+                {
+                    PrintToChat(player, lang.GetMessage("addingallzones", this, player.UserIDString));
+                    
+                    foreach (SpawnPosition sp in spawnGrid)
+                        tmpZoneList.Add(sp.GridReference);
+
+                    grTeleportData.RestrictedZones = string.Join(",", tmpZoneList.ToArray());
+                    Config.WriteObject(grTeleportData, true);
+
+                    return;
+                }
+                else
+                {
+                    PrintToChat(player, $"{grTeleportData.RestrictedZones}");
+                    PrintToChat(player, lang.GetMessage("clearingallzones", this, player.UserIDString));
+                    grTeleportData.RestrictedZones = "ZZZ123,YYY666";
+
+                }
+
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"chmClearZones {ex.Message}");
+            }
+        }
+
 
         [ChatCommand("togglebuildingblocked")]
         void chmtogglebuildingblocked(BasePlayer player, string command, string[] args)
@@ -709,7 +787,7 @@ namespace Oxide.Plugins
                     if (cd != null)
                     {
                         coolDowns.Remove(cd);
-                        PrintToChat($"Cleared {cd.name}..");
+                        PrintToChat($"Cleared cooldown for {cd.name}..");
                     }
                     else
                     {
@@ -727,6 +805,41 @@ namespace Oxide.Plugins
             }
 
         }
+
+        [ChatCommand("clearlimit")]
+        void chmClearLimit(BasePlayer player, string command, string[] args)
+        {
+            try
+            {
+                if (!CheckAccess(player, "clearlimit", adminPermission)) return;
+
+                if (args.Length == 1)
+                {
+                    var cd = rustUsers.Find(x => x.Player.displayName.ToLower().Contains(args[0].ToLower()));
+                    if (cd != null)
+                    {
+                        var userGroupData = GetUsersGroupDataOrDefault(cd.Player);
+                        var user = GetOrCreateUser(cd.Player, userGroupData);
+                        cd.TeleportsRemaining = userGroupData.dailyTeleports;
+                        PrintToChat($"Cleared limit for {cd.Player.displayName}..");
+                    }
+                    else
+                    {
+                        PrintToChat($"{args[0]} not found.");
+                    }
+                    return;
+                }
+                coolDowns.Clear();
+                PrintToChat($"Cleared Limits");
+                return;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"chmClearLimit {ex.Message}");
+            }
+
+        }
+
 
         #endregion
 
@@ -1050,36 +1163,6 @@ namespace Oxide.Plugins
         }
 
         List<DeathNotice> pendingDeathNotice = new List<DeathNotice>();
-
-        void OnEntityDeath(BaseEntity entity, HitInfo info)
-        {
-            try
-            {
-                if (!grTeleportData.DisplayDeathLocation) return;
-
-                if (entity is BasePlayer)
-                    pendingDeathNotice.Add(new DeathNotice { Player = entity.ToPlayer(), DeathLocation = entity.transform.position, DeathGridReference = GetGridReference(entity.transform.position) });
-
-            }
-            catch (Exception ex)
-            {
-                PrintError("Error OnEntityDeath " + ex.StackTrace);
-            }
-        }
-
-        void OnPlayerRespawned(BasePlayer player)
-        {
-            if (!grTeleportData.DisplayDeathLocation) return;
-
-            //pendingDeathNotice.
-            var deathNotice = pendingDeathNotice.Find(x => x.Player == player);
-            if (deathNotice != null)
-            {
-                pendingDeathNotice.Remove(deathNotice);
-                PrintToChat(player, "You died " + deathNotice.DeathGridReference);
-            }
-
-        }
 
         string GetGridReference(Vector3 position)
         {

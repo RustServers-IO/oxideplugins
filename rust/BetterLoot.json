@@ -3,9 +3,9 @@
     "description": "A complete re-implementation of the drop system",
     "author": "Fujikura",
     "version": "2.13.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/betterloot.828",
+    "url": "https:\/\/oxidemod.org\/plugins\/betterloot.828",
     "games": [
         "rust"
     ],

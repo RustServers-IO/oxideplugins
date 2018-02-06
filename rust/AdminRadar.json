@@ -2,13 +2,13 @@
     "name": "Admin Radar",
     "description": "Allows admins to have a radar to help detect cheaters",
     "author": "nivex",
-    "version": "4.1.4",
-    "configuration": true,
+    "version": "4.2.1",
+    "configuration": false,
     "suggest": {
         "AdminPanel": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/admin-radar.978",
+    "url": "https:\/\/oxidemod.org\/plugins\/admin-radar.978",
     "games": [
         "rust"
     ],

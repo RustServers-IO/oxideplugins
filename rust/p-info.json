@@ -3,9 +3,9 @@
     "description": "Check your target's info and yours.",
     "author": "PaiN",
     "version": "2.5.0",
-    "configuration": true,
+    "configuration": false,
     "language": "lua",
-    "url": "http:\/\/oxidemod.org\/plugins\/player-info.1063",
+    "url": "https:\/\/oxidemod.org\/plugins\/player-info.1063",
     "games": [
         "rust"
     ],

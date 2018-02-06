@@ -3,9 +3,9 @@
     "description": "Reserves a number of slots so that reserved players can connect",
     "author": "Wulf",
     "version": "1.0.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/reserved.674",
+    "url": "https:\/\/oxidemod.org\/plugins\/reserved.674",
     "games": [
         "rust",
         "hurtworld"

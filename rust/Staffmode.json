@@ -3,9 +3,9 @@
     "description": "Toggle on\/off staff mode",
     "author": "Canopy Sheep",
     "version": "1.2.3",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/staffmode.2263",
+    "url": "https:\/\/oxidemod.org\/plugins\/staffmode.2263",
     "games": [
         "rust"
     ],

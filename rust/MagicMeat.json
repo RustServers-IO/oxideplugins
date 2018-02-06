@@ -2,10 +2,10 @@
     "name": "MagicMeat",
     "description": "Automatically converts raw meat to cooked",
     "author": "ignignokt84",
-    "version": "0.1.2",
-    "configuration": true,
+    "version": "0.1.3",
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/magicmeat.2011",
+    "url": "https:\/\/oxidemod.org\/plugins\/magicmeat.2011",
     "games": [
         "rust"
     ],

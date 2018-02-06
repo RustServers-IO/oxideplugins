@@ -8,10 +8,9 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Bounty", "k1lly0u", "0.1.73", ResourceId = 1649)]
+    [Info("Bounty", "k1lly0u", "0.1.74", ResourceId = 1649)]
     class Bounty : RustPlugin
     {
-
         [PluginReference]
         Plugin Clans;
         [PluginReference]
@@ -249,7 +248,7 @@ namespace Oxide.Plugins
             Vector3 newPos = pos + player.eyes.BodyForward() + new Vector3(0, 1, 0);
             BaseEntity box = GameManager.server.CreateEntity(rBox, newPos);           
             box.SendMessage("SetDeployedBy", player, UnityEngine.SendMessageOptions.DontRequireReceiver);
-            box.Spawn(true);
+            box.Spawn();
             ItemContainer loot = box.GetComponent<ItemContainer>();
             var ownerloot = player.inventory.loot;
             ownerloot.StartLootingEntity(box, true);
@@ -1024,9 +1023,9 @@ namespace Oxide.Plugins
         }
         bool isAuthCon(ConsoleSystem.Arg arg)
         {
-            if (arg.connection != null)
+            if (arg.Connection != null)
             {
-                if (arg.connection.authLevel < 1)
+                if (arg.Connection.authLevel < 1)
                 {
                     SendReply(arg, lang.GetMessage("noPerms", this));
                     return false;

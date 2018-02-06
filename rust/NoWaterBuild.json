@@ -1,11 +1,11 @@
 {
     "name": "NoWaterBuild",
     "description": "Block players building in water",
-    "author": "Jakkee",
+    "author": "",
     "version": "0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/nowaterbuild.2173",
+    "url": "https:\/\/oxidemod.org\/plugins\/nowaterbuild.2173",
     "games": [
         "rust"
     ],

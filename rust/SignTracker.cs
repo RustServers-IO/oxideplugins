@@ -2,14 +2,15 @@
 using System.Collections.Generic;
 using Oxide.Core;
 using Oxide.Core.Configuration;
+using Oxide.Core.Libraries.Covalence;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("SignTracker", "Wulf/lukespragg", "2.0.0", ResourceId = 1060)]
+    [Info("SignTracker", "Wulf/lukespragg", "2.0.1", ResourceId = 1060)]
     [Description("Track who last updated a sign with name and Steam ID, and optional logging")]
 
-    class SignTracker : RustPlugin
+    class SignTracker : CovalencePlugin
     {
         #region Initialization
 
@@ -93,33 +94,35 @@ namespace Oxide.Plugins
 
         #region Chat Command
 
-        [ChatCommand("sign")]
-        void SignCommand(BasePlayer player, string command, string[] args)
+        [Command("sign")]
+        void SignCommand(IPlayer player, string command, string[] args)
         {
-            if (!permission.UserHasPermission(player.UserIDString, permUse))
+            if (!player.HasPermission(permUse))
             {
-                PrintToChat(player, Lang("NotAllowed", player.UserIDString, command));
+                player.Reply(Lang("NotAllowed", player.Id, command));
                 return;
             }
 
             RaycastHit hit;
-            if (!Physics.Raycast(player.eyes.HeadRay(), out hit, 2.0f)) return;
-            var hitSign = hit.transform.GetComponentInParent<Signage>();
-            if (hitSign == null) return;
+            var basePlayer = player.Object as BasePlayer;
+            if (basePlayer == null || !Physics.Raycast(basePlayer.eyes.HeadRay(), out hit, 2.0f)) return;
 
-            if (signs.ContainsKey(hitSign.textureID))
+            var sign = hit.transform.GetComponentInParent<Signage>();
+            if (sign == null) return;
+
+            if (signs.ContainsKey(sign.textureID))
             {
-                var value = signs[hitSign.textureID].Split(',');
-                PrintToChat(player, Lang("LastUpdated", player.UserIDString, value[0], value[2], value[1]));
+                var value = signs[sign.textureID].Split(',');
+                player.Reply(Lang("LastUpdated", player.Id, value[0], value[2], value[1]));
             }
-            else PrintToChat(player, Lang("NoInformation", player.UserIDString));
+            else player.Reply(Lang("NoInformation", player.Id));
         }
 
         #endregion
 
         #region Sign Storage
 
-        void OnSignUpdate(Signage sign, BasePlayer player)
+        void OnSignUpdated(Signage sign, BasePlayer player)
         {
             if (signs.ContainsKey(sign.textureID)) signs[sign.textureID] = $"{player.displayName}, {player.userID}, {DateTime.Now}";
             else signs.Add(sign.textureID, $"{player.displayName}, {player.userID}, {DateTime.Now}");
@@ -148,7 +151,7 @@ namespace Oxide.Plugins
 
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
-        void Log(string text) => ConVar.Server.Log($"{Interface.Oxide.LogDirectory}/{Title.ToLower()}_{DateTime.Now.ToString("yyyy-MM-dd")}.txt", text);
+        void Log(string text) => LogToFile("updates", text, this);
 
         #endregion
     }

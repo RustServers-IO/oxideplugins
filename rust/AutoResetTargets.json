@@ -1,11 +1,11 @@
 {
     "name": "Auto Reset Targets",
     "description": "Resets knocked down targets after 3 seconds of being down",
-    "author": "Dyceman",
+    "author": "redBDGR",
     "version": "1.00",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/auto-reset-targets.1732",
+    "url": "https:\/\/oxidemod.org\/plugins\/auto-reset-targets.1732",
     "games": [
         "rust"
     ],

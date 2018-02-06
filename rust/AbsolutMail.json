@@ -3,7 +3,7 @@
     "description": "An ingame mail system. Players can send mail messages and attach items!",
     "author": "Absolut",
     "version": "1.0.7",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "SignArtist": "*"
     },
@@ -11,7 +11,7 @@
         "ImageLibrary": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/absolutmail.2255",
+    "url": "https:\/\/oxidemod.org\/plugins\/absolutmail.2255",
     "games": [
         "rust"
     ],

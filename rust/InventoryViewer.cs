@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Inventory Viewer", "Mughisi", "3.0.1", ResourceId = 871)]
+    [Info("Inventory Viewer", "Mughisi", "3.0.2", ResourceId = 871)]
     [Description("This plugin allows those with the permission assigned to view anyone's inventory.")]
     public class InventoryViewer : RustPlugin
     {
@@ -344,7 +344,15 @@ namespace Oxide.Plugins
 
             foreach (BasePlayer player in BasePlayer.activePlayerList)
             {
-                if (player.displayName.ToLower().Contains(nameOrId.ToLower()) || player.UserIDString == nameOrId)
+                if (!string.IsNullOrEmpty(player.displayName))
+                {
+                    if (player.displayName.ToLower().Contains(nameOrId.ToLower()))
+                    {
+                        matches.Add(player);
+                    }
+                }
+
+                if (player.UserIDString == nameOrId)
                 {
                     matches.Add(player);
                 }
@@ -352,7 +360,15 @@ namespace Oxide.Plugins
 
             foreach (BasePlayer player in BasePlayer.sleepingPlayerList)
             {
-                if (player.displayName.ToLower().Contains(nameOrId.ToLower()) || player.UserIDString == nameOrId)
+                if (!string.IsNullOrEmpty(player.displayName))
+                {
+                    if (player.displayName.ToLower().Contains(nameOrId.ToLower()))
+                    {
+                        matches.Add(player);
+                    }
+                }
+
+                if (player.UserIDString == nameOrId)
                 {
                     matches.Add(player);
                 }

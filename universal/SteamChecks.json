@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Kicks players when they join depending on information from their Steam accounts",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/steamchecks.2113",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

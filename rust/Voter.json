@@ -3,14 +3,14 @@
     "description": "Rewards players who vote for your server on rust-servers.net",
     "author": "k1lly0u",
     "version": "2.1.0",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "HelpText": "*",
         "Economics": "*",
         "ServerRewards": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/voter-rewards.752",
+    "url": "https:\/\/oxidemod.org\/plugins\/voter-rewards.752",
     "games": [
         "rust"
     ],

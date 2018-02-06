@@ -1,0 +1,20 @@
+{
+    "name": "Day\/Night Gather",
+    "description": "Set different gather rates for day and night.",
+    "author": "Dubz",
+    "version": "1.0.5",
+    "configuration": false,
+    "suggest": {
+        "TimeOfDay": "*"
+    },
+    "require": {},
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/day-night-gather.2297",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

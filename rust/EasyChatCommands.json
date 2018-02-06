@@ -1,0 +1,16 @@
+{
+    "name": "EasyChatCommands",
+    "description": "Easily Add Chat Info Commands",
+    "author": "Jake Rich",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/easychatcommands.2308",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

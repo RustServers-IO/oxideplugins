@@ -3,9 +3,9 @@
     "description": "Shows a simple MOTD on the screen",
     "author": "PaiN",
     "version": "0.2.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/motd-gui.1243",
+    "url": "https:\/\/oxidemod.org\/plugins\/motd-gui.1243",
     "games": [
         "rust"
     ],

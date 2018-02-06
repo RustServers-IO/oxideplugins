@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("InvFoundation", "sami37", "1.2.3", ResourceId = 2096)]
+    [Info("InvFoundation", "sami37", "1.2.4", ResourceId = 2096)]
     [Description("Invulnerable foundation")]
     public class InvFoundation : RustPlugin
     {
@@ -27,8 +27,10 @@ namespace Oxide.Plugins
         private bool UseEntityOwner => GetConfig("UseEntityOwner", false);
         private bool UseBuildOwners => GetConfig("UseBuildingOwner", false);
         private bool UseDamageScaling => GetConfig("UseDamageScaling", false);
+        private bool ExcludeCave => GetConfig("Exclude cave", false);
         static int colisionentity = LayerMask.GetMask("Construction");
         private readonly int cupboardMask = LayerMask.GetMask("Trigger");
+        private readonly int groundLayer = LayerMask.GetMask("Terrain", "World");
         T GetConfig<T>(string name, T defaultValue)
         {
             if (Config[name] == null) return defaultValue;
@@ -64,6 +66,7 @@ namespace Oxide.Plugins
             Config["UseBuildingOwner"] = UseBuildOwners;
             Config["UseEntityOwner"] = UseEntityOwner;
             Config["UseDamageScaling"] = UseDamageScaling;
+            Config["Exclude cave"] = ExcludeCave;
             Config["DamageList"] = damageList;
             Config["TierScalingDamage"] = damageGradeScaling;
             SaveConfig();
@@ -102,6 +105,8 @@ namespace Oxide.Plugins
                 {
                     if (IsOwner(attacker, block))
                         return;
+                    RaycastHit hit;
+                    if (ExcludeCave && Physics.SphereCast(block.transform.position, .1f, Vector3.down, out hit, 250, groundLayer) && hit.collider.name.Contains("cave_")) return;
                     if (!UseDamageScaling)
                     {
                         hitInfo.damageTypes = new DamageTypeList();

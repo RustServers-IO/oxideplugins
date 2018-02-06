@@ -1,17 +1,30 @@
-﻿using Oxide.Core.Plugins;
+﻿/// <summary>
+/// Author: S0N_0F_BISCUIT
+/// Permissions:
+///		tcmanager.upkeep - Allows player to use the /upkeep command
+///		tcmanager.taxrate - Allows player to use the /taxrate command
+///		tcmanager.openinv - Allows player to use the /openinv command
+///		tcmanager.auth - Allows player to use the /auth command
+///	Chat Commands:
+///		/upkeep [0-4] - Get the current building's upkeep requirements. If a grade is provided get the current building's upkeep at that levle.
+///		/taxrate - Get the resource tax rate used to calculate the upkeep
+///		/tcinv - Opens the inventory of the building privlege's tool cupboard
+///		/auth <player_name> - Authorizes the given player on the current tool cupboard
+/// </summary>
+using Oxide.Core.Plugins;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("TCManager", "S0N_0F_BISCUIT", "1.0.1", ResourceId = 2744)]
+	[Info("TCManager", "S0N_0F_BISCUIT", "1.0.2", ResourceId = 2744)]
 	[Description("Manage your tool cupboard remotely.")]
 	class TCManager : RustPlugin
 	{
 		#region Variables
 		[PluginReference]
-		Plugin MasterLock;
+		Plugin MasterLock, GameTipAPI;
 		#endregion
 
 		#region Localization
@@ -28,7 +41,7 @@ namespace Oxide.Plugins
 				["NoCommandPermission"] = "You do not have permission to use this command!",
 				["UpkeepUsage"] = "Usage: /upkeep [0|1|2|3|4]",
 				["DefaultCostHeader"] = "Upkeep Cost",
-				["GradedCostHeader"] = "Maintenance Costs (Grade: {grade})",
+				["GradedCostHeader"] = "Maintenance Costs (Grade: {0})",
 				["ItemCost"] = "{0}: {1}",
 				["Line"] = "----------------------------------",
 				["TaxUsage"] = "Usage: /taxrate",
@@ -37,7 +50,9 @@ namespace Oxide.Plugins
 				["AuthUsage"] = "Usage: /auth <player name>",
 				["AuthorizePlayer"] = "Successfully authorized {0}.",
 				["PlayerNotFound"] = "Unable to find player {0}.",
-				["MultiplePlayers"] = "Multiple players found: {0}"
+				["MultiplePlayers"] = "Multiple players found: {0}",
+				["Tooltip /tcinv"] = "Use /tcinv to access your tool cupboard remotely.",
+				["Tooltip /auth"] = "Use /auth \"player name\" to authorize another player."
 			}, this);
 		}
 		#endregion
@@ -53,6 +68,36 @@ namespace Oxide.Plugins
 			permission.RegisterPermission("tcmanager.taxrate", this);
 			permission.RegisterPermission("tcmanager.openinv", this);
 			permission.RegisterPermission("tcmanager.auth", this);
+		}
+		#endregion
+
+		#region Config Handling
+		/// <summary>
+		/// Load default config file
+		/// </summary>
+		protected override void LoadDefaultConfig()
+		{
+			Config["Display Tooltips"] = ConfigValue("Display Tooltips");
+
+			SaveConfig();
+		}
+		/// <summary>
+		/// Get stored config value
+		/// </summary>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		private object ConfigValue(string value)
+		{
+			switch (value)
+			{
+				case "Display Tooltips":
+					if (Config[value] == null)
+						return true;
+					else
+						return Config[value];
+				default:
+					return null;
+			}
 		}
 		#endregion
 
@@ -255,6 +300,23 @@ namespace Oxide.Plugins
 		}
 		#endregion
 
+		#region Hooks
+		/// <summary>
+		/// Set code on new lock in master lock privilege area
+		/// </summary>
+		/// <param name="entity"></param>
+		void OnEntitySpawned(BaseNetworkable entity)
+		{
+			if (!(bool)Config["Display Tooltips"])
+				return;
+			if (entity is BuildingPrivlidge)
+			{
+				BasePlayer player = BasePlayer.FindByID((entity as BuildingPrivlidge).OwnerID);
+				DisplayTooltips(player);
+			}
+		}
+		#endregion
+
 		#region Helpers
 		/// <summary>
 		/// Get string and format from lang file
@@ -343,6 +405,33 @@ namespace Oxide.Plugins
 			playerList.AddRange(BasePlayer.sleepingPlayerList.FindAll(i => i.displayName.ToLower().Contains(name.ToLower())));
 
 			return playerList;
+		}
+		/// <summary>
+		/// Display a game tip to the given player
+		/// </summary>
+		/// <param name="player"></param>
+		/// <param name="tip"></param>
+		private void DisplayTooltips(BasePlayer player)
+		{
+			if (player == null)
+				return;
+
+			if (GameTipAPI)
+			{
+				GameTipAPI.CallHook("ShowGameTip", player, Lang("Tooltip /tcinv", player.UserIDString), 5f);
+				GameTipAPI.CallHook("ShowGameTip", player, Lang("Tooltip /auth", player.UserIDString), 5f);
+			}
+			else
+			{
+				player.SendConsoleCommand("gametip.hidegametip");
+				player.SendConsoleCommand("gametip.showgametip", Lang("Tooltip /tcinv", player.UserIDString));
+				timer.Once(5f, () =>
+				{
+					player?.SendConsoleCommand("gametip.hidegametip");
+					player.SendConsoleCommand("gametip.showgametip", Lang("Tooltip /auth", player.UserIDString));
+					timer.Once(5f, () => player?.SendConsoleCommand("gametip.hidegametip"));
+				});
+			}
 		}
 		#endregion
 	}

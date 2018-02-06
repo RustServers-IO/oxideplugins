@@ -3,9 +3,9 @@
     "description": "Useful GUI Compass",
     "author": "",
     "version": "1.0.3",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/ucompass.2583",
+    "url": "https:\/\/oxidemod.org\/plugins\/ucompass.2583",
     "games": [
         "rust"
     ],

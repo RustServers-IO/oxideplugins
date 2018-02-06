@@ -3,9 +3,9 @@
     "description": "Allows you to modify explosive damage and radius",
     "author": "Mughisi",
     "version": "1.3.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/explosives-modifier.832",
+    "url": "https:\/\/oxidemod.org\/plugins\/explosives-modifier.832",
     "games": [
         "rust"
     ],

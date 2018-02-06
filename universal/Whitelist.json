@@ -1,0 +1,16 @@
+{
+    "name": "Whitelist",
+    "description": "Restricts server access to whitelisted players with permission",
+    "author": "Wulf",
+    "version": "3.3.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/whitelist.1932",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -3,10 +3,10 @@
     "description": "Personalize the Paper Map, set a default map, let users save there maps",
     "author": "Reneb",
     "version": "1.0.0",
-    "configuration": true,
+    "configuration": false,
     "require": {},
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/personal-paper-map.2098",
+    "url": "https:\/\/oxidemod.org\/plugins\/personal-paper-map.2098",
     "games": [
         "rust"
     ],

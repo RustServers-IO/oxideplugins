@@ -3,14 +3,14 @@
     "description": "GTA 5 Slasher event arena game mode",
     "author": "k1lly0u",
     "version": "0.2.1",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "EventManager": "*",
         "ZoneManager": "*",
         "Spawns": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/slasher.1662",
+    "url": "https:\/\/oxidemod.org\/plugins\/slasher.1662",
     "games": [
         "rust"
     ],

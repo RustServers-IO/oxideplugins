@@ -3,14 +3,14 @@
     "description": "Allow players to roll number to win more money or points",
     "author": "sami37",
     "version": "1.2.1",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "ServerRewards": "*",
         "Economics": "*",
         "HumanNPC": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/lottery.2145",
+    "url": "https:\/\/oxidemod.org\/plugins\/lottery.2145",
     "games": [
         "rust"
     ],

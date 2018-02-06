@@ -3,9 +3,9 @@
     "description": "Prevents looting of players for a specified time after disconnecting or server start.",
     "author": "FireStorm78",
     "version": "1.0.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/dc-protect.2724",
+    "url": "https:\/\/oxidemod.org\/plugins\/dc-protect.2724",
     "games": [
         "rust"
     ],

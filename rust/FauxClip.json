@@ -3,9 +3,9 @@
     "description": "NoClip Simulator for players with permission",
     "author": "Colon Blow",
     "version": "1.3.8",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/fauxclip.1299",
+    "url": "https:\/\/oxidemod.org\/plugins\/fauxclip.1299",
     "games": [
         "rust"
     ],

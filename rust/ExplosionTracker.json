@@ -3,13 +3,13 @@
     "description": "This plugin tracks every explosion that happens on the server.",
     "author": "Ryan",
     "version": "1.0.1",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Discord": "*",
         "Slack": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/explosion-tracker.1282",
+    "url": "https:\/\/oxidemod.org\/plugins\/explosion-tracker.1282",
     "games": [
         "rust"
     ],

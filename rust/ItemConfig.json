@@ -3,9 +3,9 @@
     "description": "Settings for items, blueprints, weapons, tools, etc.",
     "author": "Nogrod",
     "version": "1.0.36",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/itemconfig.806",
+    "url": "https:\/\/oxidemod.org\/plugins\/itemconfig.806",
     "games": [
         "rust"
     ],

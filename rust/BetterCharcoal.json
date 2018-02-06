@@ -1,0 +1,16 @@
+{
+    "name": "BetterCharcoal",
+    "description": "All stacks of wood will burn at once when nothing cookable is present.",
+    "author": "Jake Rich",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/bettercharcoal.2754",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

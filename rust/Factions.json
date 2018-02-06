@@ -3,7 +3,7 @@
     "description": "A Faction system with Leaders, Taxes, Trades, Ranks, Kill Rewards, and MORE!",
     "author": "Absolut",
     "version": "3.5.5",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Economics": "*",
         "ServerRewards": "*",
@@ -12,7 +12,7 @@
         "ZoneManager": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/factions.1919",
+    "url": "https:\/\/oxidemod.org\/plugins\/factions.1919",
     "games": [
         "rust"
     ],

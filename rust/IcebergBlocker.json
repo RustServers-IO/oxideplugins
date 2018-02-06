@@ -3,9 +3,9 @@
     "description": "Blocks building on icebergs.",
     "author": "Slut",
     "version": "1.1.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/iceberg-blocker.2625",
+    "url": "https:\/\/oxidemod.org\/plugins\/iceberg-blocker.2625",
     "games": [
         "rust"
     ],

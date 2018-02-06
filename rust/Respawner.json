@@ -3,9 +3,9 @@
     "description": "Automatically respawns players with permission and optionally wakes them up",
     "author": "Wulf",
     "version": "1.0.3",
-    "configuration": true,
-    "language": "cs\r\n",
-    "url": "http:\/\/oxidemod.org\/plugins\/respawner.669",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/respawner.669",
     "games": [
         "rust"
     ],

@@ -2,10 +2,10 @@
     "name": "Damage Control",
     "description": "Allows you to tune damage entities take",
     "author": "",
-    "version": "2.1.9",
-    "configuration": true,
+    "version": "2.2.5",
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/damage-control.2677",
+    "url": "https:\/\/oxidemod.org\/plugins\/damage-control.2677",
     "games": [
         "rust"
     ],

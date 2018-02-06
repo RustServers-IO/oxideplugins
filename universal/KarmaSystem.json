@@ -1,0 +1,16 @@
+{
+    "name": "KarmaSystem",
+    "description": "Allows players to upvote\/downvote other players",
+    "author": "Ryan",
+    "version": "1.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/karmasystem.2525",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

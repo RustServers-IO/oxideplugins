@@ -3,12 +3,12 @@
     "description": "Manage helicopter health, player damage, configure turrets\/rockets, and more!",
     "author": "Shady757",
     "version": "1.2.5",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "NTeleportation": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/helicontrol.1348",
+    "url": "https:\/\/oxidemod.org\/plugins\/helicontrol.1348",
     "games": [
         "rust"
     ],

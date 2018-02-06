@@ -1,0 +1,18 @@
+{
+    "name": "AutoDoors",
+    "description": "Automatically closes doors behind players after X seconds",
+    "author": "Wulf",
+    "version": "3.1.2",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/autodoors.1924",
+    "games": [
+        "rust",
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "rust",
+        "hurtworld"
+    ]
+}

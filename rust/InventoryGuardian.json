@@ -3,9 +3,9 @@
     "description": "Restore players inventory even after server wipe",
     "author": "k1lly0u",
     "version": "0.2.4",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/inventory-guardian.773",
+    "url": "https:\/\/oxidemod.org\/plugins\/inventory-guardian.773",
     "games": [
         "rust"
     ],

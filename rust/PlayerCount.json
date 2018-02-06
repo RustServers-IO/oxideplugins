@@ -3,9 +3,9 @@
     "description": "Displays a simple message notifying players of both the online player and sleeper count.",
     "author": "Kappasaurus",
     "version": "1.0.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/playercount.2430",
+    "url": "https:\/\/oxidemod.org\/plugins\/playercount.2430",
     "games": [
         "rust"
     ],

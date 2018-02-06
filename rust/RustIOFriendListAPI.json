@@ -3,10 +3,10 @@
     "description": "A simple API designed to interact with RustIOs friend list",
     "author": "Alphawar",
     "version": "1.4.0",
-    "configuration": true,
+    "configuration": false,
     "require": {},
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/rust-io-friends-list-api.1734",
+    "url": "https:\/\/oxidemod.org\/plugins\/rust-io-friends-list-api.1734",
     "games": [
         "rust"
     ],

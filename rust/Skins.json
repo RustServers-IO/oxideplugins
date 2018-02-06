@@ -3,9 +3,9 @@
     "description": "Allow players to change items skin with the skin from steam workshop.",
     "author": "MalkoR",
     "version": "1.2.9",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/skins.2431",
+    "url": "https:\/\/oxidemod.org\/plugins\/skins.2431",
     "games": [
         "rust"
     ],

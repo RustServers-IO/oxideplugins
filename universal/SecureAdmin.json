@@ -1,0 +1,16 @@
+{
+    "name": "SecureAdmin",
+    "description": "Restricts select admin commands to players with permission",
+    "author": "Wulf",
+    "version": "1.1.8",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/secureadmin.1449",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

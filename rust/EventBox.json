@@ -3,9 +3,9 @@
     "description": "allows you to set up spots for boxes which other plugins can use.",
     "author": "LaserHydra",
     "version": "1.0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/eventbox-api.1481",
+    "url": "https:\/\/oxidemod.org\/plugins\/eventbox-api.1481",
     "games": [
         "rust"
     ],

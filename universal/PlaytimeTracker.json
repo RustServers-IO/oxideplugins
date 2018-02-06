@@ -1,0 +1,23 @@
+{
+    "name": "Playtime Tracker",
+    "description": "Tracks playtime and AFK time of players with a built-in reward system",
+    "author": "k1lly0u",
+    "version": "0.1.7",
+    "configuration": false,
+    "suggest": {
+        "ServerRewards": "*",
+        "Economics": "*",
+        "Economy": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/playtime-tracker.2125",
+    "games": [
+        "rust",
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "rust",
+        "hurtworld"
+    ]
+}

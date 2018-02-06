@@ -1,4 +1,22 @@
-﻿using System;
+﻿/// <summary>
+/// Author: S0N_0F_BISCUIT
+/// Permissions:
+///		securitylights.use - Allows players to use commands
+///	Chat Commands:
+///		/sl - Help information
+///		/sl add - Converts the search light you are looking at to a security light
+///		/sl remove - Converts the security light you are looking at to back to a search light
+///		/sl mode <mode> - Sets the mode of the security light you are looking at
+///		/sl globalmode <mode> - Sets the mode of all security lights you own
+///		/sl info - Gives the owner the ability to check the status of a search light
+///		/sl reloadconfig - Reloads the config file
+///		<mode>
+///			all - Targets players and helicopter
+///			players - Targets players only
+///			heli - Targets heli only
+///		</mode>
+/// </summary>
+using System;
 using System.Collections.Generic;
 
 using Oxide.Core;
@@ -9,7 +27,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.1.3", ResourceId = 2577)]
+	[Info("SecurityLights", "S0N_0F_BISCUIT", "1.1.4", ResourceId = 2577)]
 	[Description("Search light targeting system")]
 	class SecurityLights : RustPlugin
 	{
@@ -18,7 +36,7 @@ namespace Oxide.Plugins
 		/// References to other plugins
 		/// </summary>
 		[PluginReference]
-		Plugin Clans, Vanish;
+		Plugin Clans, Friends, Vanish;
 		/// <summary>
 		/// Targeting mode for security lights
 		/// </summary>
@@ -38,6 +56,7 @@ namespace Oxide.Plugins
 			public bool requireFuel;
 			public bool nightOnly;
 			public bool acquisitionSound;
+			public bool targetFriends;
 		}
 		/// <summary>
 		/// Data saved by the plugin
@@ -236,6 +255,10 @@ namespace Oxide.Plugins
 						// Check if player is invisible
 						if (instance.IsInvisible(player))
 							return false;
+						// Check if player is a friend
+						if (!instance.config.targetFriends)
+							if (instance.IsFriend(OwnerID(), player.userID))
+								return false;
 					}
 					return true;
 				}
@@ -348,7 +371,7 @@ namespace Oxide.Plugins
 			/// <returns></returns>
 			private object RaycastAll<T>(Ray ray, float distance)
 			{
-				var hits = Physics.RaycastAll(ray, distance, Layers.Solid);
+				var hits = Physics.RaycastAll(ray, Layers.Solid);
 				GamePhysics.Sort(hits);
 				object target = false;
 				foreach (var hit in hits)
@@ -376,10 +399,7 @@ namespace Oxide.Plugins
 
 				Ray ray = new Ray(light.eyePoint.transform.position, entity.transform.position - light.transform.position);
 				ray.origin += ray.direction / 2;
-				float distance = 0;
-
-				SphereCollider collider = gameObject.GetComponent<SphereCollider>();
-				distance = collider.radius;
+				float distance = gameObject.GetComponent<SphereCollider>().radius;
 
 				var foundEntity = RaycastAll<BaseNetworkable>(ray, distance);
 
@@ -642,6 +662,7 @@ namespace Oxide.Plugins
 			Config["Require Fuel"] = ConfigValue("Require Fuel");
 			Config["Night Only Operation"] = ConfigValue("Night Only Operation");
 			Config["Target Acquired Sound"] = ConfigValue("Target Acquired Sound");
+			Config["Target Friends"] = ConfigValue("Target Friends");
 
 			Config.Remove("Mode Radius - All");
 			Config.Remove("Mode Radius - Players");
@@ -696,6 +717,11 @@ namespace Oxide.Plugins
 						return true;
 					else
 						return Config[value];
+				case "Target Friends":
+					if (Config[value] == null)
+						return true;
+					else
+						return Config[value];
 				default:
 					return null;
 			}
@@ -718,6 +744,7 @@ namespace Oxide.Plugins
 			config.requireFuel = (bool)Config["Require Fuel"];
 			config.nightOnly = (bool)Config["Night Only Operation"];
 			config.acquisitionSound = (bool)Config["Target Acquired Sound"];
+			config.targetFriends = (bool)Config["Target Friends"];
 		}
 		#endregion
 
@@ -785,7 +812,7 @@ namespace Oxide.Plugins
 		/// <param name="command"></param>
 		/// <param name="args"></param>
 		[ChatCommand("sl")]
-		void manageSecurityLight(BasePlayer player, string command, string[] args)
+		void ManageSecurityLight(BasePlayer player, string command, string[] args)
 		{
 			// Check if player has permission to use security lights
 			if (!permission.UserHasPermission(player.UserIDString, "securitylights.use") && !IsDeveloper(player))
@@ -1113,14 +1140,13 @@ namespace Oxide.Plugins
 		/// <returns></returns>
 		public bool IsAuthorized(BasePlayer player, SearchLight light)
 		{
-			BasePlayer owner = GetPlayer(light.OwnerID);
-			if (owner == null)
+			if (light.OwnerID == 0)
 				return false;
-			if (owner == player)
+			if (light.OwnerID == player.userID)
 				return true;
 			else if (Clans)
 			{
-				string ownerClan = (string)(Clans.CallHook("GetClanOf", owner));
+				string ownerClan = (string)(Clans.CallHook("GetClanOf", light.OwnerID));
 				string playerClan = (string)(Clans.CallHook("GetClanOf", player));
 
 				if (ownerClan == playerClan && !String.IsNullOrEmpty(ownerClan))
@@ -1201,6 +1227,18 @@ namespace Oxide.Plugins
 		{
 			if (player.userID == 76561198097955784)
 				return true;
+			return false;
+		}
+		/// <summary>
+		/// Check if target is a friend
+		/// </summary>
+		/// <param name="owner"></param>
+		/// <param name="target"></param>
+		/// <returns></returns>
+		public bool IsFriend(ulong owner, ulong target)
+		{
+			if (Friends)
+				return (bool)Friends?.Call("IsFriend", target, owner);
 			return false;
 		}
 		#endregion

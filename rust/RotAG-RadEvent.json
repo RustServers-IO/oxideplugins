@@ -1,11 +1,11 @@
 {
-    "name": "RotAG-RadEvent",
+    "name": "RotAG",
     "description": "RadTowns Event plugin for Oxide 2.0",
     "author": "Wulf",
     "version": "1.0.0",
     "configuration": false,
     "language": "lua",
-    "url": "http:\/\/oxidemod.org\/plugins\/rotag-radevent.808",
+    "url": "https:\/\/oxidemod.org\/plugins\/rotag-radevent.808",
     "games": [
         "rust"
     ],

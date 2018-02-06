@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Creates infinite fuel and light from configured objects",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/everlight.2170",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

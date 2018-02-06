@@ -3,7 +3,7 @@
     "description": "Gives players money through Economics\/ServerRewards for various actions (gathering, animal kills)",
     "author": "Canopy Sheep",
     "version": "1.5.2",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Friends": "*",
         "Clans": "*"
@@ -13,7 +13,7 @@
         "ServerRewards": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/gatherrewards.770",
+    "url": "https:\/\/oxidemod.org\/plugins\/gatherrewards.770",
     "games": [
         "rust"
     ],

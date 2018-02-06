@@ -3,9 +3,9 @@
     "description": "A machine that automatically crafts items so the player can do more interesting stuff instead.",
     "author": "Skipcast",
     "version": "1.0.4",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/autocrafter.2582",
+    "url": "https:\/\/oxidemod.org\/plugins\/autocrafter.2582",
     "games": [
         "rust"
     ],

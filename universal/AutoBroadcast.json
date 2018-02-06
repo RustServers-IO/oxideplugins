@@ -1,0 +1,16 @@
+{
+    "name": "AutoBroadcast",
+    "description": "Sends randomly configured chat messages every X amount of seconds",
+    "author": "Wulf",
+    "version": "1.0.8",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/autobroadcast.684",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

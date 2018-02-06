@@ -1,11 +1,11 @@
 {
     "name": "UpgradeTimer",
-    "description": "Twig has a configurable cooldown before it can be upgraded after being placed.",
+    "description": "Online raiding buffed as walls keep their health when upgraded.",
     "author": "Jake Rich",
-    "version": "1.0.1",
-    "configuration": true,
+    "version": "2.0.0",
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/upgradetimer.2740",
+    "url": "https:\/\/oxidemod.org\/plugins\/upgradetimer.2740",
     "games": [
         "rust"
     ],

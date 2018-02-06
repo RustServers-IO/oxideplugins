@@ -3,9 +3,9 @@
     "description": "Give players a random item",
     "author": "LaserHydra",
     "version": "2.1.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/rgive-random-item-give.929",
+    "url": "https:\/\/oxidemod.org\/plugins\/rgive-random-item-give.929",
     "games": [
         "rust"
     ],

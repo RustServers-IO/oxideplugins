@@ -1,0 +1,16 @@
+{
+    "name": "FileIndexer",
+    "description": "Keep track of your plugin data files",
+    "author": "",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/fileindexer.2268",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

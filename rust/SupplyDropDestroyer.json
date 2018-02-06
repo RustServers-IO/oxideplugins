@@ -3,9 +3,9 @@
     "description": "This plugin destroys the supply drop container after x seconds.",
     "author": "PaiN",
     "version": "0.2.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/supply-drop-destroyer.1281",
+    "url": "https:\/\/oxidemod.org\/plugins\/supply-drop-destroyer.1281",
     "games": [
         "rust"
     ],

@@ -1,11 +1,11 @@
 {
-    "name": "Limited Ladders",
-    "description": "Controls the placement of ladders where building is blocked.",
-    "author": "",
-    "version": "1.0.2",
-    "configuration": true,
+    "name": "LimitedLadders",
+    "description": "Controls the placement of ladders where building is blocked",
+    "author": "Wulf",
+    "version": "1.0.3",
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/limited-ladders.1051",
+    "url": "https:\/\/oxidemod.org\/plugins\/limitedladders.1051",
     "games": [
         "rust"
     ],

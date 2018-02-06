@@ -1,0 +1,16 @@
+{
+    "name": "NoobMessages",
+    "description": "Displays a message when a player joins the server for the first time.",
+    "author": "Kappasaurus",
+    "version": "1.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/noobmessages.2443",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

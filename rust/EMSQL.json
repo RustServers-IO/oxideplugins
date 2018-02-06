@@ -1,15 +1,15 @@
 {
     "name": "EMSQL",
     "description": "MySQL database add-on for Event Manager",
-    "author": "=BBUK= Steenamaroo",
+    "author": "Steenamaroo",
     "version": "0.0.5",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "EventManager": "*",
         "EMInterface": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/emsql.2442",
+    "url": "https:\/\/oxidemod.org\/plugins\/emsql.2442",
     "games": [
         "rust"
     ],

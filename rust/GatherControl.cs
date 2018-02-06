@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("GatherControl", "CaseMan", "1.5.1", ResourceId = 2477)]
+    [Info("GatherControl", "CaseMan", "1.5.2", ResourceId = 2477)]
     [Description("Control gather rates by day and night with permissions")]
 
     class GatherControl : RustPlugin
@@ -21,6 +21,7 @@ namespace Oxide.Plugins
 		bool UseZeroIndexForDefaultGroup;
 		bool UseMessageBroadcast;
 		bool UseGUIAnnouncements;
+		bool AdminMode;
 		string BannerColor;
 		string TextColor;
 		public Dictionary<ulong, int> Temp = new Dictionary<ulong, int>();
@@ -120,6 +121,7 @@ namespace Oxide.Plugins
 			Config["Sunset"] = Sunset = GetConfig("Sunset", 19);
 			Config["DayRateMultStaticQuarry"] = DayRateMultStaticQuarry = GetConfig("DayRateMultStaticQuarry", 1);
 			Config["NightRateMultStaticQuarry"] = NightRateMultStaticQuarry = GetConfig("NightRateMultStaticQuarry", 1);
+			Config["AdminMode"] = AdminMode = GetConfig("AdminMode", false);
 			SaveConfig();
 		}
 		#endregion		
@@ -143,6 +145,7 @@ namespace Oxide.Plugins
 				["InvalidSyntax"] = "Invalid syntax! Use: showrate <name/ID>",
 				["NoPlayer"] = "Player not found!",
 				["NoPermission"] = "You don't have the permission to use this command",
+				["AdminMode"] = "This is <color=lime>{0}</color> gather type.\nName: <color=lime>{1}</color>.\nItem short name: <color=lime>{2}</color>",
             }, this);
 			lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -161,6 +164,7 @@ namespace Oxide.Plugins
 				["InvalidSyntax"] = "Неправильный синтаксис. Используйте: showrate <имя/ID>",
 				["NoPlayer"] = "Игрок не найден!",
 				["NoPermission"] = "У вас недостаточно прав для выполнения этой команды",
+				["AdminMode"] = "This is <color=lime>{0}</color> gather type.\nName: <color=lime>{1}</color>.\nItem short name: <color=lime>{2}</color>",
             }, this, "ru");
         }
         #endregion
@@ -210,6 +214,8 @@ namespace Oxide.Plugins
         {			
             BasePlayer player = entity.ToPlayer();
 			if(player == null) return;
+			if(AdminMode)
+				if(player.IsAdmin) SendReply(player, (string.Format(lang.GetMessage("AdminMode", this), "RESOURCE", item.info.displayName.english, item.info.shortname)));	
 			int gr = CheckPlayerPerms(player);
 			if(gr >= 0)
 			{			
@@ -230,6 +236,8 @@ namespace Oxide.Plugins
 		void OnCollectiblePickup(Item item, BasePlayer player)
 		{
 			if(player == null) return;
+			if(AdminMode)
+				if(player.IsAdmin) SendReply(player, (string.Format(lang.GetMessage("AdminMode", this), "PICKUP", item.info.displayName.english, item.info.shortname)));		
 			int gr = CheckPlayerPerms(player);
 			if(gr >= 0) 
 			{
@@ -265,6 +273,8 @@ namespace Oxide.Plugins
 		void OnCropGather(PlantEntity plant, Item item, BasePlayer player)
 		{
 			if(player == null) return;
+			if(AdminMode)
+				if(player.IsAdmin) SendReply(player, (string.Format(lang.GetMessage("AdminMode", this), "CROP GATHER", item.info.displayName.english, item.info.shortname)));
 			int gr = CheckPlayerPerms(player);
 			if(gr >= 0) 
 			{	

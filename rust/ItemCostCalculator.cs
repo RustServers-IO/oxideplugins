@@ -5,7 +5,7 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("ItemCostCalculator", "Absolut", "1.0.0", ResourceId = 11111111)]
+    [Info("ItemCostCalculator", "Absolut", "1.0.1", ResourceId = 2109)]
 
     class ItemCostCalculator : RustPlugin
     {

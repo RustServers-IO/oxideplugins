@@ -3,9 +3,9 @@
     "description": "A small save icon when the server saves.",
     "author": "PsychoTea",
     "version": "1.0.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/savealerter.2472",
+    "url": "https:\/\/oxidemod.org\/plugins\/savealerter.2472",
     "games": [
         "rust"
     ],

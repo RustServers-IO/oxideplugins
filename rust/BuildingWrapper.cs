@@ -8,49 +8,11 @@ using Facepunch;
 
 namespace Oxide.Plugins
 {
-	[Info("BuildingWrapper", "ignignokt84", "0.1.3", ResourceId = 1798)]
+	[Info("BuildingWrapper", "ignignokt84", "0.1.5", ResourceId = 1798)]
+	[Description("Utility to wrap zones around buildings neatly and efficiently")]
 	class BuildingWrapper : RustPlugin
 	{
-		/*
-		BuildingWrapper helper plugin for ZoneManager
-		
-		Allows players to neatly and automatically wrap buildings in zones
-		*/
-		
-		// load default messages to Lang
-		void LoadDefaultMessages()
-		{
-			var messages = new Dictionary<string, string>
-			{
-				{"ChatCommand", "bw"},
-				{"VersionString", "BuildingWrapper v. {0}"},
-				
-				{"UsageHeader", "---- BuildingWrapper usage ----"},
-				{"CmdUsageWrap", "Wrap new or existing zone around the building being looked at"},
-				{"CmdUsageRewrap", "Re-wrap all buildings within a zone"},
-				{"CmdUsageExtend", "Extend an existing zone to include building being looked at"},
-				{"CmdUsageParamZoneId", "Note: [zone_id] is required, but can be entered as \"auto\" for automatic generation"},
-				
-				{"NoZoneManager", "ZoneManager not detected - BuildingWrapper disabled"},
-				{"ZoneManagerLoaded", "ZoneManager loaded - BuildingWrapper enabled"},
-				{"ZoneManagerUnloaded", "ZoneManager unloaded - BuildingWrapper disabled"},
-				{"NoPermission", "You do not have permission to use this command"},
-				
-				{"NotSupported", "The command \"{0}\" is not currently supported"},
-				
-				{"InvalidParameter", "Invalid Parameter: {0}"},
-				{"MissingZoneId", "Missing value for required parameter zone_id (use \"auto\" for automatic assignment)"},
-				{"NoAutoZoneId", "Zone ID cannot be auto generated for the command \"{0}\""},
-				{"ZoneNotFound", "Zone with ID \"{0}\" could not be found"},
-				{"InvalidBuffer", "Invalid buffer value: {0}"},
-				{"NoBuilding", "No building detected"},
-				
-				{"ZoneWrapSuccess", "Successfully created/updated zone {0}"},
-				{"ZoneWrapFailure", "Failed to create/update zone {0}"}
-			};
-			lang.RegisterMessages(messages, this);
-		}
-		
+		#region Variables
 		// ZoneManager base permission
 		private const string ZoneManagerPermZone = "zonemanager.zone";
 
@@ -66,12 +28,60 @@ namespace Oxide.Plugins
 		// command enum
 		private enum Command { usage, wrap, rewrap, extend};
 		// option enum
-		private enum Option { box, sphere, undef };
+		private enum Option { box, sphere, square, undef };
 		// vertical height adjustment
 		private const float yAdjust = 2f;
 		// collider buffer for finding building blocks
     	private Collider[] colBuffer;
-		
+
+		const float previewTime = 15f;
+
+		#endregion
+
+		#region Lang
+
+		// load default messages to Lang
+		void LoadDefaultMessages()
+		{
+			var messages = new Dictionary<string, string>
+			{
+				{"ChatCommand", "bw"},
+				{"VersionString", "BuildingWrapper v. {0}"},
+
+				{"UsageHeader", "---- BuildingWrapper usage ----"},
+				{"CmdUsageWrap", "Wrap new or existing zone around the building being looked at"},
+				{"CmdUsageRewrap", "Re-wrap all buildings within a zone"},
+				{"CmdUsageExtend", "Extend an existing zone to include building being looked at"},
+				{"CmdUsageShapes", "Valid shapes: box, sphere, square"},
+				{"CmdUsageParamZoneId", "Note: [zone_id] is required, but can be entered as \"auto\" for automatic generation"},
+
+				{"NoZoneManager", "ZoneManager not detected - BuildingWrapper disabled"},
+				{"ZoneManagerLoaded", "ZoneManager loaded - BuildingWrapper enabled"},
+				{"ZoneManagerUnloaded", "ZoneManager unloaded - BuildingWrapper disabled"},
+				{"NoPermission", "You do not have permission to use this command"},
+
+				{"NotSupported", "The command \"{0}\" is not currently supported"},
+
+				{"InvalidParameter", "Invalid Parameter: {0}"},
+				{"MissingZoneId", "Missing value for required parameter zone_id (use \"auto\" for automatic assignment)"},
+				{"NoAutoZoneId", "Zone ID cannot be auto generated for the command \"{0}\""},
+				{"ZoneNotFound", "Zone with ID \"{0}\" could not be found"},
+				{"NoBuilding", "No building detected"},
+
+				{"ZoneWrapSuccess", "Successfully created/updated zone {0}"},
+				{"ZoneWrapFailure", "Failed to create/update zone {0}"},
+				{"Stats", "Blocks: {0}" }
+			};
+			lang.RegisterMessages(messages, this);
+		}
+
+		// get message from Lang
+		string GetMessage(string key, string userId = null) => lang.GetMessage(key, this, userId);
+
+		#endregion
+
+		#region Loading/Unloading
+
 		// load
 		void Loaded()
 		{
@@ -82,9 +92,10 @@ namespace Oxide.Plugins
 			
 			// build usage string
 			usageString = wrapSize(14, wrapColor("orange", GetMessage("UsageHeader"))) + "\n" +
-						  wrapSize(12, wrapColor("cyan", "/" + chatCommand + " " + Command.wrap + " [zone_id] <box|sphere> <buffer>") + " - " + GetMessage("CmdUsageWrap") + "\n" +
-						  wrapColor("cyan", "/" + chatCommand + " " + Command.rewrap + " [zone_id] <box|sphere> <buffer>") + " - " + GetMessage("CmdUsageRewrap") + "\n" +
-						  wrapColor("cyan", "/" + chatCommand + " " + Command.extend + " [zone_id] <box|sphere> <buffer>") + " - " + GetMessage("CmdUsageExtend") + "\n" +
+						  wrapSize(12, wrapColor("cyan", "/" + chatCommand + " " + Command.wrap + " [zone_id] <shape> <buffer>") + " - " + GetMessage("CmdUsageWrap") + "\n" +
+						  wrapColor("cyan", "/" + chatCommand + " " + Command.rewrap + " [zone_id] <shape> <buffer>") + " - " + GetMessage("CmdUsageRewrap") + "\n" +
+						  wrapColor("cyan", "/" + chatCommand + " " + Command.extend + " [zone_id] <shape> <buffer>") + " - " + GetMessage("CmdUsageExtend") + "\n" +
+						  wrapColor("yellow", GetMessage("CmdUsageShapes")) + "\n" +
 						  wrapColor("yellow", GetMessage("CmdUsageParamZoneId")));
 			
 			serverinput = typeof(BasePlayer).GetField("serverInput", (BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance | BindingFlags.NonPublic));
@@ -119,32 +130,53 @@ namespace Oxide.Plugins
 			}
 		}
 
-		// get message from Lang
-		string GetMessage(string key, string userId = null) => lang.GetMessage(key, this, userId);
-		
+		#endregion
+
+		#region Messaging
+
 		// print usage string
 		void showUsage(BasePlayer player)
 		{
 			SendReply(player, usageString);
 		}
-		
+
+		// wrap a string in a <size> tag with the passed size
+		static string wrapSize(int size, string input)
+		{
+			if (input == null || input == "")
+				return input;
+			return "<size=" + size + ">" + input + "</size>";
+		}
+
+		// wrap a string in a <color> tag with the passed color
+		static string wrapColor(string color, string input)
+		{
+			if (input == null || input == "" || color == null || color == "")
+				return input;
+			return "<color=" + color + ">" + input + "</color>";
+		}
+
+		#endregion
+
+		#region Command Handling
+
 		// main delegator process - handles all commands
 		void cmdChatDelegator(BasePlayer player, string command, string[] args)
 		{
 			if(ZoneManager == null)
 			{
-				SendReply(player, wrapSize(12, wrapColor("red", GetMessage("NoZoneManager"))));
+				SendReply(player, wrapSize(12, wrapColor("red", GetMessage("NoZoneManager", player.UserIDString))));
 				return;
 			}
 			if(!hasPermission(player, ZoneManagerPermZone))
 			{
-				SendReply(player, wrapSize(12, wrapColor("red", GetMessage("NoPermission"))));
+				SendReply(player, wrapSize(12, wrapColor("red", GetMessage("NoPermission", player.UserIDString))));
 				return;
 			}
 			if(args == null || args.Length == 0)
 				showUsage(player);
 			else if(!Enum.IsDefined(typeof(Command), args[0]))
-				SendReply(player, wrapSize(12, wrapColor("red", String.Format(GetMessage("InvalidParameter"), args[0]))));
+				SendReply(player, wrapSize(12, wrapColor("red", String.Format(GetMessage("InvalidParameter", player.UserIDString), args[0]))));
 			else
 			{
 				Command cmd = (Command) Enum.Parse(typeof(Command), args[0]);
@@ -154,106 +186,51 @@ namespace Oxide.Plugins
 					return;
 				}
 				
-				bool update = false;
 				float buffer = 1.0f;
-				Option opt = Option.undef;
+				Option shape = Option.undef;
 				if(args.Length < 2 || args[1] == "")
 				{
-					SendReply(player, wrapSize(12, wrapColor("red", GetMessage("MissingZoneId"))));
+					SendReply(player, wrapSize(12, wrapColor("red", GetMessage("MissingZoneId", player.UserIDString))));
 					return;
 				}
 				
 				// get zone ID
 				string zoneId = args[1];
+				if(zoneId != null && zoneId == "preview")
+
 				if(zoneId == null || zoneId == "auto")
 				{
 					if(cmd == Command.extend)
 					{
-						SendReply(player, wrapSize(12, wrapColor("red", String.Format(GetMessage("NoAutoZoneId"), cmd.ToString()))));
+						SendReply(player, wrapSize(12, wrapColor("red", String.Format(GetMessage("NoAutoZoneId", player.UserIDString), cmd.ToString()))));
 						return;
 					}
 					zoneId = UnityEngine.Random.Range(1, 99999999).ToString();
 				}
 				int i = 2;
 				
-				// get option and buffer values if they exist
+				// get shape and buffer values if they exist
 				if(i < args.Length)
-					if(args[i] == "box" || args[i] == "sphere")
-						opt = (Option) Enum.Parse(typeof(Option), args[i++]);
+					if(Enum.IsDefined(typeof(Option), args[i]))
+						shape = (Option) Enum.Parse(typeof(Option), args[i++]);
 				if(i < args.Length)
 					try {
 						buffer = Convert.ToSingle(args[i++]);
-					} catch(FormatException e) {
-						SendReply(player, wrapSize(12, wrapColor("red", String.Format(GetMessage("InvalidBuffer"), args[i-1]))));
+					} catch(FormatException) {
+						SendReply(player, wrapSize(12, wrapColor("red", String.Format(GetMessage("InvalidParameter", player.UserIDString), args[i-1]))));
+						return;
 					}
 				
-				//float timestart = UnityEngine.Time.realtimeSinceStartup;
-				WrapBuilding(player, zoneId, opt, buffer, cmd);
-				//float timeend = UnityEngine.Time.realtimeSinceStartup;
-				//Puts("wrap time: " + (timeend-timestart) + "s");
+				// wrap building and show zone if successful
+				if(WrapBuilding(player, zoneId, shape, buffer, cmd) && zoneId != "preview")
+					ZoneManager?.Call("ShowZone", new object[] {player, zoneId});
 			}
 		}
-		
-		// wrap building delegator
-		void WrapBuilding(BasePlayer player, string zoneId, Option shape, float buffer, Command cmd)
-		{
-			HashSet<BuildingBlock> initialBlocks = new HashSet<BuildingBlock>();
-			Option zoneShape = Option.undef;
-			if(cmd == Command.rewrap)
-			{
-				// if rewrap, get BuildingBlocks inside zone
-				initialBlocks = getZoneEntities(player, zoneId, out zoneShape);
-				if(zoneShape == Option.undef)
-					return; // failure in getZoneEntities
-			}
-			else
-			{
-				// default sphere
-				zoneShape = Option.sphere;
-				// raycast to find building
-				object closestEntity;
-				if(!GetRaycastTarget(player, out closestEntity))
-				{
-					SendReply(player, wrapSize(12, wrapColor("red", GetMessage("NoBuilding"))));
-					return;
-				}
-				BuildingBlock initialBlock = closestEntity as BuildingBlock;
-				if(initialBlock == null)
-				{
-					SendReply(player, wrapSize(12, wrapColor("red", GetMessage("NoBuilding"))));
-					return;
-				}
-				initialBlocks.Add(initialBlock);
-			}
-			// retrieve structure
-			HashSet<BuildingBlock> all_blocks;
-			if(!GetStructure(initialBlocks, out all_blocks))
-			{
-				SendReply(player, wrapSize(12, wrapColor("red", GetMessage("NoBuilding"))));
-				return;
-			}
-			
-			if(cmd == Command.extend)
-			{
-				// if extend, merge structure block coordinates
-				all_blocks.UnionWith(getZoneEntities(player, zoneId, out zoneShape));
-				if(zoneShape == Option.undef)
-					return; // failure in getZoneEntities
-			}
-			
-			bool success = false;
-			if(shape == Option.undef)
-				shape = (Option) zoneShape;
-			if(shape == Option.box)
-				success = WrapBox(player, zoneId, all_blocks, buffer);
-			else if(shape == Option.sphere)
-				success = WrapSphere(zoneId, all_blocks, buffer);
-			
-			string str = success ? "Success" : "Failure";
-			
-			SendReply(player, wrapSize(12, wrapColor(success ? "cyan" : "red", String.Format(GetMessage("ZoneWrap"+str), zoneId))));
-		}
-		
+
+		#endregion
+
+		#region Entity Resolution
+
 		// get zone entities from existing zone, returning zoneShape "undef" signals failure
 		HashSet<BuildingBlock> getZoneEntities(BasePlayer player, string zoneId, out Option zoneShape)
 		{
@@ -263,7 +240,7 @@ namespace Oxide.Plugins
 			if(zoneInfo == null || zoneInfo.Count() == 0)
 			{
 				// failed to find zone - send message, flag zoneShape as undef
-				SendReply(player, wrapSize(12, wrapColor("red", String.Format(GetMessage("ZoneNotFound"), zoneId))));
+				SendReply(player, wrapSize(12, wrapColor("red", String.Format(GetMessage("ZoneNotFound", player.UserIDString), zoneId))));
 				zoneShape = Option.undef;
 				return null;
 			}
@@ -300,13 +277,6 @@ namespace Oxide.Plugins
 			}
 			
 			return structure;
-		}
-		
-		// parse Vector3 coordinates from a string in the format "(x, y, z)"
-		Vector3 parseVector3(string str)
-		{
-			string[] strArray = str.Substring(1, str.Length - 2).Split(',');
-			return new Vector3(float.Parse(strArray[0]), float.Parse(strArray[1]), float.Parse(strArray[2]));
 		}
 		
 		// raycast and return the closest entity - returns false if a valid entity is not found
@@ -377,9 +347,75 @@ namespace Oxide.Plugins
 			
 			return true;
 		}
-		
+
+		#endregion
+
+		#region Wrapper Procedures
+
+		// wrap building delegator
+		bool WrapBuilding(BasePlayer player, string zoneId, Option shape, float buffer, Command cmd)
+		{
+			HashSet<BuildingBlock> initialBlocks = new HashSet<BuildingBlock>();
+			Option zoneShape = Option.undef;
+			if (cmd == Command.rewrap)
+			{
+				// if rewrap, get BuildingBlocks inside zone
+				initialBlocks = getZoneEntities(player, zoneId, out zoneShape);
+				if (zoneShape == Option.undef)
+					return false; // failure in getZoneEntities
+			}
+			else
+			{
+				// default sphere
+				zoneShape = Option.sphere;
+				// raycast to find building
+				object closestEntity;
+				if (!GetRaycastTarget(player, out closestEntity))
+				{
+					SendReply(player, wrapSize(12, wrapColor("red", GetMessage("NoBuilding", player.UserIDString))));
+					return false;
+				}
+				BuildingBlock initialBlock = closestEntity as BuildingBlock;
+				if (initialBlock == null)
+				{
+					SendReply(player, wrapSize(12, wrapColor("red", GetMessage("NoBuilding", player.UserIDString))));
+					return false;
+				}
+				initialBlocks.Add(initialBlock);
+			}
+			// retrieve structure
+			HashSet<BuildingBlock> all_blocks;
+			if (!GetStructure(initialBlocks, out all_blocks))
+			{
+				SendReply(player, wrapSize(12, wrapColor("red", GetMessage("NoBuilding", player.UserIDString))));
+				return false;
+			}
+
+			if (cmd == Command.extend)
+			{
+				// if extend, merge structure block coordinates
+				all_blocks.UnionWith(getZoneEntities(player, zoneId, out zoneShape));
+				if (zoneShape == Option.undef)
+					return false; // failure in getZoneEntities
+			}
+
+			bool success = false;
+			if (shape == Option.undef)
+				shape = (Option)zoneShape;
+			if (shape == Option.box || shape == Option.square)
+				success = WrapBox(player, zoneId, all_blocks, buffer, shape);
+			else if (shape == Option.sphere)
+				success = WrapSphere(player, zoneId, all_blocks, buffer);
+
+			string str = success ? "Success" : "Failure";
+
+			if (zoneId != "preview")
+				SendReply(player, wrapSize(12, wrapColor(success ? "cyan" : "red", String.Format(GetMessage("ZoneWrap" + str, player.UserIDString), zoneId))));
+			return success;
+		}
+
 		// wrap building in a box zone
-		bool WrapBox(BasePlayer player, string zoneId, HashSet<BuildingBlock> blocks, float buffer)
+		bool WrapBox(BasePlayer player, string zoneId, HashSet<BuildingBlock> blocks, float buffer, Option shape)
 		{
 			float minY =  Mathf.Infinity;
 			float maxY = -Mathf.Infinity;
@@ -448,7 +484,15 @@ namespace Oxide.Plugins
 				}
 				float x = max_X - min_X;
 				float y = max_Y - min_Y;
+				if(shape == Option.square)
+				{
+					if(x > y)
+						y = x;
+					else if(y > x)
+						x = y;
+				}
 				float area = x*y;
+				// if square shape, set x and y to the larger of the two values
 				if(area < minArea)
 				{
 					// smallest area so far - save key values
@@ -473,6 +517,15 @@ namespace Oxide.Plugins
 			//drawCenter(player, new Vector3(bestCenter.x, center.y, bestCenter.y));
 			
 			// create zone with parameters: zoneId, args, position
+			if(zoneId == "preview")
+			{
+				Vector3 b = new Vector3(bestX + extents, sizeY + extents, bestY + extents);
+				Vector3 c = new Vector3(bestCenter.x, center.y, bestCenter.y);
+				DrawHull(player, hull, c);
+				DrawPreviewBox(player, b, c + (Vector3.up * yAdjust), bestAngle);
+				//DrawText(player, center, String.Format(GetMessage("Stats", player.UserIDString), blocks.Count));
+				return true;
+			}
 			return (bool) ZoneManager?.Call("CreateOrUpdateZone", new object[] {zoneId,
 																				new string[] { "size", (bestX+extents) + " " + (sizeY+extents) + " " + (bestY+extents),
 																							   "rotation", bestAngle.ToString()},
@@ -481,7 +534,7 @@ namespace Oxide.Plugins
 		}
 		
 		// wrap building in a sphere zone
-		bool WrapSphere(string zoneId, HashSet<BuildingBlock> blocks, float buffer)
+		bool WrapSphere(BasePlayer player, string zoneId, HashSet<BuildingBlock> blocks, float buffer)
 		{
 			float minX =  Mathf.Infinity;
 			float maxX = -Mathf.Infinity;
@@ -529,6 +582,12 @@ namespace Oxide.Plugins
 			}
 			
 			radius += extents + buffer; // add extents and buffer
+			if(zoneId == "preview")
+			{
+				DrawPreviewSphere(player, radius, center);
+				//DrawText(player, center, String.Format(GetMessage("Stats", player.UserIDString), blocks.Count));
+				return true;
+			}
 			// create zone with parameters: zoneId, args, position
 			return (bool) ZoneManager?.Call("CreateOrUpdateZone", new object[] {zoneId,
 																				new string[] { "radius", radius.ToString(),
@@ -536,7 +595,11 @@ namespace Oxide.Plugins
 																				center
 																				});
 		}
-		
+
+		#endregion
+
+		#region Maths Helpers
+
 		// rotate all passed Vector2 (point) in the array around the center point to achieve the given angle
 		private Vector2[] rotateAll(Vector2[] v, float angle, Vector2 center)
 		{
@@ -673,51 +736,97 @@ namespace Oxide.Plugins
 			}
 			return new Vector2((min_X + max_X)/2f, (min_Y + max_Y)/2f);
 		}
-		
-		// wrap a string in a <size> tag with the passed size
-		static string wrapSize(int size, string input)
-		{
-			if(input == null || input == "")
-				return input;
-			return "<size=" + size + ">" + input + "</size>";
-		}
-		
-		// wrap a string in a <color> tag with the passed color
-		static string wrapColor(string color, string input)
-		{
-			if(input == null || input == "" || color == null || color == "")
-				return input;
-			return "<color=" + color + ">" + input + "</color>";
-		}
-		
+
+		#endregion
+
+		#region Visuals
+
 		// draw hull, for debugging - assumes array is an ordered set of perimiter vertices
-		void drawHull(BasePlayer player, Vector2[] hull, Vector3 center)
+		void DrawHull(BasePlayer player, Vector2[] hull, Vector3 center)
 		{
-			for(int i=0; i<hull.Length; i++)
+			for (int i = 0; i < hull.Length; i++)
 			{
-				Vector3 from = new Vector3(hull[i].x, center.y+1f, hull[i].y);
-				int j = i+1;
-				if(j==hull.Length) j = 0;
-				Vector3 to = new Vector3(hull[j].x, center.y+1f, hull[j].y);
-				player.SendConsoleCommand("ddraw.line", 10f, Color.cyan, from, to);
+				Vector3 from = new Vector3(hull[i].x, center.y + 1f, hull[i].y);
+				int j = i + 1;
+				if (j == hull.Length) j = 0;
+				Vector3 to = new Vector3(hull[j].x, center.y + 1f, hull[j].y);
+				DrawLine(player, from, to, Color.cyan);
 			}
 		}
-		
+
+		private static Vector3 RotatePointAroundPivot(Vector3 point, Vector3 pivot, Quaternion rotation)
+		{
+			return rotation * (point - pivot) + pivot;
+		}
+
+		void DrawPreviewBox(BasePlayer player, Vector3 box, Vector3 center, float r)
+		{
+			Color color = Color.magenta;
+			Quaternion rotation = Quaternion.AngleAxis(r, Vector3.up);
+			Vector3 size = box / 2f;
+			var point1 = RotatePointAroundPivot(new Vector3(center.x + size.x, center.y + size.y, center.z + size.z), center, rotation);
+			var point2 = RotatePointAroundPivot(new Vector3(center.x + size.x, center.y - size.y, center.z + size.z), center, rotation);
+			var point3 = RotatePointAroundPivot(new Vector3(center.x + size.x, center.y + size.y, center.z - size.z), center, rotation);
+			var point4 = RotatePointAroundPivot(new Vector3(center.x + size.x, center.y - size.y, center.z - size.z), center, rotation);
+			var point5 = RotatePointAroundPivot(new Vector3(center.x - size.x, center.y + size.y, center.z + size.z), center, rotation);
+			var point6 = RotatePointAroundPivot(new Vector3(center.x - size.x, center.y - size.y, center.z + size.z), center, rotation);
+			var point7 = RotatePointAroundPivot(new Vector3(center.x - size.x, center.y + size.y, center.z - size.z), center, rotation);
+			var point8 = RotatePointAroundPivot(new Vector3(center.x - size.x, center.y - size.y, center.z - size.z), center, rotation);
+
+			DrawLine(player, point1, point2, color);
+			DrawLine(player, point1, point3, color);
+			DrawLine(player, point1, point5, color);
+
+			DrawLine(player, point2, point4, color);
+			DrawLine(player, point2, point6, color);
+
+			DrawLine(player, point3, point4, color);
+			DrawLine(player, point3, point7, color);
+
+			DrawLine(player, point4, point8, color);
+
+			DrawLine(player, point5, point6, color);
+			DrawLine(player, point5, point7, color);
+
+			DrawLine(player, point6, point8, color);
+
+			DrawLine(player, point7, point8, color);
+		}
+
+		void DrawLine(BasePlayer player, Vector3 from, Vector3 to, Color color, float duration = previewTime)
+		{
+			player.SendConsoleCommand("ddraw.line", duration, color, from, to);
+		}
+
+		void DrawPreviewSphere(BasePlayer player, float radius, Vector3 center, float duration = previewTime)
+		{
+			player.SendConsoleCommand("ddraw.sphere", duration, Color.magenta, center, radius);
+		}
+
+		void DrawText(BasePlayer player, Vector3 position, string text, float duration = previewTime)
+		{
+			player.SendConsoleCommand("ddraw.text", duration, Color.white, position, text);
+		}
+
 		// draw center point as xyz axis, for debugging
 		void drawCenter(BasePlayer player, Vector3 center)
 		{
 			float length = 0.5f;
 			Vector3 xP = new Vector3(length, 0, 0);
-			Vector3 xN= new Vector3(-length, 0, 0);
+			Vector3 xN = new Vector3(-length, 0, 0);
 			Vector3 yP = new Vector3(0, length, 0);
 			Vector3 yN = new Vector3(0, -length, 0);
 			Vector3 zP = new Vector3(0, 0, length);
 			Vector3 zN = new Vector3(0, 0, -length);
-			player.SendConsoleCommand("ddraw.line", 10f, Color.red, center+xN, center+xP);
-			player.SendConsoleCommand("ddraw.line", 10f, Color.blue, center+yN, center+yP);
-			player.SendConsoleCommand("ddraw.line", 10f, Color.green, center+zN, center+zP);
+			player.SendConsoleCommand("ddraw.line", 10f, Color.red, center + xN, center + xP);
+			player.SendConsoleCommand("ddraw.line", 10f, Color.blue, center + yN, center + yP);
+			player.SendConsoleCommand("ddraw.line", 10f, Color.green, center + zN, center + zP);
 		}
-		
+
+		#endregion
+
+		#region Helper Procedures
+
 		// check if player is admin (copied from ZoneManager)
 		private static bool isAdmin(BasePlayer player)
 		{
@@ -729,9 +838,17 @@ namespace Oxide.Plugins
 		private bool hasPermission(BasePlayer player, string permname)
 		{
 			return isAdmin(player) || permission.UserHasPermission(player.UserIDString, permname);
-        }
-        
-        public void BoxColliders<T>(Vector3 position, Vector3 halfExtents, Quaternion orientation, List<T> list, int layerMask = -1, QueryTriggerInteraction triggerInteraction = QueryTriggerInteraction.Collide)
+		}
+
+		// parse Vector3 coordinates from a string in the format "(x, y, z)"
+		Vector3 parseVector3(string str)
+		{
+			string[] strArray = str.Substring(1, str.Length - 2).Split(',');
+			return new Vector3(float.Parse(strArray[0]), float.Parse(strArray[1]), float.Parse(strArray[2]));
+		}
+
+		// helper procedure for BoxEntities
+		public void BoxColliders<T>(Vector3 position, Vector3 halfExtents, Quaternion orientation, List<T> list, int layerMask = -1, QueryTriggerInteraction triggerInteraction = QueryTriggerInteraction.Collide)
 		where T : Collider
 		{
 			layerMask = GamePhysics.HandleTerrainCollision(position, layerMask);
@@ -757,6 +874,7 @@ namespace Oxide.Plugins
 				}
 			}
 		}
+		// Box Collider version of Vis.Entities procedure
 		public void BoxEntities<T>(Vector3 position, Vector3 halfExtents, Quaternion orientation, List<T> list, int layerMask = -1, QueryTriggerInteraction triggerInteraction = QueryTriggerInteraction.Collide)
 		where T : BaseEntity
 		{
@@ -772,5 +890,6 @@ namespace Oxide.Plugins
 			}
 			Pool.FreeList<Collider>(ref colliders);
     	}
+		#endregion
 	}
 }

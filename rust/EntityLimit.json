@@ -3,12 +3,12 @@
     "description": "Limit entities per player",
     "author": "PaiN",
     "version": "0.6.1",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "RemoverTool": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/entity-limit.1947",
+    "url": "https:\/\/oxidemod.org\/plugins\/entity-limit.1947",
     "games": [
         "rust"
     ],

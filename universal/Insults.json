@@ -1,0 +1,16 @@
+{
+    "name": "Insults",
+    "description": "Insult yourself or another player.",
+    "author": "Spicy",
+    "version": "1.0.3",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/insults.2094",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

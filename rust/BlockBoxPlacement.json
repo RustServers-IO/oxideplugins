@@ -1,11 +1,11 @@
 {
     "name": "BlockBoxPlacement",
     "description": "Checking if player can upgrade building block and no objects is under",
-    "author": "wzp",
+    "author": "wazzzup",
     "version": "0.0.3",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/blockboxplacement.2312",
+    "url": "https:\/\/oxidemod.org\/plugins\/blockboxplacement.2312",
     "games": [
         "rust"
     ],

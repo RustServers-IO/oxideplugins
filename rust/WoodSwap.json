@@ -1,0 +1,16 @@
+{
+    "name": "WoodSwap",
+    "description": "Swaps wood for charcoal with one command",
+    "author": "Serenity 3",
+    "version": "0.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/woodswap.2367",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

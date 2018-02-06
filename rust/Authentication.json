@@ -3,9 +3,9 @@
     "description": "Players must enter a password after they wake up or else they'll be kicked.",
     "author": "",
     "version": "2.1.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/authentication.1269",
+    "url": "https:\/\/oxidemod.org\/plugins\/authentication.1269",
     "games": [
         "rust"
     ],

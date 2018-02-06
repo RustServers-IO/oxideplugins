@@ -3,9 +3,9 @@
     "description": "Allows configuration of Water Purifiers",
     "author": "Shady757",
     "version": "1.0.3",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/purifier-config.1911",
+    "url": "https:\/\/oxidemod.org\/plugins\/purifier-config.1911",
     "games": [
         "rust"
     ],

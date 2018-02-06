@@ -3,9 +3,9 @@
     "description": "Allows any player with permission to use third-person view",
     "author": "Wulf",
     "version": "0.1.4",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/thirdperson.1424",
+    "url": "https:\/\/oxidemod.org\/plugins\/thirdperson.1424",
     "games": [
         "rust"
     ],

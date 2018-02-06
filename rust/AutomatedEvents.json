@@ -1,0 +1,16 @@
+{
+    "name": "AutomatedEvents",
+    "description": "A small plugin that will run various events (when using a night skip plugin)",
+    "author": "k1lly0u",
+    "version": "0.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/automatedevents.2328",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Automatically runs configured commands on server startup",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/startupcommands.774",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

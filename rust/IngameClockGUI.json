@@ -3,9 +3,9 @@
     "description": "Displays ingame and server time",
     "author": "deer_SWAG",
     "version": "0.0.7",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/ingame-clock-gui.1245",
+    "url": "https:\/\/oxidemod.org\/plugins\/ingame-clock-gui.1245",
     "games": [
         "rust"
     ],

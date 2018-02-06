@@ -3,13 +3,13 @@
     "description": "Players lose a percentage, or configurable amount of XP upon death",
     "author": "k1lly0u",
     "version": "0.1.2",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Friends": "*",
         "Clans": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/xp-death-reducer.2007",
+    "url": "https:\/\/oxidemod.org\/plugins\/xp-death-reducer.2007",
     "games": [
         "rust"
     ],

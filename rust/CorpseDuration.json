@@ -3,9 +3,9 @@
     "description": "Modify the length of which a player's corpse remains active in the world",
     "author": "Mughisi",
     "version": "2.0.4",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/player-corpse-duration-modifier.778",
+    "url": "https:\/\/oxidemod.org\/plugins\/player-corpse-duration-modifier.778",
     "games": [
         "rust"
     ],

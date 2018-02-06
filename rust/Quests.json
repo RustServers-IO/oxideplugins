@@ -3,15 +3,15 @@
     "description": "Create quests for users to go on to earn rewards, complete with a GUI menu",
     "author": "k1lly0u",
     "version": "2.2.4",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "ServerRewards": "*",
         "Economics": "*",
         "HumanNPC": "*",
-        "HuntPlugin": "*"
+        "HuntRPG": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/quests.1084",
+    "url": "https:\/\/oxidemod.org\/plugins\/quests.1084",
     "games": [
         "rust"
     ],

@@ -2,13 +2,14 @@
     "name": "TC Manager",
     "description": "Remote management of tool cupboard.",
     "author": "S0N_0F_BISCUIT",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "configuration": false,
     "suggest": {
-        "MasterLock": "*"
+        "MasterLock": "*",
+        "GameTipAPI": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/tc-manager.2744",
+    "url": "https:\/\/oxidemod.org\/plugins\/tc-manager.2744",
     "games": [
         "rust"
     ],

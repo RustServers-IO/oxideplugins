@@ -1,11 +1,11 @@
 {
     "name": "ExplosiveRounds",
     "description": "Gives explosive bullets effects on impact",
-    "author": "redBDGR ~",
+    "author": "redBDGR",
     "version": "1.0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/explosiverounds.2271",
+    "url": "https:\/\/oxidemod.org\/plugins\/explosiverounds.2271",
     "games": [
         "rust"
     ],

@@ -1,15 +1,16 @@
 {
-    "name": "Prevent Looting",
+    "name": "PreventLooting",
     "description": "Plugin provides protection for entity of player from looting by other players.",
     "author": "CaseMan",
-    "version": "1.4.8",
-    "configuration": true,
+    "version": "1.5.1",
+    "configuration": false,
     "suggest": {
         "ZoneManager": "*",
-        "Friends": "*"
+        "Friends": "*",
+        "Backpacks": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/prevent-looting.2469",
+    "url": "https:\/\/oxidemod.org\/plugins\/preventlooting.2469",
     "games": [
         "rust"
     ],

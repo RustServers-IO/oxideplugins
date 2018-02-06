@@ -14,7 +14,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("RemoverTool", "Reneb", "4.2.5", ResourceId = 651)]
+    [Info("RemoverTool", "Reneb/Fuji", "4.2.8", ResourceId = 651)]
     class RemoverTool : RustPlugin
     {
         [PluginReference]
@@ -24,142 +24,141 @@ namespace Oxide.Plugins
 
         #region Fields
 
-		static int colliderRemovable = LayerMask.GetMask("Construction", "Deployed", "Default");
-        static int colliderBuilding = LayerMask.GetMask("Construction");
-        static int colliderPlayer = LayerMask.GetMask("Player (Server)");
+		int colliderRemovable = LayerMask.GetMask("Construction", "Deployed", "Default");
+        int colliderBuilding = LayerMask.GetMask("Construction");
+        int colliderPlayer = LayerMask.GetMask("Player (Server)");
 
         bool RemoveOverride = false;
 
-        static string permissionNormal = "removertool.remove";
-        static string permissionOverride = "removertool.override";
-        static string permissionAdmin = "removertool.admin";
-        static string permissionAll = "removertool.all";
-        static string permissionTarget = "removertool.target";
+        string permissionNormal = "removertool.remove";
+        string permissionOverride = "removertool.override";
+        string permissionAdmin = "removertool.admin";
+        string permissionAll = "removertool.all";
+        string permissionTarget = "removertool.target";
 
-        static int authTarget = 1;
-        static int authNormal = 0;
-        static int authAdmin = 2;
-        static int authAll = 2;
-        static int authOverride = 1;
+        int authTarget = 1;
+        int authNormal = 0;
+        int authAdmin = 2;
+        int authAll = 2;
+        int authOverride = 1;
 		
-        static int removeDistanceNormal = 3;
-        static int removeDistanceAdmin = 20;
-        static int removeDistanceAll = 100;
+        int removeDistanceNormal = 3;
+        int removeDistanceAdmin = 20;
+        int removeDistanceAll = 100;
 
-        static bool removeGibsNormal = true;
-        static bool removeGibsAdmin = true;
-        static bool removeGibsAll = false;
+        bool removeGibsNormal = true;
+        bool removeGibsAdmin = true;
+        bool removeGibsAll = false;
 
-		static bool removeUnequipStart = true;
-		static bool removeUnequipUpdate = false;
+		bool removeUnequipStart = true;
+		bool removeUnequipUpdate = false;
 		
-        static int RemoveDefaultTime = 30;
-        static int RemoveMaxTime = 300;
-		static bool RemoveContainerWithDrop = true;
-		static bool RemoveContainerWithContent = true;
-		static bool RemoveFractionedObjects = false;
-		static bool RemoveFractionedObjectsExcludeBuildingBlocks = true;
-		static int RemoveFractionedPercent = 90;
+        int RemoveDefaultTime = 30;
+        int RemoveMaxTime = 300;
+		bool RemoveContainerWithDrop = true;
+		bool RemoveContainerWithContent = true;
+		bool RemoveFractionedObjects = false;
+		bool RemoveFractionedObjectsExcludeBuildingBlocks = true;
+		int RemoveFractionedPercent = 90;
 		
-		static bool RemoveWithToolCupboards = false;
-        static bool RemoveWithEntityOwners = true;
-        static bool RemoveWithBuildingOwners = true;
-        static bool RemoveWithRustIO = true;
-        static bool RemoveWithFriends = true;
-		static bool RemoveWithClans = true;
+		bool RemoveWithToolCupboards = false;
+        bool RemoveWithEntityOwners = true;
+        bool RemoveWithBuildingOwners = true;
+        bool RemoveWithRustIO = true;
+        bool RemoveWithFriends = true;
+		bool RemoveWithClans = true;
 
-        static bool RaidBlocker = true;
-        static bool RaidBlockerBlockBuildingID = true;
-        static bool RaidBlockerBlockSurroundingPlayers = true;
-        static int RaidBlockerRadius = 120;
-        static int RaidBlockerTime = 300;
+        bool RaidBlocker = true;
+        bool RaidBlockerBlockBuildingID = true;
+        bool RaidBlockerBlockSurroundingPlayers = true;
+        int RaidBlockerRadius = 120;
+        int RaidBlockerTime = 300;
 		
-		static bool CoolDownEnabled = false;
-		static float CoolDownTime = 60f;
-		static bool CoolDownExcludeAdmins = true;
+		bool CoolDownEnabled = false;
+		float CoolDownTime = 60f;
+		bool CoolDownExcludeAdmins = true;
 
-        static Dictionary<string, object> Price = new Dictionary<string, object>();
-        static bool PriceEnabled = true;
-		static Dictionary<string, object> Refund = new Dictionary<string, object>();
-        static bool RefundEnabled = true;
-		static Dictionary<string, object> ValidEntities = new Dictionary<string, object>();
+        Dictionary<string, object> Price = new Dictionary<string, object>();
+        bool PriceEnabled = true;
+		Dictionary<string, object> Refund = new Dictionary<string, object>();
+        bool RefundEnabled = true;
+		Dictionary<string, object> ValidEntities = new Dictionary<string, object>();
 		
-		static Dictionary<string, DateTime> cooldownTimes = new Dictionary<string, DateTime>();
+		Dictionary<string, DateTime> cooldownTimes = new Dictionary<string, DateTime>();
 
-        static string GUIRemoverToolBackgroundColor = "0.1 0.1 0.1 0";
-        static string GUIRemoverToolAnchorMin = "0.1 0.65";
-        static string GUIRemoverToolAnchorMax = "0.4 0.95";
+        string GUIRemoverToolBackgroundColor = "0.1 0.1 0.1 0";
+        string GUIRemoverToolAnchorMin = "0.1 0.65";
+        string GUIRemoverToolAnchorMax = "0.4 0.95";
 
-        static string GUIRemoveBackgroundColor = "0.1 0.1 0.1 0.98";
-        static string GUIRemoveAnchorMin = "0 0.9";
-        static string GUIRemoveAnchorMax = "0.55 1";
+        string GUIRemoveBackgroundColor = "0.1 0.1 0.1 0.98";
+        string GUIRemoveAnchorMin = "0 0.9";
+        string GUIRemoveAnchorMax = "0.55 1";
 
-        static string GUIRemoveTextColor = "1 0.1 0.1 0.98";
-        static int GUIRemoveTextSize = 16;
-        static string GUIRemoveTextAnchorMin = "0.1 0";
-        static string GUIRemoveTextAnchorMax = "1 1";
+        string GUIRemoveTextColor = "1 0.1 0.1 0.98";
+        int GUIRemoveTextSize = 16;
+        string GUIRemoveTextAnchorMin = "0.1 0";
+        string GUIRemoveTextAnchorMax = "1 1";
 
-        static string GUITimeLeftBackgroundColor = "0.1 0.1 0.1 0.98";
-        static string GUITimeLeftAnchorMin = "0.55 0.9";
-        static string GUITimeLeftAnchorMax = "1 1";
+        string GUITimeLeftBackgroundColor = "0.1 0.1 0.1 0.98";
+        string GUITimeLeftAnchorMin = "0.55 0.9";
+        string GUITimeLeftAnchorMax = "1 1";
 
-        static string GUITimeLeftTextColor = "1 1 1 0.98";
-        static int GUITimeLeftTextSize = 16;
-        static string GUITimeLeftTextAnchorMin = "0 0";
-        static string GUITimeLeftTextAnchorMax = "0.9 1";
+        string GUITimeLeftTextColor = "1 1 1 0.98";
+        int GUITimeLeftTextSize = 16;
+        string GUITimeLeftTextAnchorMin = "0 0";
+        string GUITimeLeftTextAnchorMax = "0.9 1";
 
-        static string GUIEntityBackgroundColor = "0.1 0.1 0.1 0.98";
-        static string GUIEntityAnchorMin = "0 0.8";
-        static string GUIEntityAnchorMax = "1 0.9";
+        string GUIEntityBackgroundColor = "0.1 0.1 0.1 0.98";
+        string GUIEntityAnchorMin = "0 0.8";
+        string GUIEntityAnchorMax = "1 0.9";
 
-        static string GUIEntityTextColor = "1 1 1 0.98";
-        static int GUIEntityTextSize = 16;
-        static string GUIEntityTextAnchorMin = "0.05 0";
-        static string GUIEntityTextAnchorMax = "1 1";
+        string GUIEntityTextColor = "1 1 1 0.98";
+        int GUIEntityTextSize = 16;
+        string GUIEntityTextAnchorMin = "0.05 0";
+        string GUIEntityTextAnchorMax = "1 1";
 
-        static bool GUIAuthorizations = true;
-        static string GUIAllowedBackgroundColor = "0.1 1 0.1 0.3";
-        static string GUIRefusedBackgroundColor = "1 0.1 0.1 0.3";
-        static string GUIAuthorizationsAnchorMin = "0 0.8";
-        static string GUIAuthorizationsAnchorMax = "1 0.9";
+        bool GUIAuthorizations = true;
+        string GUIAllowedBackgroundColor = "0.1 1 0.1 0.3";
+        string GUIRefusedBackgroundColor = "1 0.1 0.1 0.3";
+        string GUIAuthorizationsAnchorMin = "0 0.8";
+        string GUIAuthorizationsAnchorMax = "1 0.9";
 
-        static string GUIPriceBackgroundColor = "0.1 0.1 0.1 0.98";
-        static string GUIPriceAnchorMin = "0 0.60";
-        static string GUIPriceAnchorMax = "1 0.80";
+        string GUIPriceBackgroundColor = "0.1 0.1 0.1 0.98";
+        string GUIPriceAnchorMin = "0 0.60";
+        string GUIPriceAnchorMax = "1 0.80";
 
-        static bool GUIPrices = true;
-        static string GUIPriceTextColor = "1 1 1 0.98";
-        static int GUIPriceTextSize = 16;
-        static string GUIPriceTextAnchorMin = "0.05 0";
-        static string GUIPriceTextAnchorMax = "0.3 1";
+        bool GUIPrices = true;
+        string GUIPriceTextColor = "1 1 1 0.98";
+        int GUIPriceTextSize = 16;
+        string GUIPriceTextAnchorMin = "0.05 0";
+        string GUIPriceTextAnchorMax = "0.3 1";
 
-        static string GUIPrice2TextColor = "1 1 1 0.98";
-        static int GUIPrice2TextSize = 16;
-        static string GUIPrice2TextAnchorMin = "0.35 0";
-        static string GUIPrice2TextAnchorMax = "1 1";
+        string GUIPrice2TextColor = "1 1 1 0.98";
+        int GUIPrice2TextSize = 16;
+        string GUIPrice2TextAnchorMin = "0.35 0";
+        string GUIPrice2TextAnchorMax = "1 1";
 
-        static string GUIRefundBackgroundColor = "0.1 0.1 0.1 0.98";
-        static string GUIRefundAnchorMin = "0 0.40";
-        static string GUIRefundAnchorMax = "1 0.60";
+        string GUIRefundBackgroundColor = "0.1 0.1 0.1 0.98";
+        string GUIRefundAnchorMin = "0 0.40";
+        string GUIRefundAnchorMax = "1 0.60";
 
-        static bool GUIRefund = true;
-        static string GUIRefundTextColor = "1 1 1 0.98";
-        static int GUIRefundTextSize = 16;
-        static string GUIRefundTextAnchorMin = "0.05 0";
-        static string GUIRefundTextAnchorMax = "0.3 1";
+        bool GUIRefund = true;
+        string GUIRefundTextColor = "1 1 1 0.98";
+        int GUIRefundTextSize = 16;
+        string GUIRefundTextAnchorMin = "0.05 0";
+        string GUIRefundTextAnchorMax = "0.3 1";
 
-        static string GUIRefund2TextColor = "1 1 1 0.98";
-        static int GUIRefund2TextSize = 16;
-        static string GUIRefund2TextAnchorMin = "0.35 0";
-        static string GUIRefund2TextAnchorMax = "1 1";
+        string GUIRefund2TextColor = "1 1 1 0.98";
+        int GUIRefund2TextSize = 16;
+        string GUIRefund2TextAnchorMin = "0.35 0";
+        string GUIRefund2TextAnchorMax = "1 1";
 
-
-        static Dictionary<string, string> PrefabNameToDeployable = new Dictionary<string, string>();
-        static Dictionary<string, string> PrefabNameToItemName = new Dictionary<string, string>();
-		static Dictionary<string, string> PrefabNameToStructure = new Dictionary<string, string>();
-        static Dictionary<string, int> ItemNameToItemID = new Dictionary<string, int>();
-        static Hash<uint, float> LastAttackedBuildings = new Hash<uint, float>();
-        static Hash<ulong, float> LastBlockedPlayers = new Hash<ulong, float>();
+        Dictionary<string, string> PrefabNameToDeployable = new Dictionary<string, string>();
+        Dictionary<string, string> PrefabNameToItemName = new Dictionary<string, string>();
+		Dictionary<string, string> PrefabNameToStructure = new Dictionary<string, string>();
+        Dictionary<string, int> ItemNameToItemID = new Dictionary<string, int>();
+        Hash<uint, float> LastAttackedBuildings = new Hash<uint, float>();
+        Hash<ulong, float> LastBlockedPlayers = new Hash<ulong, float>();
 
         public enum RemoveType
         {
@@ -379,11 +378,11 @@ namespace Oxide.Plugins
         /// RustIO Inclusion
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        private static Library RustIO;
-        private static MethodInfo isInstalled;
-        private static MethodInfo hasFriend;
+        private Library RustIO;
+        private MethodInfo isInstalled;
+        private MethodInfo hasFriend;
 
-        private static bool RustIOIsInstalled()
+        private bool RustIOIsInstalled()
         {
             if (RustIO == null) return false;
             return (bool)isInstalled.Invoke(RustIO, new object[] { });
@@ -402,7 +401,7 @@ namespace Oxide.Plugins
                 Puts("{0}: {1}", Title, "Rust:IO is not present. You need to install Rust:IO first in order to use the RustIO option!");
             }
         }
-        private static bool HasFriend(string playerId, string friendId)
+        private bool HasFriend(string playerId, string friendId)
         {
             if (RustIO == null) return false;
             return (bool)hasFriend.Invoke(RustIO, new object[] { playerId, friendId });
@@ -534,7 +533,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Methods
-        static string GetMsg(string key, BasePlayer source = null) { return rt.lang.GetMessage(key, rt, source == null ? null : source.UserIDString); }
+        string GetMsg(string key, BasePlayer source = null) { return rt.lang.GetMessage(key, rt, source == null ? null : source.UserIDString); }
 
         bool hasPermission(BasePlayer player, string perm, int authlevel)
         {
@@ -604,7 +603,7 @@ namespace Oxide.Plugins
             return (Reason == string.Empty);
         }
 
-        static void DoRemove(BaseEntity Entity, bool gibs = true)
+        void DoRemove(BaseEntity Entity, bool gibs = true)
         {
             if (Entity != null)
             {
@@ -619,7 +618,7 @@ namespace Oxide.Plugins
         #region UI
         public class UI
         {
-            static public CuiElementContainer CreateElementContainer(string parent, string panelName, string color, string aMin, string aMax, bool useCursor)
+            public static CuiElementContainer CreateElementContainer(string parent, string panelName, string color, string aMin, string aMax, bool useCursor)
             {
                 var NewElement = new CuiElementContainer()
                 {
@@ -636,7 +635,7 @@ namespace Oxide.Plugins
                 };
                 return NewElement;
             }
-            static public void CreatePanel(ref CuiElementContainer container, string panel, string color, string aMin, string aMax, bool cursor = false)
+            public static void CreatePanel(ref CuiElementContainer container, string panel, string color, string aMin, string aMax, bool cursor = false)
             {
                 container.Add(new CuiPanel
                 {
@@ -646,7 +645,7 @@ namespace Oxide.Plugins
                 },
                 panel);
             }
-            static public void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
+            public static void CreateLabel(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, TextAnchor align = TextAnchor.MiddleCenter)
             {
                 container.Add(new CuiLabel
                 {
@@ -656,7 +655,7 @@ namespace Oxide.Plugins
                 panel);
 
             }
-            static public void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter)
+            public static void CreateButton(ref CuiElementContainer container, string panel, string color, string text, int size, string aMin, string aMax, string command, TextAnchor align = TextAnchor.MiddleCenter)
             {
                 container.Add(new CuiButton
                 {
@@ -669,8 +668,8 @@ namespace Oxide.Plugins
         }
         public static string GetName(string prefabname)
         {
-            if (PrefabNameToStructure.ContainsKey(prefabname)) return PrefabNameToStructure[prefabname];
-            else if (PrefabNameToDeployable.ContainsKey(prefabname)) return PrefabNameToDeployable[prefabname];
+            if (rt.PrefabNameToStructure.ContainsKey(prefabname)) return rt.PrefabNameToStructure[prefabname];
+            else if (rt.PrefabNameToDeployable.ContainsKey(prefabname)) return rt.PrefabNameToDeployable[prefabname];
             return string.Empty;
         }
 
@@ -679,13 +678,13 @@ namespace Oxide.Plugins
             var panelName = "RemoverTool";
             CuiHelper.DestroyUi(player, panelName);
 
-            var Class_Element = UI.CreateElementContainer("Hud", panelName, GUIRemoverToolBackgroundColor, GUIRemoverToolAnchorMin, GUIRemoverToolAnchorMax, false);
+            var Class_Element = UI.CreateElementContainer("Hud", panelName, rt.GUIRemoverToolBackgroundColor, rt.GUIRemoverToolAnchorMin, rt.GUIRemoverToolAnchorMax, false);
             CuiHelper.AddUi(player, Class_Element);
 
             var panelName2 = "Remove";
             CuiHelper.DestroyUi(player, panelName2);
-            var Class_Element2 = UI.CreateElementContainer(panelName, panelName2, GUIRemoveBackgroundColor, GUIRemoveAnchorMin, GUIRemoveAnchorMax, false);
-            UI.CreateLabel(ref Class_Element2, panelName2, GUIRemoveTextColor, string.Format(GetMsg("Remover Tool {0}", player), removeType == RemoveType.Normal ? string.Empty : string.Format("({0})", removeType.ToString())), GUIRemoveTextSize, GUIRemoveTextAnchorMin, GUIRemoveTextAnchorMax, TextAnchor.MiddleLeft);
+            var Class_Element2 = UI.CreateElementContainer(panelName, panelName2, rt.GUIRemoveBackgroundColor, rt.GUIRemoveAnchorMin, rt.GUIRemoveAnchorMax, false);
+            UI.CreateLabel(ref Class_Element2, panelName2, rt.GUIRemoveTextColor, string.Format(rt.GetMsg("Remover Tool {0}", player), removeType == RemoveType.Normal ? string.Empty : string.Format("({0})", removeType.ToString())), rt.GUIRemoveTextSize, rt.GUIRemoveTextAnchorMin, rt.GUIRemoveTextAnchorMax, TextAnchor.MiddleLeft);
 
             CuiHelper.AddUi(player, Class_Element2);
         }
@@ -694,8 +693,8 @@ namespace Oxide.Plugins
             var panelName = "RemoverToolTimeLeft";
             CuiHelper.DestroyUi(player, panelName);
 
-            var Class_Element = UI.CreateElementContainer("RemoverTool", panelName, GUITimeLeftBackgroundColor, GUITimeLeftAnchorMin, GUITimeLeftAnchorMax, false);
-            UI.CreateLabel(ref Class_Element, panelName, GUITimeLeftTextColor, string.Format(GetMsg("Timeleft: {0}secs", player), timeleft.ToString()), GUITimeLeftTextSize, GUITimeLeftTextAnchorMin, GUITimeLeftTextAnchorMax, TextAnchor.MiddleLeft);
+            var Class_Element = UI.CreateElementContainer("RemoverTool", panelName, rt.GUITimeLeftBackgroundColor, rt.GUITimeLeftAnchorMin, rt.GUITimeLeftAnchorMax, false);
+            UI.CreateLabel(ref Class_Element, panelName, rt.GUITimeLeftTextColor, string.Format(rt.GetMsg("Timeleft: {0}secs", player), timeleft.ToString()), rt.GUITimeLeftTextSize, rt.GUITimeLeftTextAnchorMin, rt.GUITimeLeftTextAnchorMax, TextAnchor.MiddleLeft);
 
             CuiHelper.AddUi(player, Class_Element);
         }
@@ -705,8 +704,8 @@ namespace Oxide.Plugins
             CuiHelper.DestroyUi(player, panelName);
             if (TargetEntity == null) return;
             var Name = GetName(TargetEntity.PrefabName);
-            var Class_Element = UI.CreateElementContainer("RemoverTool", panelName, GUIEntityBackgroundColor, GUIEntityAnchorMin, GUIEntityAnchorMax, false);
-            UI.CreateLabel(ref Class_Element, panelName, GUIEntityTextColor, Name, GUIEntityTextSize, GUIEntityTextAnchorMin, GUIEntityTextAnchorMax, TextAnchor.MiddleLeft);
+            var Class_Element = UI.CreateElementContainer("RemoverTool", panelName, rt.GUIEntityBackgroundColor, rt.GUIEntityAnchorMin, rt.GUIEntityAnchorMax, false);
+            UI.CreateLabel(ref Class_Element, panelName, rt.GUIEntityTextColor, Name, rt.GUIEntityTextSize, rt.GUIEntityTextAnchorMin, rt.GUIEntityTextAnchorMax, TextAnchor.MiddleLeft);
 
             CuiHelper.AddUi(player, Class_Element);
         }
@@ -719,10 +718,10 @@ namespace Oxide.Plugins
             Dictionary<string, object> price = new Dictionary<string, object>();
             if (usePrice)
             {
-                price = GetPrice(TargetEntity);
+                price = rt.GetPrice(TargetEntity);
             }
             string cost = string.Empty;
-            if (price.Count == 0) cost = GetMsg("Free", player);
+            if (price.Count == 0) cost = rt.GetMsg("Free", player);
             else
             {
                 foreach (KeyValuePair<string, object> p in price)
@@ -730,9 +729,9 @@ namespace Oxide.Plugins
                     cost += string.Format("{2}{0} x{1}", p.Key, p.Value.ToString(), cost != string.Empty ? "\n" : string.Empty);
                 }
             }
-            var Class_Element = UI.CreateElementContainer("RemoverTool", panelName, GUIPriceBackgroundColor, GUIPriceAnchorMin, GUIPriceAnchorMax, false);
-            UI.CreateLabel(ref Class_Element, panelName, GUIPriceTextColor, GetMsg("Price:", player), GUIPriceTextSize, GUIPriceTextAnchorMin, GUIPriceTextAnchorMax, TextAnchor.MiddleLeft);
-            UI.CreateLabel(ref Class_Element, panelName, GUIPrice2TextColor, cost, GUIPrice2TextSize, GUIPrice2TextAnchorMin, GUIPrice2TextAnchorMax, TextAnchor.MiddleLeft);
+            var Class_Element = UI.CreateElementContainer("RemoverTool", panelName, rt.GUIPriceBackgroundColor, rt.GUIPriceAnchorMin, rt.GUIPriceAnchorMax, false);
+            UI.CreateLabel(ref Class_Element, panelName, rt.GUIPriceTextColor, rt.GetMsg("Price:", player), rt.GUIPriceTextSize, rt.GUIPriceTextAnchorMin, rt.GUIPriceTextAnchorMax, TextAnchor.MiddleLeft);
+            UI.CreateLabel(ref Class_Element, panelName, rt.GUIPrice2TextColor, cost, rt.GUIPrice2TextSize, rt.GUIPrice2TextAnchorMin, rt.GUIPrice2TextAnchorMax, TextAnchor.MiddleLeft);
             CuiHelper.AddUi(player, Class_Element);
         }
         public static void GUIRefundUpdate(BasePlayer player, bool useRefund, BaseEntity TargetEntity)
@@ -743,10 +742,10 @@ namespace Oxide.Plugins
             Dictionary<string, object> refund = new Dictionary<string, object>();
             if (useRefund)
             {
-                refund = GetRefund(TargetEntity);
+                refund = rt.GetRefund(TargetEntity);
             }
             string r = string.Empty;
-            if (refund.Count == 0) r = GetMsg("Nothing", player);
+            if (refund.Count == 0) r = rt.GetMsg("Nothing", player);
             else
             {
                 foreach (KeyValuePair<string, object> p in refund)
@@ -754,9 +753,9 @@ namespace Oxide.Plugins
                     r += string.Format("{2}{0} x{1}", p.Key, p.Value.ToString(), r != string.Empty ? "\n" : string.Empty);
                 }
             }
-            var Class_Element = UI.CreateElementContainer("RemoverTool", panelName, GUIRefundBackgroundColor, GUIRefundAnchorMin, GUIRefundAnchorMax, false);
-            UI.CreateLabel(ref Class_Element, panelName, GUIRefundTextColor, GetMsg("Refund:", player), GUIRefundTextSize, GUIRefundTextAnchorMin, GUIRefundTextAnchorMax, TextAnchor.MiddleLeft);
-            UI.CreateLabel(ref Class_Element, panelName, GUIRefund2TextColor, r, GUIRefund2TextSize, GUIRefund2TextAnchorMin, GUIRefund2TextAnchorMax, TextAnchor.MiddleLeft);
+            var Class_Element = UI.CreateElementContainer("RemoverTool", panelName, rt.GUIRefundBackgroundColor, rt.GUIRefundAnchorMin, rt.GUIRefundAnchorMax, false);
+            UI.CreateLabel(ref Class_Element, panelName, rt.GUIRefundTextColor, rt.GetMsg("Refund:", player), rt.GUIRefundTextSize, rt.GUIRefundTextAnchorMin, rt.GUIRefundTextAnchorMax, TextAnchor.MiddleLeft);
+            UI.CreateLabel(ref Class_Element, panelName, rt.GUIRefund2TextColor, r, rt.GUIRefund2TextSize, rt.GUIRefund2TextAnchorMin, rt.GUIRefund2TextAnchorMax, TextAnchor.MiddleLeft);
             CuiHelper.AddUi(player, Class_Element);
         }
 
@@ -767,12 +766,12 @@ namespace Oxide.Plugins
             if (TargetEntity == null) return;
 
             string Reason = string.Empty;
-            string GUIColor = CanRemoveEntity(player, removeType, TargetEntity, shouldPay, out Reason) ? GUIAllowedBackgroundColor : GUIRefusedBackgroundColor;
-            var Class_Element = UI.CreateElementContainer("RemoverTool", panelName, GUIColor, GUIAuthorizationsAnchorMin, GUIAuthorizationsAnchorMax, false);
+            string GUIColor = rt.CanRemoveEntity(player, removeType, TargetEntity, shouldPay, out Reason) ? rt.GUIAllowedBackgroundColor : rt.GUIRefusedBackgroundColor;
+            var Class_Element = UI.CreateElementContainer("RemoverTool", panelName, GUIColor, rt.GUIAuthorizationsAnchorMin, rt.GUIAuthorizationsAnchorMax, false);
 
             CuiHelper.AddUi(player, Class_Element);
         }
-        public static void DestroyGUI(BasePlayer player)
+        public void DestroyGUI(BasePlayer player)
         {
             CuiHelper.DestroyUi(player, "RemoverTool");
         }
@@ -806,7 +805,7 @@ namespace Oxide.Plugins
                 player = GetComponent<BasePlayer>();
                 lastUpdate = UnityEngine.Time.realtimeSinceStartup;
                 lastRemove = UnityEngine.Time.realtimeSinceStartup;
-				if (removeUnequipStart || removeUnequipUpdate)
+				if (rt.removeUnequipStart || rt.removeUnequipUpdate)
 				{
 					currentItemID = player.svActiveItemID;
 					UnEquip();
@@ -826,21 +825,21 @@ namespace Oxide.Plugins
                 if (timeLeft <= 0) { Destroy(); return; }
                 GUITimeLeftUpdate(player, timeLeft);
                 GUIEntityUpdate(player, TargetEntity);
-                if (removetype == RemoveType.Normal && GUIAuthorizations) GUIAuthorizationUpdate(player, removetype, TargetEntity, Pay);
-                if (removetype == RemoveType.Normal && GUIPrices) GUIPricesUpdate(player, Pay, TargetEntity);
-                if (removetype == RemoveType.Normal && GUIRefund) GUIRefundUpdate(player, Refund, TargetEntity);
+                if (removetype == RemoveType.Normal && rt.GUIAuthorizations) GUIAuthorizationUpdate(player, removetype, TargetEntity, Pay);
+                if (removetype == RemoveType.Normal && rt.GUIPrices) GUIPricesUpdate(player, Pay, TargetEntity);
+                if (removetype == RemoveType.Normal && rt.GUIRefund) GUIRefundUpdate(player, Refund, TargetEntity);
             }			
 
             void FixedUpdate()
             {
                 if (player.IsSleeping() || !player.IsConnected) { Destroy(); return; }
 				
-				if (player.svActiveItemID != currentItemID && (removeUnequipStart || removeUnequipUpdate))
+				if (player.svActiveItemID != currentItemID && (rt.removeUnequipStart || rt.removeUnequipUpdate))
 				{
 					currentItemID = player.svActiveItemID;
 					if (currentItemID > 0u)
 					{
-						if (!removeUnequipUpdate)
+						if (!rt.removeUnequipUpdate)
 						{
 							Destroy();
 							return;
@@ -853,7 +852,7 @@ namespace Oxide.Plugins
                 float currentTime = UnityEngine.Time.realtimeSinceStartup;
                 if (currentTime - lastUpdate >= 0.5f)
                 {
-                    bool flag1 = Physics.Raycast(player.eyes.HeadRay(), out RayHit, distance, colliderRemovable);
+                    bool flag1 = Physics.Raycast(player.eyes.HeadRay(), out RayHit, distance, rt.colliderRemovable);
                     TargetEntity = flag1 ? RayHit.GetEntity() : null;
                     lastUpdate = currentTime;
                 }
@@ -862,7 +861,7 @@ namespace Oxide.Plugins
                 {
                     if (currentTime - lastRemove >= 0.5f)
                     {
-                        var returnmsg = TryRemove(player, removetype, distance, Pay, Refund);
+                        var returnmsg = rt.TryRemove(player, removetype, distance, Pay, Refund);
                         if (returnmsg != string.Empty) player.ChatMessage(returnmsg);
                         lastRemove = currentTime;
                     }
@@ -889,18 +888,18 @@ namespace Oxide.Plugins
             public void Destroy()
             {
 				CancelInvoke("RemoveUpdate");
-                DestroyGUI(player);
-				if (CoolDownEnabled)
-					cooldownTimes[player.UserIDString + "-box"] = DateTime.UtcNow;
+                rt.DestroyGUI(player);
+				if (rt.CoolDownEnabled)
+					rt.cooldownTimes[player.UserIDString + "-box"] = DateTime.UtcNow;
 				GameObject.Destroy(this);
             }
         }
         #endregion
 
         #region Pay
-        static bool Pay(BasePlayer player, BaseEntity TargetEntity)
+        bool Pay(BasePlayer player, BaseEntity TargetEntity)
         {
-            var cost = GetPrice(TargetEntity);
+			var cost = GetPrice(TargetEntity);
             try
             {
                 List<Item> collect = new List<Item>();
@@ -914,10 +913,12 @@ namespace Oxide.Plugins
                         player.inventory.Take(collect, itemid, amount);
                         player.Command("note.inv", itemid, -amount);
                     }
-                    else if (priceName == "withdraw" && rt.Economics)
+                    else if (priceName == "withdraw")
                     {
-                        var w = rt.Economics.CallHook("Withdraw", player.userID, (double)amount);
-                        if (w == null || !(bool)w) return false;
+						if (!rt.Economics)
+							return false;
+						var w = rt.Economics.CallHook("Withdraw", player.userID, (double)amount);
+						if (w == null || !(bool)w) return false;
                     }
                 }
                 foreach (Item item in collect)
@@ -929,7 +930,7 @@ namespace Oxide.Plugins
 
             return true;
         }
-        static Dictionary<string, object> GetPrice(BaseEntity TargetEntity)
+        Dictionary<string, object> GetPrice(BaseEntity TargetEntity)
         {
             var cost = new Dictionary<string, object>();
             var buildingblock = TargetEntity.GetComponent<BuildingBlock>();
@@ -953,7 +954,7 @@ namespace Oxide.Plugins
             return cost;
         }
 
-        static bool CanPay(BasePlayer player, BaseEntity TargetEntity)
+        bool CanPay(BasePlayer player, BaseEntity TargetEntity)
         {
             var prefabname = TargetEntity.PrefabName;
 
@@ -971,7 +972,9 @@ namespace Oxide.Plugins
                 }
                 else if (priceName == "withdraw")
                 {
-                    var b = Interface.Oxide.CallHook("GetPlayerMoney", player.userID);
+					if (!rt.Economics)
+						return false;
+					var b = rt.Economics.CallHook("Balance", player.userID);
                     if (b == null) return false;
                     var balance = (double)b;
                     if (balance <= amount) return false;
@@ -982,7 +985,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Refund
-        static void GiveRefund(BasePlayer player, BaseEntity TargetEntity)
+        void GiveRefund(BasePlayer player, BaseEntity TargetEntity)
         {
             var refund = GetRefund(TargetEntity);
 			foreach (KeyValuePair<string, object> p in refund)
@@ -999,7 +1002,7 @@ namespace Oxide.Plugins
             }
         }
 
-        static Dictionary<string, object> GetRefund(BaseEntity TargetEntity)
+        Dictionary<string, object> GetRefund(BaseEntity TargetEntity)
         {
             var refund = new Dictionary<string, object>();
 			var buildingblock = TargetEntity.GetComponent<BuildingBlock>();
@@ -1094,7 +1097,7 @@ namespace Oxide.Plugins
                 }
             }
         }
-        static bool IsBlocked(BasePlayer player, BaseEntity TargetEntity, out float timeLeft)
+        bool IsBlocked(BasePlayer player, BaseEntity TargetEntity, out float timeLeft)
         {
             timeLeft = 0f;
             if (RaidBlockerBlockBuildingID)
@@ -1122,16 +1125,16 @@ namespace Oxide.Plugins
         #endregion
 
         #region TryRemove
-        static string TryRemove(BasePlayer player, RemoveType removeType, float distance, bool shouldPay, bool shouldRefund)
+        string TryRemove(BasePlayer player, RemoveType removeType, float distance, bool shouldPay, bool shouldRefund)
         {
-            RaycastHit RayHit;
+			RaycastHit RayHit;
             bool flag1 = Physics.Raycast(player.eyes.HeadRay(), out RayHit, distance, colliderRemovable);
             var TargetEntity = flag1 ? RayHit.GetEntity() : null;
 
             if (TargetEntity == null) return GetMsg("Couldn't use the RemoverTool: No valid entity targeted, or entity is too far.", player);
 
             string Reason = string.Empty;
-            if (!CanRemoveEntity(player, removeType, TargetEntity, shouldPay, out Reason))
+			if (!CanRemoveEntity(player, removeType, TargetEntity, shouldPay, out Reason))
             {
                 return Reason;
             }
@@ -1141,16 +1144,16 @@ namespace Oxide.Plugins
 
 			if (TargetEntity is StorageContainer)
 			{
-				if (!RemoveContainerWithContent && (TargetEntity as StorageContainer).inventory.itemList.Count > 0)
+				if (!rt.RemoveContainerWithContent && (TargetEntity as StorageContainer).inventory.itemList.Count > 0)
 					return GetMsg("Couldn't use the RemoverTool: Entity storage is not empty", player);
-				if (RemoveContainerWithDrop && (TargetEntity as StorageContainer).inventory.itemList.Count > 0)
+				if (rt.RemoveContainerWithDrop && (TargetEntity as StorageContainer).inventory.itemList.Count > 0)
 					DropUtil.DropItems((TargetEntity as StorageContainer).inventory, TargetEntity.transform.position, 1f);
 			}
 			
 			
 			if (shouldPay)
             {
-                bool flag2 = Pay(player, TargetEntity);
+				bool flag2 = Pay(player, TargetEntity);
                 if (!flag2)
                 {
                     return GetMsg("Couldn't use the RemoverTool: Paying system crashed! Contact an administrator with the time and date to help him understand what happened.", player);
@@ -1162,7 +1165,7 @@ namespace Oxide.Plugins
                 GiveRefund(player, TargetEntity);
             }
 
-            DoRemove(TargetEntity, removeType == RemoveType.Normal ? removeGibsNormal : removeGibsAdmin);
+            DoRemove(TargetEntity, removeType == RemoveType.Normal ? rt.removeGibsNormal : rt.removeGibsAdmin);
 
             return string.Empty;
         }
@@ -1170,7 +1173,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Remove Conditions
-        static bool CanRemoveEntity(BasePlayer player, RemoveType removeType, BaseEntity TargetEntity, bool shouldPay, out string Reason)
+        bool CanRemoveEntity(BasePlayer player, RemoveType removeType, BaseEntity TargetEntity, bool shouldPay, out string Reason)
         {
             Reason = string.Empty;
             float timeLeft = 0f;
@@ -1195,7 +1198,7 @@ namespace Oxide.Plugins
                 return false;
             }
 
-            if (!RemoveFractionedObjects && IsFractioned(TargetEntity))
+            if (!rt.RemoveFractionedObjects && IsFractioned(TargetEntity))
             {
                 Reason = GetMsg("Couldn't use the RemoverTool: Admin has restricted damaged objects from being removed.", player);
                 return false;
@@ -1238,14 +1241,19 @@ namespace Oxide.Plugins
 			}
             return false;
         }
-        static bool HasAccess(BasePlayer player, BaseEntity TargetEntity)
+        bool HasAccess(BasePlayer player, BaseEntity TargetEntity)
         {
-            if (RemoveWithEntityOwners)
+            if (rt.RemoveWithEntityOwners)
             {
-                if (TargetEntity.OwnerID == player.userID) return true;
-                if (rt.AreFriends(TargetEntity.OwnerID.ToString(), player.userID.ToString())) return true;
+                if (TargetEntity.OwnerID == player.userID || rt.AreFriends(TargetEntity.OwnerID.ToString(), player.userID.ToString()))
+				{
+					if (!rt.RemoveWithToolCupboards)
+						return true;
+					if (rt.RemoveWithToolCupboards && hasTotalAccess(player, TargetEntity))
+						return true;
+				}
             }
-            if (RemoveWithBuildingOwners)
+            if (rt.RemoveWithBuildingOwners)
             {
                 BuildingBlock BuildingRef = TargetEntity.GetComponent<BuildingBlock>();
                 if (BuildingRef == null)
@@ -1272,46 +1280,44 @@ namespace Oxide.Plugins
                 }
             }
 
-			if (RemoveWithToolCupboards && hasTotalAccess(player, TargetEntity))
-            {
+			if (rt.RemoveWithToolCupboards && hasTotalAccess(player, TargetEntity))
                 return true;
-            }
 			return false;
         }
 
-        static bool IsRemovableEntity(BaseEntity entity)
+        bool IsRemovableEntity(BaseEntity entity)
         {
             var Name = GetName(entity.PrefabName);
             return (!(Name == string.Empty));
         }
-		static bool IsFractioned(BaseEntity entity)
+		bool IsFractioned(BaseEntity entity)
 		{
-			if (RemoveFractionedObjectsExcludeBuildingBlocks && (entity is BuildingBlock || entity is SimpleBuildingBlock)) return false;
+			if (rt.RemoveFractionedObjectsExcludeBuildingBlocks && (entity is BuildingBlock || entity is SimpleBuildingBlock)) return false;
 			var baseCombat = entity as BaseCombatEntity;
 			if (baseCombat == null || !baseCombat.repair.enabled)
 				return false;
 			if (!(entity is BuildingBlock) &&  !(entity is SimpleBuildingBlock))
 				if (baseCombat.repair.itemTarget == null || baseCombat.repair.itemTarget.Blueprint == null)
 					return false;
-			if ((100f / baseCombat.MaxHealth() * baseCombat.Health()) >= RemoveFractionedPercent) return false;
+			if ((100f / baseCombat.MaxHealth() * baseCombat.Health()) >= rt.RemoveFractionedPercent) return false;
 			return true;			
 		}
-        static bool IsValidEntity(BaseEntity entity)
+        bool IsValidEntity(BaseEntity entity)
         {
             var Name = GetName(entity.PrefabName);
 
-            if (ValidEntities.ContainsKey(Name) && !(bool)ValidEntities[Name]) return false;
+            if (rt.ValidEntities.ContainsKey(Name) && !(bool)rt.ValidEntities[Name]) return false;
 
             var buildingblock = entity.GetComponent<BuildingBlock>();
             if (buildingblock != null)
             {
-                if (ValidEntities.ContainsKey(buildingblock.grade.ToString()) && !(bool)ValidEntities[buildingblock.grade.ToString()]) return false;
+                if (rt.ValidEntities.ContainsKey(buildingblock.grade.ToString()) && !(bool)rt.ValidEntities[buildingblock.grade.ToString()]) return false;
             }
 
             return true;
         }
         
-		static bool hasTotalAccess(BasePlayer player, BaseEntity TargetEntity)
+		bool hasTotalAccess(BasePlayer player, BaseEntity TargetEntity)
         {
 			if (player.IsBuildingBlocked(TargetEntity.WorldSpaceBounds()))
 				return false;
@@ -1321,7 +1327,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Remove All
-        static void RemoveAll(BaseEntity sourceEntity)
+        void RemoveAll(BaseEntity sourceEntity)
         {
             var current = 0;
             var checkFrom = new List<Vector3> { sourceEntity.transform.position };
@@ -1350,7 +1356,7 @@ namespace Oxide.Plugins
             ServerMgr.Instance.StartCoroutine(DelayRemove(removeList));
         }
 
-        static bool RemoveStructure(BaseEntity sourceEntity)
+        bool RemoveStructure(BaseEntity sourceEntity)
         {
             var buildingBlock = sourceEntity.GetComponent<BuildingBlock>();
             if (buildingBlock == null) return false;
@@ -1362,7 +1368,7 @@ namespace Oxide.Plugins
             return true;
         }
 
-        public static IEnumerator DelayRemove(List<BuildingBlock> entities)
+        public IEnumerator DelayRemove(List<BuildingBlock> entities)
         {
             for (int i = 0; i < entities.Count; i++)
             {
@@ -1370,7 +1376,7 @@ namespace Oxide.Plugins
                 yield return new WaitWhile(new Func<bool>(() => (!entities[i].IsDestroyed)));
             }
         }
-        public static IEnumerator DelayRemove(List<BaseEntity> entities)
+        public IEnumerator DelayRemove(List<BaseEntity> entities)
         {
             for (int i = 0; i < entities.Count; i++)
             {

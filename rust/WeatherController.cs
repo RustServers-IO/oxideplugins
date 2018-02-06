@@ -1,14 +1,9 @@
-/******************************************************************************
-* Version 1.3 Changelog
-*** Added /weather auto command to turn weather back to automatic.
-******************************************************************************/
-
 using UnityEngine;
 using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Weather Controller", "Waizujin", 1.4)]
+    [Info("Weather Controller", "Waizujin", "1.4.1", ResourceId = 1180)]
     [Description("Allows you to control the weather.")]
     public class WeatherController : RustPlugin
     {
@@ -160,10 +155,10 @@ namespace Oxide.Plugins
         {
             if (status == 0)
             {
-                if (type == "clouds") { ConsoleSystem.Run.Server.Normal("weather.clouds " + status); if (!quiet) { SendReply(player, "Clouds have been disabled!"); } }
-                if (type == "rain") { ConsoleSystem.Run.Server.Normal("weather.rain " + status); if (!quiet) { SendReply(player, "Rain has been disabled!"); } }
-                if (type == "wind") { ConsoleSystem.Run.Server.Normal("weather.wind " + status); if (!quiet) { SendReply(player, "Wind has been disabled!"); } }
-                if (type == "fog") { ConsoleSystem.Run.Server.Normal("weather.fog " + status); if (!quiet) { SendReply(player, "Fog has been disabled!"); } }
+                if (type == "clouds") { ConsoleSystem.Run(ConsoleSystem.Option.Server, "weather.clouds " + status); if (!quiet) { SendReply(player, "Clouds have been disabled!"); } }
+                if (type == "rain") { ConsoleSystem.Run(ConsoleSystem.Option.Server, "weather.rain " + status); if (!quiet) { SendReply(player, "Rain has been disabled!"); } }
+                if (type == "wind") { ConsoleSystem.Run(ConsoleSystem.Option.Server, "weather.wind " + status); if (!quiet) { SendReply(player, "Wind has been disabled!"); } }
+                if (type == "fog") { ConsoleSystem.Run(ConsoleSystem.Option.Server, "weather.fog " + status); if (!quiet) { SendReply(player, "Fog has been disabled!"); } }
                 if (type == "mild") { mild(player, status); }
                 if (type == "average") { average(player, status); }
                 if (type == "heavy") { heavy(player, status); }
@@ -189,10 +184,10 @@ namespace Oxide.Plugins
 			}
 			else
 			{
-                if (type == "clouds") { ConsoleSystem.Run.Server.Normal("weather.clouds " + status); if (!quiet) { SendReply(player, "Clouds have been enabled!"); } }
-                if (type == "rain") { ConsoleSystem.Run.Server.Normal("weather.rain " + status); if (!quiet) { SendReply(player, "Rain has been enabled!"); } }
-                if (type == "wind") { ConsoleSystem.Run.Server.Normal("weather.wind " + status); if (!quiet) { SendReply(player, "Wind has been enabled!"); } }
-                if (type == "fog") { ConsoleSystem.Run.Server.Normal("weather.fog " + status); if (!quiet) { SendReply(player, "Fog has been enabled!"); } }
+                if (type == "clouds") { ConsoleSystem.Run(ConsoleSystem.Option.Server, "weather.clouds " + status); if (!quiet) { SendReply(player, "Clouds have been enabled!"); } }
+                if (type == "rain") { ConsoleSystem.Run(ConsoleSystem.Option.Server, "weather.rain " + status); if (!quiet) { SendReply(player, "Rain has been enabled!"); } }
+                if (type == "wind") { ConsoleSystem.Run(ConsoleSystem.Option.Server, "weather.wind " + status); if (!quiet) { SendReply(player, "Wind has been enabled!"); } }
+                if (type == "fog") { ConsoleSystem.Run(ConsoleSystem.Option.Server, "weather.fog " + status); if (!quiet) { SendReply(player, "Fog has been enabled!"); } }
                 if (type == "mild") { mild(player, status); }
                 if (type == "average") { average(player, status); }
                 if (type == "heavy") { heavy(player, status); }

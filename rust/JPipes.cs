@@ -11,7 +11,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins {
 
-    [Info("JPipes", "TheGreatJ", "0.6.2", ResourceId = 2402)]
+    [Info("JPipes", "TheGreatJ", "0.6.4", ResourceId = 2402)]
     class JPipes : RustPlugin {
 
         [PluginReference]
@@ -30,8 +30,8 @@ namespace Oxide.Plugins {
         #region Hooks
 
         void Init() {
-
-            lang.RegisterMessages(new Dictionary<string, string> {
+			
+			lang.RegisterMessages(new Dictionary<string, string> {
                 ["ErrorFindFirst"] = "Failed to find first StorageContainer",
                 ["ErrorFindSecond"] = "Failed to find second StorageContainer",
                 ["ErrorAlreadyConnected"] = "Error: StorageContainers are already connected",
@@ -143,7 +143,12 @@ namespace Oxide.Plugins {
 
             SavePipes();
             UnloadPipes();
-        }
+
+			//foreach (jPipeGroundWatch go in UnityEngine.Object.FindObjectsOfType<jPipeGroundWatch>()) {
+			//	GameObject.Destroy(go);
+			//}
+
+		}
 
         void OnNewSave(string filename) {
             regpipes.Clear();
@@ -263,7 +268,30 @@ namespace Oxide.Plugins {
             }
         }
 
-        bool? OnStructureUpgrade(BaseCombatEntity entity, BasePlayer player, BuildingGrade.Enum grade) {
+		object OnEntityGroundMissing(BaseEntity entity) {
+
+			foreach (var c in entity.GetComponents<Component>()) {
+				if (c.GetType().ToString() == "Oxide.Plugins.JPipes.jPipeGroundWatch") {
+					return true;
+					break;
+				}
+			}
+
+			//jPipeGroundWatch gw = entity?.gameObject?.GetComponent<jPipeGroundWatch>();
+			//if (gw != null) {
+			//	return true;
+			//	gw.connectedpipes.Remove(null); // remove any null references
+			//	if (gw.connectedpipes.Count > 0) { // if pipes are connected
+			//		return true; // don't destroy container
+			//	} else {
+			//		GameObject.Destroy(gw);
+			//		return null;
+			//	}
+			//}
+			return null;
+		}
+
+		bool? OnStructureUpgrade(BaseCombatEntity entity, BasePlayer player, BuildingGrade.Enum grade) {
             jPipeSegChild p = entity?.GetComponent<jPipeSegChild>();
             if (p != null && p.pipe != null && player != null) {
                 if (!commandperm(player))
@@ -805,7 +833,10 @@ namespace Oxide.Plugins {
                     return false;
                 }
 
-                destisstartable = isStartable(dest);
+				jPipeGroundWatch.Attach(source, this);
+				jPipeGroundWatch.Attach(dest, this);
+
+				destisstartable = isStartable(dest);
                 isWaterPipe = dest is LiquidContainer && source is LiquidContainer;
 
                 remover = rem;
@@ -816,14 +847,15 @@ namespace Oxide.Plugins {
                 endpos = destcont.CenterPoint() + containeroffset(destcont);
 
                 distance = Vector3.Distance(sourcepos, endpos);
-                rotation = Quaternion.LookRotation(endpos - sourcepos) * Quaternion.Euler(90, 0, 0);
+                rotation = Quaternion.LookRotation(endpos - sourcepos) * Quaternion.Euler(0, 0, 0);
 
                 // create pillars
 
                 int segments = (int) Mathf.Ceil(distance / pipesegdist);
                 float segspace = (distance - pipesegdist) / (segments - 1);
+				sourcepos = sourcepos + ((rotation * Vector3.forward) * pipesegdist * 0.5f) + ((rotation * Vector3.down) * 0.7f);
 
-                initerr = "";
+				initerr = "";
 
                 for (int i = 0; i < segments; i++) {
 
@@ -836,13 +868,13 @@ namespace Oxide.Plugins {
 
                     if (i == 0) {
                         // the position thing centers the pipe if there is only one segment
-                        ent = GameManager.server.CreateEntity("assets/prefabs/building core/pillar/pillar.prefab", (segments == 1) ? (sourcepos + ((rotation * Vector3.up) * ((distance - pipesegdist) * 0.5f))) : sourcepos, rotation);
+                        ent = GameManager.server.CreateEntity("assets/prefabs/building core/wall.low/wall.low.prefab", (segments == 1) ? (sourcepos + ((rotation * Vector3.up) * ((distance - pipesegdist) * 0.5f))) : sourcepos, rotation);
                         mainlogic = jPipeLogic.Attach(ent, this, updaterate, pipeplugin.flowrates[0]);
                         mainparent = ent;
 					} else {
                         //ent = GameManager.server.CreateEntity("assets/prefabs/building core/pillar/pillar.prefab", sourcepos + rotation * (Vector3.up * (segspace * i) + ((i % 2 == 0) ? Vector3.zero : pipefightoffset)), rotation);
                         // position based on parent
-                        ent = GameManager.server.CreateEntity("assets/prefabs/building core/pillar/pillar.prefab", Vector3.up * (segspace * i) + ((i % 2 == 0) ? Vector3.zero : pipefightoffset));
+                        ent = GameManager.server.CreateEntity("assets/prefabs/building core/wall.low/wall.low.prefab", Vector3.forward * (segspace * i) + ((i % 2 == 0) ? Vector3.zero : pipefightoffset));
 						
 					}
 
@@ -861,7 +893,7 @@ namespace Oxide.Plugins {
 					jPipeSegChild.Attach(ent, this);
 
                     if (i != 0)
-                    ent.SetParent(mainparent);
+						ent.SetParent(mainparent);
 
 					if (pipeplugin.xmaslights) {
 
@@ -886,7 +918,7 @@ namespace Oxide.Plugins {
                 sourceiconurl = GetContIcon(source);
                 endiconurl = GetContIcon(dest);
 
-                return true;
+				return true;
 
             }
 
@@ -1444,7 +1476,7 @@ namespace Oxide.Plugins {
         private static float pipesegdist = 3;
 
         // every other pipe segment is offset by this to remove z fighting
-        private static Vector3 pipefightoffset = new Vector3(0.0001f, 0, 0.0001f);
+        private static Vector3 pipefightoffset = new Vector3(0.0001f, 0.0001f, 0);
 
         // offset of pipe inside different containers
         private static class contoffset {
@@ -1735,11 +1767,11 @@ namespace Oxide.Plugins {
         private void RegisterPipe(jPipe pipe) {
             GetUserInfo(pipe.ownerid).pipes.Add(pipe.id, pipe);
             regpipes.Add(pipe.id, pipe);
-        }
+		}
         private void UnRegisterPipe(jPipe pipe) {
-            GetUserInfo(pipe.ownerid).pipes.Remove(pipe.id);
+			GetUserInfo(pipe.ownerid).pipes.Remove(pipe.id);
             regpipes.Remove(pipe.id);
-        }
+		}
         private void UnRegisterPipe(ulong id) {
             jPipe pipe;
             if (regpipes.TryGetValue(id, out pipe)) {
@@ -1997,7 +2029,34 @@ namespace Oxide.Plugins {
 			}
 		}
 
-        private class jPipeFilterStash : MonoBehaviour {
+		private class jPipeGroundWatch : MonoBehaviour {
+
+			public HashSet<jPipe> connectedpipes = new HashSet<jPipe>();
+
+			public static void Attach(BaseEntity entity, jPipe pipe) {
+
+				jPipeGroundWatch n = entity.gameObject.GetComponent<jPipeGroundWatch>();
+
+				if (n == null) {
+					List<Component> comp = new List<Component>();
+
+					foreach (var c in entity.GetComponents<Component>()) {
+						if (c.GetType().ToString() == "Oxide.Plugins.JPipes.jPipeGroundWatch") {
+							comp.Add(c);
+						}
+					}
+
+					foreach (var c in comp)
+						GameObject.Destroy(c);
+
+					n = entity.gameObject.AddComponent<jPipeGroundWatch>();
+				}
+
+				n.connectedpipes.Add(pipe);
+			}
+		}
+
+		private class jPipeFilterStash : MonoBehaviour {
 
             private Action<BasePlayer> callback;
             private Action<Item> itemcallback;

@@ -1,0 +1,19 @@
+{
+    "name": "LangGen",
+    "description": "Generates language files using the default language strings",
+    "author": "Wulf",
+    "version": "0.1.0",
+    "configuration": false,
+    "require": {
+        "Babel": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/langgen.2168",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

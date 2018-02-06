@@ -16,8 +16,9 @@ using Facepunch;
 
 namespace Oxide.Plugins
 //comments are wide to the right --->
+//reload loop fixed
 {
-    [Info("BotSpawn", "Steenamaroo", "1.4.3", ResourceId = 2580)]
+    [Info("BotSpawn", "Steenamaroo", "1.4.5", ResourceId = 2580)]
     
     [Description("Spawn tailored AI with kits at monuments and custom locations.")]
 
@@ -64,8 +65,6 @@ namespace Oxide.Plugins
             no_of_AI = 0;
             Wipe();
             LoadConfigVariables();
-            if (configData.Options.Cull_Default_Population)
-            Scientist.Population = 0;
         }
         
         void OnServerInitialized()
@@ -757,6 +756,8 @@ namespace Oxide.Plugins
 
             if (npcPlayer == null || entity == null)
             return null;
+            if (entity is NPCPlayer)
+            return null;
             BasePlayer victim = null;
             if (entity is BasePlayer)
             {
@@ -808,7 +809,6 @@ namespace Oxide.Plugins
             return 0f;
             else
             return null;
-
         }
         
         object CanBradleyApcTarget(BradleyAPC bradley, BaseEntity target)                                                                                       //stops bradley targeting bots
@@ -819,7 +819,8 @@ namespace Oxide.Plugins
         }
         
         object OnNpcTarget(BaseNpc npc, BaseEntity entity)                                                                                                      //stops animals targeting bots
-        {                                                                                                                                                       //at present this is not working
+        {
+            Puts("OnNpcTargetFired");                                                                                                                     //at present this is not working
             if (entity is NPCPlayer && configData.Options.Animal_Safe)
             return 0f;
             return null;
@@ -1404,7 +1405,6 @@ namespace Oxide.Plugins
             public bool Animal_Safe { get; set; }
             public int Suicide_Timer { get; set; }
             public bool Supply_Enabled { get; set; }
-            public bool Cull_Default_Population { get; set; }
             public bool Remove_BackPacks { get; set; }
             public bool Ignore_HumanNPC { get; set; }
             public bool Peace_Keeper { get; set; }
@@ -1475,7 +1475,6 @@ namespace Oxide.Plugins
                     Animal_Safe = true,
                     Suicide_Timer = 300,
                     Supply_Enabled = false,
-                    Cull_Default_Population = true,
                     Remove_BackPacks = true,
                     Ignore_HumanNPC = true,
                     Peace_Keeper = true,

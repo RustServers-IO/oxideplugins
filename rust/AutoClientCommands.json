@@ -2,10 +2,10 @@
     "name": "Automatic Client Commands",
     "description": "Automatically run a configurable list of client commands when a player joins the server",
     "author": "k1lly0u",
-    "version": "0.1.0",
-    "configuration": true,
+    "version": "0.1.1",
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/automatic-client-commands.1894",
+    "url": "https:\/\/oxidemod.org\/plugins\/automatic-client-commands.1894",
     "games": [
         "rust"
     ],

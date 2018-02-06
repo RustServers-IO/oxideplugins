@@ -1,11 +1,11 @@
 {
-    "name": "Object Remover",
+    "name": "ObjectRemover",
     "description": "Removes on Chat or console commands furnaces, lanterns, campfires, buildings etc..",
     "author": "Wulf",
     "version": "2.1.7",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/object-remover.1213",
+    "url": "https:\/\/oxidemod.org\/plugins\/objectremover.1213",
     "games": [
         "rust"
     ],

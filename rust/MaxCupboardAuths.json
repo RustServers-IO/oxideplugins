@@ -3,9 +3,9 @@
     "description": "Limit how many tool cupboards each player can authorise to",
     "author": "redBDGR",
     "version": "1.0.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/maxcupboardauths.2368",
+    "url": "https:\/\/oxidemod.org\/plugins\/maxcupboardauths.2368",
     "games": [
         "rust"
     ],

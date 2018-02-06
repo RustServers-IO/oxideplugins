@@ -1,9 +1,9 @@
 {
     "name": "Hotel",
     "description": "Hotel System",
-    "author": "",
+    "author": "FireStorm78",
     "version": "1.1.9",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "HumanNPC": "*",
         "Economics": "*"
@@ -12,7 +12,7 @@
         "ZoneManager": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/hotel.1298",
+    "url": "https:\/\/oxidemod.org\/plugins\/hotel.1298",
     "games": [
         "rust"
     ],

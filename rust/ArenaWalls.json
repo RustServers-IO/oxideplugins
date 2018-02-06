@@ -3,9 +3,9 @@
     "description": "Simple plugin to remove walls, mainly for arena servers.",
     "author": "Kappasaurus",
     "version": "1.0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/arenawalls.2414",
+    "url": "https:\/\/oxidemod.org\/plugins\/arenawalls.2414",
     "games": [
         "rust"
     ],

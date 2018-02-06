@@ -1,11 +1,11 @@
 {
     "name": "StorageWhitelist",
     "description": "Allows only whitelisted items to be put into storage containers",
-    "author": "",
+    "author": "Kaleidos",
     "version": "0.2.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/storagewhitelist.2264",
+    "url": "https:\/\/oxidemod.org\/plugins\/storagewhitelist.2264",
     "games": [
         "rust"
     ],

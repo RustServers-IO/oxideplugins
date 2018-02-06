@@ -7,7 +7,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("CommandRateLimiter", "Calytic", "0.1.1", ResourceId = 1812)]
+    [Info("CommandRateLimiter", "Calytic", "0.1.2", ResourceId = 1812)]
     public class CommandRateLimiter : CovalencePlugin
     {
         private int KickAfter;
@@ -88,7 +88,7 @@ namespace Oxide.Plugins
 
             if (player.IsConnected == false) return null;
 
-            if (arg.isAdmin)
+            if (arg.IsAdmin)
                 return null;
 
             DateTime lastTime;

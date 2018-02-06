@@ -1,11 +1,11 @@
 {
     "name": "InfoPanel",
     "description": "A small panel with in-game clock, online players, sleepers and custom messages, etc.",
-    "author": "Wulf",
+    "author": "Fujikura",
     "version": "0.9.7",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/infopanel.1356",
+    "url": "https:\/\/oxidemod.org\/plugins\/infopanel.1356",
     "games": [
         "rust"
     ],

@@ -3,9 +3,9 @@
     "description": "Wearing a registered item restores your HP",
     "author": "",
     "version": "1.0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/recoveryitems.2091",
+    "url": "https:\/\/oxidemod.org\/plugins\/recoveryitems.2091",
     "games": [
         "rust"
     ],

@@ -1,0 +1,16 @@
+{
+    "name": "BGrade",
+    "description": "Auto update building blocks when placed",
+    "author": "Ryan",
+    "version": "1.0.46",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/bgrade.921",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

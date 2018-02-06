@@ -2,10 +2,10 @@
     "name": "ItemCostCalculator",
     "description": "Automatically Calculates Item Costs based on ingredients",
     "author": "Absolut",
-    "version": "1.0.0",
-    "configuration": true,
+    "version": "1.0.1",
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/itemcostcalculator.2215",
+    "url": "https:\/\/oxidemod.org\/plugins\/itemcostcalculator.2215",
     "games": [
         "rust"
     ],

@@ -1,11 +1,11 @@
 {
-    "name": "Where's My Corpse?",
+    "name": "WheresMyCorpse",
     "description": "Displays direction and distance to corpse after respawn or on command",
     "author": "Fujikura",
     "version": "0.6.1",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/wheres-my-corpse.1777",
+    "url": "https:\/\/oxidemod.org\/plugins\/wheresmycorpse.1777",
     "games": [
         "rust"
     ],

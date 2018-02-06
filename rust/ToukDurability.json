@@ -3,9 +3,9 @@
     "description": "Allow you to configure the durability loss of items.",
     "author": "",
     "version": "1.0.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/toukdurability.1968",
+    "url": "https:\/\/oxidemod.org\/plugins\/toukdurability.1968",
     "games": [
         "rust"
     ],

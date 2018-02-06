@@ -3,12 +3,12 @@
     "description": "Broadcasts players and animals deaths to chat",
     "author": "LaserHydra",
     "version": "5.2.19",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "PopupNotifications": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/death-notes.819",
+    "url": "https:\/\/oxidemod.org\/plugins\/death-notes.819",
     "games": [
         "rust"
     ],

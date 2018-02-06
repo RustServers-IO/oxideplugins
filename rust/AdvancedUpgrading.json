@@ -3,9 +3,9 @@
     "description": "Advanced upgrading that disallows players from upgrading building blocks quickly",
     "author": "Ryan",
     "version": "1.0.0",
-    "configuration": true,
-    "language": "cs\r\n",
-    "url": "http:\/\/oxidemod.org\/plugins\/advancedupgrading.2632",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/advancedupgrading.2632",
     "games": [
         "rust"
     ],

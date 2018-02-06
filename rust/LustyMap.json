@@ -3,7 +3,7 @@
     "description": "In-game map and minimap GUI",
     "author": "k1lly0u",
     "version": "2.1.39",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Clans": "*",
         "Friends": "*"
@@ -12,7 +12,7 @@
         "ImageLibrary": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/lustymap.1333",
+    "url": "https:\/\/oxidemod.org\/plugins\/lustymap.1333",
     "games": [
         "rust"
     ],

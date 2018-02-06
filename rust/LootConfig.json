@@ -3,12 +3,12 @@
     "description": "Allows you to adjust the server's loot list",
     "author": "Nogrod",
     "version": "1.0.28",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "SpawnConfig": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/lootconfig.861",
+    "url": "https:\/\/oxidemod.org\/plugins\/lootconfig.861",
     "games": [
         "rust"
     ],

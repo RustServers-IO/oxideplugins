@@ -3,14 +3,14 @@
     "description": "Players can fly the Patrol Helicopter",
     "author": "Colon Blow",
     "version": "1.1.11",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "FauxAdmin": "*",
         "Vanish": "*",
         "Chute": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/heliride.2274",
+    "url": "https:\/\/oxidemod.org\/plugins\/heliride.2274",
     "games": [
         "rust"
     ],

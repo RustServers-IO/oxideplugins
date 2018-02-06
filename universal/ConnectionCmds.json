@@ -1,0 +1,16 @@
+{
+    "name": "ConnectionCommands",
+    "description": "Runs one or more server command when a player connects\/disconnects",
+    "author": "Wulf",
+    "version": "0.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/connectioncommands.2487",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

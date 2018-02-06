@@ -3,9 +3,9 @@
     "description": "Leaves a Bloodtrail behind you while bleeding",
     "author": "hoppel",
     "version": "1.0.3",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/bloodtrail.2558",
+    "url": "https:\/\/oxidemod.org\/plugins\/bloodtrail.2558",
     "games": [
         "rust"
     ],

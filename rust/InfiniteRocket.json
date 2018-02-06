@@ -3,9 +3,9 @@
     "description": "Infinite time Rocket lifecycle",
     "author": "",
     "version": "0.2.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/infiniterocket.2265",
+    "url": "https:\/\/oxidemod.org\/plugins\/infiniterocket.2265",
     "games": [
         "rust"
     ],

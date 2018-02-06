@@ -7,7 +7,7 @@ using Oxide.Core.Plugins;
 using UnityEngine;
 
 namespace Oxide.Plugins {
-    [Info("ConsoleMessages", "Skrallex", "1.1.1", ResourceId = 2093)]
+    [Info("ConsoleMessages", "Skrallex", "1.1.2", ResourceId = 2093)]
     [Description("Send messages to players with a console command")]
     class ConsoleMessages : RustPlugin {
         bool UsePermissionsOnly = false;
@@ -192,7 +192,7 @@ namespace Oxide.Plugins {
         }
 
         bool IsAllowed(BasePlayer player, string perm) {
-            if(player.IsAdmin() && !UsePermissionsOnly) return true;
+            if(player.IsAdmin && !UsePermissionsOnly) return true;
             if(permission.UserHasPermission(player.UserIDString, adminPerm)) return true;
             if(permission.UserHasPermission(player.UserIDString, perm)) return true;
             return false;

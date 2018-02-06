@@ -3,9 +3,9 @@
     "description": "Displays the given damage to a player in a GUI",
     "author": "",
     "version": "1.6.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/damagedisplay-gui.1811",
+    "url": "https:\/\/oxidemod.org\/plugins\/damagedisplay-gui.1811",
     "games": [
         "rust"
     ],

@@ -3,13 +3,13 @@
     "description": "Gives players RewardPoints for destroying barrels",
     "author": "redBDGR",
     "version": "2.0.8",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "Economics": "*",
         "ServerRewards": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/barrelpoints.2182",
+    "url": "https:\/\/oxidemod.org\/plugins\/barrelpoints.2182",
     "games": [
         "rust"
     ],

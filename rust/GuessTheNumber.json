@@ -3,13 +3,13 @@
     "description": "An event that requires player to guess the correct number",
     "author": "redBDGR",
     "version": "2.0.2",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "ServerRewards": "*",
         "Economics": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/guessthenumber.2023",
+    "url": "https:\/\/oxidemod.org\/plugins\/guessthenumber.2023",
     "games": [
         "rust"
     ],

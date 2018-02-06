@@ -8,7 +8,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Sign Ban", "Tori1157", "1.0.0")]
+    [Info("Sign Ban", "Tori1157", "1.0.1", ResourceId = 2727)]
     [Description("Prevents users from updating signs")]
 
     class SignBan : CovalencePlugin
@@ -21,7 +21,7 @@ namespace Oxide.Plugins
 
         #region Initializing
 
-        [PluginReference] Plugin SignArtist;
+        [PluginReference] Plugin SignArtist, ZoneManager;
 
         private void Init()
         {
@@ -156,7 +156,9 @@ namespace Oxide.Plugins
                 SendChatMessage(player.IPlayer, Lang("Player Try Update", player.UserIDString));
                 return false;
             }
-            return true;
+
+            if (ZoneManager != null && ZMNoSignUpdates(player) == true) return false;
+            else return true;
         }
 
         private bool CanBanSign(IPlayer player)
@@ -247,6 +249,11 @@ namespace Oxide.Plugins
             public static bool IsSignBanned(IPlayer player) => bannedply.ContainsKey(player.Id);
 
             public SignBanInfo() { }
+        }
+
+        private bool ZMNoSignUpdates(BasePlayer player)
+        {
+            return (bool)ZoneManager.CallHook("EntityHasFlag", player, "nosignupdates");
         }
 
         private void LoadData<T>(ref T data, string filename = null) => data = Interface.Oxide.DataFileSystem.ReadObject<T>(filename ?? Name);

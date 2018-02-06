@@ -3,13 +3,13 @@
     "description": "The All-In-One Airdrop toolset",
     "author": "Fujikura",
     "version": "2.7.1",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "GUIAnnouncements": "*",
         "BetterLoot": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/fancydrop.1934",
+    "url": "https:\/\/oxidemod.org\/plugins\/fancydrop.1934",
     "games": [
         "rust"
     ],

@@ -1,11 +1,11 @@
 {
     "name": "HardcoreDeath",
     "description": "Unlearn a random blueprint on death",
-    "author": "Reynostrum",
+    "author": "",
     "version": "1.0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/hardcoredeath.2028",
+    "url": "https:\/\/oxidemod.org\/plugins\/hardcoredeath.2028",
     "games": [
         "rust"
     ],

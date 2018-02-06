@@ -1,15 +1,15 @@
 {
-    "name": "Auto Purge",
+    "name": "AutoPurge",
     "description": "Automatically removes entities created by inactive users",
     "author": "Fujikura",
     "version": "1.6.1",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Clans": "*",
         "Friends": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/auto-purge.1566",
+    "url": "https:\/\/oxidemod.org\/plugins\/autopurge.1566",
     "games": [
         "rust"
     ],

@@ -1,5 +1,6 @@
 /*
 TODO:
+- Add categories settings instead of exclusions?
 - Add weapons option to replace on ammo empty
 - Re-activate slot where item was replaced
 - Refill candle hat fuel when empty
@@ -19,12 +20,20 @@ namespace Oxide.Plugins
         const string permAllow = "replaceonbroken.allow";
 
         List<object> exclusions;
-        bool usePermissions;
+
+        bool sameCategory;
 
         protected override void LoadDefaultConfig()
         {
-            Config["ItemExclusions"] = exclusions = GetConfig("ItemExclusions", new List<object> { "item.shortname", "otheritem.name" });
-            Config["UsePermissions"] = usePermissions = GetConfig("UsePermissions", true);
+            // Options
+            Config["Same Category Only (true/false)"] = sameCategory = GetConfig("Same Category Only (true/false)", true);
+
+            // Settings
+            Config["Item Exclusions"] = exclusions = GetConfig("Item Exclusions", new List<object> { "item.shortname", "otheritem.name" });
+
+            // Cleanup
+            Config.Remove("ItemExclusions");
+            Config.Remove("UsePermissions");
 
             SaveConfig();
         }
@@ -45,13 +54,13 @@ namespace Oxide.Plugins
             if (oldItem.condition > amount || exclusions.Contains(oldItem.info.shortname)) return;
 
             var player = oldItem.parent.playerOwner;
-            if (player == null) return;
-
-            if (usePermissions && !permission.UserHasPermission(player.UserIDString, permAllow)) return;
+            if (player == null || !permission.UserHasPermission(player.UserIDString, permAllow)) return;
 
             var main = player.inventory.containerMain;
             foreach (var newItem in main.itemList)
             {
+                if (newItem.info.category != oldItem.info.category) continue;
+
                 var newItemPosition = newItem.position;
                 timer.Once(0.1f, () => oldItem.MoveToContainer(main, newItemPosition));
                 break;

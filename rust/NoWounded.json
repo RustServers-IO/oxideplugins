@@ -1,0 +1,16 @@
+{
+    "name": "NoWounded",
+    "description": "Removes the wounded state for players",
+    "author": "k1lly0u",
+    "version": "0.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/nowounded.2393",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

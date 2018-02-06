@@ -3,9 +3,9 @@
     "description": "Gives players health when they damage someone",
     "author": "redBDGR",
     "version": "1.0.3",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/lifestealer.2357",
+    "url": "https:\/\/oxidemod.org\/plugins\/lifestealer.2357",
     "games": [
         "rust"
     ],

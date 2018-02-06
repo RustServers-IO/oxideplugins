@@ -3,9 +3,9 @@
     "description": "Removes default radiation zones, for use with plugins that enable server radiation",
     "author": "k1lly0u",
     "version": "0.1.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/remove-default-radiation.2045",
+    "url": "https:\/\/oxidemod.org\/plugins\/remove-default-radiation.2045",
     "games": [
         "rust"
     ],

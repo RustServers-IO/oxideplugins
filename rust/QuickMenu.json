@@ -3,9 +3,9 @@
     "description": "A easily accessible menu that contains configurable buttons.",
     "author": "Xianith",
     "version": "0.0.7",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/quick-menu.2419",
+    "url": "https:\/\/oxidemod.org\/plugins\/quick-menu.2419",
     "games": [
         "rust"
     ],

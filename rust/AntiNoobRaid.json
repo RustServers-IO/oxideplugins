@@ -2,13 +2,13 @@
     "name": "AntiNoobRaid",
     "description": "Blocks raiding of new players",
     "author": "Slydelix",
-    "version": "1.4",
-    "configuration": true,
+    "version": "1.5",
+    "configuration": false,
     "require": {
         "PlaytimeTracker": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/antinoobraid.2697",
+    "url": "https:\/\/oxidemod.org\/plugins\/antinoobraid.2697",
     "games": [
         "rust"
     ],

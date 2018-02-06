@@ -1,0 +1,18 @@
+{
+    "name": "Oxide",
+    "description": "Teleports players with permission to object or terrain they are looking at",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/portgun.664",
+    "games": [
+        "hurtworld",
+        "reignofkings"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld",
+        "reignofkings"
+    ]
+}

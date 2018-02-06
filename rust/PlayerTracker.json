@@ -3,9 +3,9 @@
     "description": "Easily track the movements of players",
     "author": "redBDGR",
     "version": "1.0.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/playertracker.2584",
+    "url": "https:\/\/oxidemod.org\/plugins\/playertracker.2584",
     "games": [
         "rust"
     ],

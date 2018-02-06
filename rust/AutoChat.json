@@ -3,7 +3,7 @@
     "description": "Automatic clans\/private chat switching",
     "author": "Frenk92",
     "version": "0.4.9",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "BetterChat": "*",
         "Clans": "*",
@@ -11,7 +11,7 @@
         "Friends": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/autochat.2230",
+    "url": "https:\/\/oxidemod.org\/plugins\/autochat.2230",
     "games": [
         "rust"
     ],

@@ -3,9 +3,9 @@
     "description": "Customize the Say console command output as you want",
     "author": "LaserHydra",
     "version": "2.0.4",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/better-say-command.998",
+    "url": "https:\/\/oxidemod.org\/plugins\/better-say-command.998",
     "games": [
         "rust"
     ],

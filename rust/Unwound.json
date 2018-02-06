@@ -3,13 +3,13 @@
     "description": "The sky presents the newest technology in calling the MEDIC!",
     "author": "Wulf",
     "version": "1.0.11",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "Economics": "*",
         "ZoneManager": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/unwound.1352",
+    "url": "https:\/\/oxidemod.org\/plugins\/unwound.1352",
     "games": [
         "rust"
     ],

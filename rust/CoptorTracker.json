@@ -2,10 +2,10 @@
     "name": "Coptor Tracker",
     "description": "Spawns helicopters based on a timer, sets a lifetime, and announcements",
     "author": "k1lly0u",
-    "version": "1.6.6",
-    "configuration": true,
+    "version": "1.6.7",
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/coptor-tracker.1468",
+    "url": "https:\/\/oxidemod.org\/plugins\/coptor-tracker.1468",
     "games": [
         "rust"
     ],

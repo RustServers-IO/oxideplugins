@@ -3,9 +3,9 @@
     "description": "Rock Paper Scissors game",
     "author": "PaiN",
     "version": "0.3.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/rps-battles.1929",
+    "url": "https:\/\/oxidemod.org\/plugins\/rps-battles.1929",
     "games": [
         "rust"
     ],

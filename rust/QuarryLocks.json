@@ -3,9 +3,9 @@
     "description": "Ads customizable locks to a quarry",
     "author": "DylanSMR",
     "version": "1.0.5",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/quarrylocks.1819",
+    "url": "https:\/\/oxidemod.org\/plugins\/quarrylocks.1819",
     "games": [
         "rust"
     ],

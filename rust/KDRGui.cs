@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("KDRGui", "Ankawi/LaserHydra", "1.0.7", ResourceId = 2042)]
+    [Info("KDRGui", "Ankawi/LaserHydra", "2.0.1", ResourceId = 2042)]
     [Description("GUI that portrays kills, deaths, player name, and K/D Ratio")]
     class KDRGui : RustPlugin
     {
@@ -260,7 +260,6 @@ namespace Oxide.Plugins
         {
             PlayerData.TryLoad(player);
         }
-
         //void LoadSleeperData()
         //{
         //    var sleepers = BasePlayer.sleepingPlayerList;
@@ -355,36 +354,42 @@ namespace Oxide.Plugins
         void DrawKDRWindow(BasePlayer player)
         {
             UIObject ui = new UIObject();
-            string panel = ui.AddPanel("panel1", 0.0132382892057026, 0.0285714285714286, 0.958248472505092, 0.874285714285714, new UIColor(0.85, 0.85, 0.85, 0.6), true, "Overlay");
-            ui.AddText("list", 0.0626992561105207, 0.250544662309368, 0.83740701381509, 0.697167755991285, new UIColor(0, 0, 1, 1), GetTopList(), 20, panel, 7);
-            ui.AddText("label4", 0.390148777895855, 0.163398692810458, 0.18384697130712, 0.0610021786492375, new UIColor(0, 0, 0, 1), "K/D Ratio", 24, panel, 7);
-            ui.AddText("label3", 0.223358129649309, 0.163398692810458, 0.188097768331562, 0.0610021786492375, new UIColor(0, 0, 0, 1), "Deaths", 24, panel, 7);
-            ui.AddText("label2", 0.0541976620616366, 0.163398692810458, 0.16365568544102, 0.0610021786492375, new UIColor(0, 0, 0, 1), "Kills", 24, panel, 7);
-            ui.AddText("label1", 0.552444208289054, 0.163398692810458, 0.197662061636557, 0.0610021786492375, new UIColor(0, 0, 0, 1), "Player Name", 24, panel, 7);
-            string close = ui.AddButton("button1", 0.872476089266737, 0.0479302832244009, 0.0924548352816153, 0.0915032679738562, new UIColor(1, 0, 0, 1), "", panel, panel);
-            ui.AddText("button1_Text", 0, 0, 1, 1, new UIColor(0.93, 23, 23, 0.9), "Close", 18, close, 3);
-
-            //old alignment //ignore this
-            //string panel = ui.AddPanel("panel1", 0.0132382892057026, 0.0285714285714286, 0.958248472505092, 0.874285714285714, new UIColor(0.501960784313725, 0.501960784313725, 0.501960784313725, 1), true, "Overlay");
-            //ui.AddText("list", 0.0626992561105207, 0.250544662309368, 0.83740701381509, 0.697167755991285, new UIColor(0, 1, 1, 1), GetTopList(), 20, panel, 7);
-            //ui.AddText("label4", 0.390148777895855, 0.163398692810458, 0.0924548352816153, 0.0610021786492375, new UIColor(0, 0, 0, 1), "K/D Ratio", 24, panel, 7);
-            //ui.AddText("label3", 0.223358129649309, 0.163398692810458, 0.0786397449521785, 0.0610021786492375, new UIColor(0, 0, 0, 1), "Deaths", 24, panel, 7);
-            //ui.AddText("label2", 0.0541976620616366, 0.163398692810458, 0.0478214665249734, 0.0610021786492375, new UIColor(0, 0, 0, 1), "Kills", 24, panel, 7);
-            //ui.AddText("label1", 0.552444208289054, 0.163398692810458, 0.126461211477152, 0.0610021786492375, new UIColor(0, 0, 0, 1), "Player Name", 24, panel, 7);
-            //string close = ui.AddButton("button1", 0.872476089266737, 0.0479302832244009, 0.0924548352816153, 0.0915032679738562, new UIColor(1, 0, 0, 1), "", panel, panel);
-            //ui.AddText("button1_Text", 0, 0, 1, 1, new UIColor(0.93, 23, 23, 0.9), "Close", 18, close, 3);
+            string panel = ui.AddPanel("panel1", 0.0132382892057026, 0.0285714285714286, 0.958248472505092, 0.874285714285714, new UIColor(0, 0, 0, 1), true, "Overlay");
+            ui.AddText("label8", 0.675876726886291, 0.248366013071895, 0.272051009564293, 0.718954248366013, new UIColor(1, 1, 1, 1), GetNames(), 24, panel, 7);
+            ui.AddText("label7", 0.483528161530287, 0.248366013071895, 0.0563230605738576, 0.718954248366013, new UIColor(1, 1, 1, 1), GetKDRs(), 24, panel, 6);
+            ui.AddText("label6", 0.269925611052072, 0.248366013071895, 0.0456960680127524, 0.718954248366013, new UIColor(1, 1, 1, 1), GetDeaths(), 24, panel, 6);
+            ui.AddText("label5", 0.0786397449521785, 0.248366013071895, 0.0456960680127524, 0.718954248366013, new UIColor(1, 1, 1, 1), GetTopKills(), 24, panel, 6);
+            string close = ui.AddButton("button1", 0.849096705632306, 0.0326797385620915, 0.124335812964931, 0.0871459694989107, new UIColor(1, 0, 0, 1), "", panel, panel);
+            ui.AddText("button1_Text", 0, 0, 1, 1, new UIColor(0, 0, 0, 1), "Close", 19, close, 3);
+            ui.AddText("label4", 0.470775770456961, 0.163398692810458, 0.0935175345377258, 0.0610021786492375, new UIColor(1, 0, 0, 1), "K/D Ratio", 24, panel, 7);
+            ui.AddText("label3", 0.260361317747078, 0.163398692810458, 0.0722635494155154, 0.0610021786492375, new UIColor(1, 0, 0, 1), "Deaths", 24, panel, 7);
+            ui.AddText("label2", 0.0786397449521785, 0.163398692810458, 0.0467587672688629, 0.0610021786492375, new UIColor(1, 0, 0, 1), "Kills", 24, panel, 7);
+            ui.AddText("label1", 0.675876726886291, 0.163398692810458, 0.125398512221041, 0.0610021786492375, new UIColor(1, 0, 0, 1), "Player Name", 24, panel, 7);
 
             ui.Draw(player);
-
             UsedUI.Add(ui);
         }
-
-        string GetTopList()
+        private void LoadSleepers()
         {
             foreach (BasePlayer player in BasePlayer.sleepingPlayerList)
                 PlayerData.TryLoad(player);
-
-            return string.Join("\n", LoadedPlayerData.OrderByDescending((d) => d.kills).Select((d) => $"{d.kills}                                                {d.deaths}                                                {d.KDR.ToString("0.00")}                                              {d.name}").Take(15).ToArray());
+        }
+        string GetTopKills()
+        {
+            LoadSleepers();
+            return string.Join("\n", LoadedPlayerData.OrderByDescending((d) => d.kills).Select((d) => $"{d.kills}").Take(15).ToArray());
+        }
+        string GetDeaths()
+        {
+            return string.Join("\n", LoadedPlayerData.OrderByDescending((d) => d.kills).Select((d) => $"{d.deaths}").Take(15).ToArray());
+        }
+        string GetKDRs()
+        {
+            return string.Join("\n", LoadedPlayerData.OrderByDescending((d) => d.kills).Select((d) => $"{d.KDR}").Take(15).ToArray());
+        }
+        string GetNames()
+        {
+            return string.Join("\n", LoadedPlayerData.OrderByDescending((d) => d.kills).Select((d) => $"{d.name}").Take(15).ToArray());
         }
         #endregion
 

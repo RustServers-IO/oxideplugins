@@ -3,9 +3,9 @@
     "description": "Change gatherable items and amounts",
     "author": "Nogrod",
     "version": "1.0.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/gatherconfig.1569",
+    "url": "https:\/\/oxidemod.org\/plugins\/gatherconfig.1569",
     "games": [
         "rust"
     ],

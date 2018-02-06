@@ -1,0 +1,16 @@
+{
+    "name": "ChatCleaner",
+    "description": "Clears\/resets a player's chat when joining the server and on command",
+    "author": "Wulf",
+    "version": "0.4.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/chatcleaner.1183",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

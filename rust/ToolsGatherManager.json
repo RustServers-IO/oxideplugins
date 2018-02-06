@@ -3,9 +3,9 @@
     "description": "Modifies the gather rate from certain tools",
     "author": "hoppel",
     "version": "1.0.5",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/toolsgathermanager.2553",
+    "url": "https:\/\/oxidemod.org\/plugins\/toolsgathermanager.2553",
     "games": [
         "rust"
     ],

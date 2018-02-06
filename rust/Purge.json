@@ -1,11 +1,11 @@
 {
-    "name": "The Purge",
+    "name": "ThePurge",
     "description": "Allows damage and killing only between specified hours",
     "author": "Wulf",
     "version": "1.2.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/the-purge.1102",
+    "url": "https:\/\/oxidemod.org\/plugins\/thepurge.1102",
     "games": [
         "rust"
     ],

@@ -3,9 +3,9 @@
     "description": "Use the hammer to display info about entities\/authorization",
     "author": "mvrb",
     "version": "1.1.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/adminhammer.2237",
+    "url": "https:\/\/oxidemod.org\/plugins\/adminhammer.2237",
     "games": [
         "rust"
     ],

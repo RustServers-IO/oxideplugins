@@ -3,7 +3,7 @@
     "description": "Team Deathmatch event for EventManager",
     "author": "k1lly0u",
     "version": "0.3.52",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "EventManager": "*",
         "ZoneManager": "*",
@@ -11,7 +11,7 @@
         "Kits": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/team-deathmatch.1484",
+    "url": "https:\/\/oxidemod.org\/plugins\/team-deathmatch.1484",
     "games": [
         "rust"
     ],

@@ -1,0 +1,16 @@
+{
+    "name": "ConnectMessages",
+    "description": "Provides connect and disconnect messages.",
+    "author": "Spicy",
+    "version": "1.1.9",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/connectmessages.2178",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

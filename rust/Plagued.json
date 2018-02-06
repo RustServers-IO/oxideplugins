@@ -1,11 +1,11 @@
 {
     "name": "Plagued",
     "description": "A plague has decimated the world's population, avoid others players to stay alive",
-    "author": "",
-    "version": "0.3.3",
-    "configuration": true,
+    "author": "Wulf",
+    "version": "0.3.4",
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/plagued.1991",
+    "url": "https:\/\/oxidemod.org\/plugins\/plagued.1991",
     "games": [
         "rust"
     ],

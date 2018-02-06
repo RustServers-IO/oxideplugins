@@ -1,11 +1,11 @@
 {
-    "name": "Magazin Booster",
+    "name": "MagazinBooster",
     "description": "Can change magazines, ammo and conditon for most projectile weapons",
     "author": "Fujikura",
     "version": "1.6.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/magazin-booster.1962",
+    "url": "https:\/\/oxidemod.org\/plugins\/magazinbooster.1962",
     "games": [
         "rust"
     ],

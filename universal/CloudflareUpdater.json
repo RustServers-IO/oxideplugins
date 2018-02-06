@@ -1,0 +1,16 @@
+{
+    "name": "CloudflareUpdater",
+    "description": "Updates your Cloudflare domains with your server's IP",
+    "author": "PsychoTea",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/cloudflareupdater.2385",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

@@ -2,8 +2,8 @@
     "name": "PlayerReport GUI",
     "description": "Plugin to report your killer",
     "author": "hoppel",
-    "version": "1.0.7",
-    "configuration": true,
+    "version": "1.0.8",
+    "configuration": false,
     "suggest": {
         "DiscordMessages": "*"
     },
@@ -11,7 +11,7 @@
         "Tickets": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/playerreport-gui.2635",
+    "url": "https:\/\/oxidemod.org\/plugins\/playerreport-gui.2635",
     "games": [
         "rust"
     ],

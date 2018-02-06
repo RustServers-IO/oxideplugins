@@ -1,0 +1,16 @@
+{
+    "name": "SmallShelves",
+    "description": "Allow players to place smaller shelves",
+    "author": "redBDGR",
+    "version": "1.0.1",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/smallshelves.2772",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

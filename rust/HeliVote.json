@@ -3,9 +3,9 @@
     "description": "Allows players to open a vote to call helicopters",
     "author": "k1lly0u",
     "version": "0.1.32",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/helivote.1665",
+    "url": "https:\/\/oxidemod.org\/plugins\/helivote.1665",
     "games": [
         "rust"
     ],

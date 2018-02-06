@@ -3,12 +3,12 @@
     "description": "Shows a crosshair on the screen",
     "author": "",
     "version": "1.0.78",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "ImageLibrary": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/showcrosshair.2057",
+    "url": "https:\/\/oxidemod.org\/plugins\/showcrosshair.2057",
     "games": [
         "rust"
     ],

@@ -1,13 +1,26 @@
-﻿using Oxide.Core;
+﻿/// <summary>
+/// Author: S0N_0F_BISCUIT
+/// Permissions:
+///		masterlock.toggle - Gives players the ability to use the masterlock command
+///		masterlock.doorcontrol - Gives player the ability to use open/close doors commands
+///	Chat Commands:
+///		/masterlock - Toggles master lock on or off
+///		/opendoors - Opens all doors linked with the master lock
+///		/closedoors - Closes all doors linked with the master lock
+/// </summary>
+using Oxide.Core;
+using Oxide.Core.Plugins;
 using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-	[Info("MasterLock", "S0N_0F_BISCUIT", "1.0.0", ResourceId = 0)]
+	[Info("MasterLock", "S0N_0F_BISCUIT", "1.0.1", ResourceId = 2746)]
 	[Description("Control all locks in a base with the tool cupboard.")]
 	class MasterLock : RustPlugin
 	{
 		#region Variables
+		[PluginReference]
+		Plugin GameTipAPI;
 		/// <summary>
 		/// Data saved by the plugin
 		/// </summary>
@@ -18,6 +31,7 @@ namespace Oxide.Plugins
 		}
 
 		private StoredData data;
+		private bool initialized = false;
 		#endregion
 
 		#region Localization
@@ -39,7 +53,9 @@ namespace Oxide.Plugins
 				["RemoveAuthorization"] = "Deauthorized {0} on {1} lock(s).",
 				["NotEnabled"] = "Master lock is not enabled.",
 				["OpenedDoors"] = "Opened {0} doors.",
-				["ClosedDoors"] = "Closed {0} doors."
+				["ClosedDoors"] = "Closed {0} doors.",
+				["AddLock"] = "Add a code lock to use master lock.",
+				["UseCommand"] = "Use /masterlock to enable master lock"
 			}, this);
 		}
 		#endregion
@@ -63,6 +79,37 @@ namespace Oxide.Plugins
 		{
 			// Restore data
 			FindBuildingPrivileges();
+			initialized = true;
+		}
+		#endregion
+
+		#region Config Handling
+		/// <summary>
+		/// Load default config file
+		/// </summary>
+		protected override void LoadDefaultConfig()
+		{
+			Config["Display Tooltips"] = ConfigValue("Display Tooltips");
+
+			SaveConfig();
+		}
+		/// <summary>
+		/// Get stored config value
+		/// </summary>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		private object ConfigValue(string value)
+		{
+			switch (value)
+			{
+				case "Display Tooltips":
+					if (Config[value] == null)
+						return true;
+					else
+						return Config[value];
+				default:
+					return null;
+			}
 		}
 		#endregion
 
@@ -250,6 +297,8 @@ namespace Oxide.Plugins
 		/// <param name="entity"></param>
 		void OnEntitySpawned(BaseNetworkable entity)
 		{
+			if (!initialized)
+				return;
 			if (entity is CodeLock)
 			{
 				CodeLock codeLock = entity as CodeLock;
@@ -271,6 +320,11 @@ namespace Oxide.Plugins
 						}
 					}
 				}
+			}
+			else if (entity is BuildingPrivlidge && (bool)Config["Display Tooltips"])
+			{
+				BasePlayer player = BasePlayer.FindByID((entity as BuildingPrivlidge).OwnerID);
+				ShowGameTip(player, Lang("AddLock", player.UserIDString));
 			}
 		}
 		/// <summary>
@@ -331,11 +385,17 @@ namespace Oxide.Plugins
 			{
 				BuildingPrivlidge privilege = codeLock.GetParentEntity() as BuildingPrivlidge;
 				if (data.buildings.ContainsKey(privilege.net.ID))
+				{
 					if (data.buildings[privilege.net.ID] && !isGuestCode)
 					{
 						uint count = UpdateCode(privilege, newCode);
 						player.ChatMessage(Lang("CodeUpdate", player.UserIDString, count));
 					}
+					else if (!data.buildings[privilege.net.ID] && !isGuestCode && (bool)Config["Display Tooltips"])
+						ShowGameTip(BasePlayer.FindByID(privilege.OwnerID), Lang("UseCommand", player.UserIDString));
+				}
+				else if ((bool)Config["Display Tooltips"])
+					ShowGameTip(BasePlayer.FindByID(privilege.OwnerID), Lang("UseCommand", player.UserIDString));
 			}
 		}
 		#endregion
@@ -626,6 +686,25 @@ namespace Oxide.Plugins
 					}
 				}
 				player.ChatMessage(Lang("ClosedDoors", player.UserIDString, doorCount));
+			}
+		}
+		/// <summary>
+		/// Display a game tip to the given player
+		/// </summary>
+		/// <param name="player"></param>
+		/// <param name="tip"></param>
+		private void ShowGameTip(BasePlayer player, string tip)
+		{
+			if (player == null)
+				return;
+
+			if (GameTipAPI)
+				GameTipAPI.CallHook("ShowGameTip", player, tip, 5f);
+			else
+			{
+				player.SendConsoleCommand("gametip.hidegametip");
+				player.SendConsoleCommand("gametip.showgametip", tip);
+				timer.Once(5f, () => player?.SendConsoleCommand("gametip.hidegametip"));
 			}
 		}
 		#endregion

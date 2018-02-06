@@ -3,9 +3,9 @@
     "description": "Remove fractional ownership from items when picked up or dropped for admins\/players with permission",
     "author": "k1lly0u",
     "version": "0.1.3",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/noadminownership.2019",
+    "url": "https:\/\/oxidemod.org\/plugins\/noadminownership.2019",
     "games": [
         "rust"
     ],

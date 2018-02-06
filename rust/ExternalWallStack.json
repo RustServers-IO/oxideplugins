@@ -1,14 +1,14 @@
 {
     "name": "External Wall Stacking",
     "description": "Allows the player to stack high external walls.",
-    "author": "Dyceman",
-    "version": "1.0.0",
-    "configuration": true,
+    "author": "",
+    "version": "1.0.1",
+    "configuration": false,
     "suggest": {
         "RemoverTool": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/external-wall-stacking.2190",
+    "url": "https:\/\/oxidemod.org\/plugins\/external-wall-stacking.2190",
     "games": [
         "rust"
     ],

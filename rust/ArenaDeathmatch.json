@@ -3,13 +3,13 @@
     "description": "Deathmatch event for EventManager",
     "author": "k1lly0u",
     "version": "1.2.22",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "EventManager": "*",
         "Kits": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/deathmatch.741",
+    "url": "https:\/\/oxidemod.org\/plugins\/deathmatch.741",
     "games": [
         "rust"
     ],

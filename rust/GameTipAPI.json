@@ -1,0 +1,16 @@
+{
+    "name": "Game Tip API",
+    "description": "API for displaying queued gametips to players.",
+    "author": "S0N_0F_BISCUIT",
+    "version": "1.0.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/game-tip-api.2759",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

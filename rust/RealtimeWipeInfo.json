@@ -2,13 +2,13 @@
     "name": "RealtimeWipeInfo",
     "description": "Auto title & description updating, auto wipe schedule, chat filter & more!",
     "author": "Ryan",
-    "version": "2.1.1",
-    "configuration": true,
+    "version": "2.1.3",
+    "configuration": false,
     "suggest": {
         "BetterChat": "*"
     },
-    "language": "cs\r\n",
-    "url": "http:\/\/oxidemod.org\/plugins\/realtimewipeinfo.2473",
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/realtimewipeinfo.2473",
     "games": [
         "rust"
     ],

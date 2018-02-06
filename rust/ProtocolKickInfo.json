@@ -1,11 +1,11 @@
 {
-    "name": "Protocol Kick Inmation",
+    "name": "ProtocolKickInformation",
     "description": "Customize disconnect info for being kicked by wrong protocol version",
     "author": "Fujikura",
     "version": "1.0.3",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/protocol-kick-information.2041",
+    "url": "https:\/\/oxidemod.org\/plugins\/protocolkickinformation.2041",
     "games": [
         "rust"
     ],

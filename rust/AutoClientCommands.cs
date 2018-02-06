@@ -2,7 +2,7 @@
 
 namespace Oxide.Plugins
 {
-    [Info("Automatic Client Commands", "k1lly0u", "0.1.0", ResourceId = 0)]
+    [Info("Automatic Client Commands", "k1lly0u", "0.1.1", ResourceId = 0)]
     class AutoClientCommands : RustPlugin
     {
         #region Oxide Hooks
@@ -32,7 +32,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("addcommand")]
         private void ccmdAddCommand(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null)
+            if (arg.Connection == null)
             {
                 if (arg.Args != null && arg.Args.Length > 0)
                 {
@@ -45,7 +45,7 @@ namespace Oxide.Plugins
         [ConsoleCommand("removecommand")]
         private void ccmdRemoveCommand(ConsoleSystem.Arg arg)
         {
-            if (arg.connection == null)
+            if (arg.Connection == null)
             {
                 if (arg.Args != null && arg.Args.Length > 0)
                 {

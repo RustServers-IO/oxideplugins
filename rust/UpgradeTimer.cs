@@ -10,15 +10,15 @@ using Oxide.Core.Configuration;
 
 namespace Oxide.Plugins
 {
-    [Info("UpgradeTimer", "Jake_Rich", "1.0.1", ResourceId = 2740)]
+    [Info("UpgradeTimer", "Jake_Rich", "2.0.0", ResourceId = 2740)]
     [Description("Time limit to upgrade twig after it has been placed")]
 
     public class UpgradeTimer : RustPlugin
     {
         public static UpgradeTimer _plugin;
-        public JSONFile<ConfigData> _settingsFile;
-        public ConfigData Settings { get { return _settingsFile.Instance; } }
-        public PlayerDataController<TemplatePlayerData> PlayerData;
+        public static JSONFile<ConfigData> _settingsFile;
+        public static ConfigData Settings { get { return _settingsFile.Instance; } }
+        public Dictionary<BaseEntity,EntityData> EntityDictionary;
 
         void Init()
         {
@@ -28,32 +28,137 @@ namespace Oxide.Plugins
         void Loaded()
         {
             _settingsFile = new JSONFile<ConfigData>($"{Name}", ConfigLocation.Config, extension: ".cfg");
-            PlayerData = new PlayerDataController<TemplatePlayerData>();
+            EntityDictionary = new Dictionary<BaseEntity, EntityData>();
         }
 
         void Unload()
         {
-            PlayerData.Unload();
+
         }
 
         public class ConfigData
         {
             public int UpgradeDelay = 10;
+            public int WoodUpgradeDelay = 3 * 60;
+            public int StoneUpgradeDelay = 10 * 60;
+            public int MetalUpgradeDelay = 20 * 60;
+            public int ArmouredUpgradeDelay = 30 * 60;
+            public float ExplosiveDamageDelay = 90f;
+            public float NormalDamageDelay = 10f;
+
+            public Dictionary<string, int> EntityUpgradeTime = new Dictionary<string, int>()
+            {
+                { "wall.external.high.stone", 20 * 60},
+                { "wall.external.high.wood",  10 * 60},
+                { "gates.external.high.stone", 20 * 60},
+                { "gates.external.high.wood", 10 * 60},
+                { "door.hinged.wood", 3 * 60},
+                { "door.hinged.metal", 10 * 60},
+                { "door.hinged.toptier", 20 * 60},
+                { "door.double.hinged.wood", 3 * 60},
+                { "door.double.hinged.metal", 10 * 60},
+                { "door.double.hinged.toptier", 20 * 60},
+                { "wall.frame.garagedoor", 10 * 60},
+            };
         }
 
-        public class TemplatePlayerData : BasePlayerData
+        public class EntityData
         {
+            public BaseCombatEntity Entity;
+            public Timer timer;
+            public int TimerRate = 6;
+            public float NextRepairTime;
+            public float NextUpgradeTime;
 
+            public EntityData(BaseCombatEntity block)
+            {
+                Entity = block;
+            }
+
+            public void ResetTimer()
+            {
+                StartTimer();
+            }
+
+            public void StartTimer()
+            {
+                NextRepairTime = Mathf.Max(UnityEngine.Time.time + TimerRate + 4, NextRepairTime);
+                timer?.Destroy();
+                timer = _plugin.timer.Every(TimerRate, TimerLoop);
+            }
+
+            private void TimerLoop()
+            {
+                if (Entity == null)
+                {
+                    return;
+                }
+                NextRepairTime = Mathf.Max(UnityEngine.Time.time + TimerRate + 4, NextRepairTime);
+                float rate = 0;
+                if (Entity is BuildingBlock)
+                {
+                    switch (((BuildingBlock)Entity).grade)
+                    {
+                        case BuildingGrade.Enum.Wood: { rate = Settings.WoodUpgradeDelay; break; }
+                        case BuildingGrade.Enum.Stone: { rate = Settings.StoneUpgradeDelay; break; }
+                        case BuildingGrade.Enum.Metal: { rate = Settings.MetalUpgradeDelay; break; }
+                        case BuildingGrade.Enum.TopTier: { rate = Settings.ArmouredUpgradeDelay; break; }
+                        default: { return; }
+                    }
+                }
+                int amount;
+                if (Settings.EntityUpgradeTime.TryGetValue(Entity.ShortPrefabName, out amount))
+                {
+                    rate = amount;
+                }
+                Entity.healthFraction = Mathf.Min(1f, Entity.healthFraction + (TimerRate / rate));
+                if (Entity.healthFraction >= 1f)
+                {
+                    Destroy();
+                }
+                if (!(Entity is BuildingBlock))
+                {
+                    Entity.SendNetworkUpdate();
+                }
+            }
+
+            public void Destroy()
+            {
+                timer?.Destroy();
+            }
+        }
+
+        public EntityData GetEntityData(BaseCombatEntity entity)
+        {
+            EntityData data;
+            if (!EntityDictionary.TryGetValue(entity, out data))
+            {
+                data = new EntityData(entity);
+                EntityDictionary.Add(entity, data);
+            }
+            return data;
         }
 
         void OnEntityBuilt(Planner plan, GameObject go)
         {
-            BaseCombatEntity entity = go.ToBaseEntity() as BuildingBlock;
+            BaseCombatEntity entity = go.ToBaseEntity() as BaseCombatEntity;
 
             if (entity == null)
             {
                 return;
             }
+
+            if (Settings.EntityUpgradeTime.ContainsKey(entity.ShortPrefabName) == false)
+            {
+                return;
+            }
+
+            var data = GetEntityData(entity);
+            entity.healthFraction = (float)data.TimerRate / Settings.EntityUpgradeTime[entity.ShortPrefabName];
+            entity.SendNetworkUpdate();
+            data.StartTimer();
+
+            return;
 
             Timer _timer = null;
             entity.healthFraction = 0;
@@ -70,10 +175,10 @@ namespace Oxide.Plugins
                 if (_timer.Repetitions == 0)
                 {
                     entity.lastAttackedTime = 0;
-                    timers.Remove(entity);
+                    //timers.Remove(entity);
                 }
             });
-            timers.Add(entity, _timer);
+            //timers.Add(entity, _timer);
         }
 
         void OnEntityKill(BaseNetworkable net)
@@ -83,133 +188,70 @@ namespace Oxide.Plugins
             {
                 return;
             }
-            Timer _timer;
-            if (!timers.TryGetValue(entity, out _timer))
+            if (entity is BuildingBlock || Settings.EntityUpgradeTime.ContainsKey(net.ShortPrefabName))
             {
-                return;
-            }
-            _timer?.Destroy();
-            timers.Remove(entity);
-        }
-
-         void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
-         {
-            if (!(entity is BuildingBlock))
-            {
-                return;
-            }
-            Timer _timer;
-            if (!timers.TryGetValue(entity, out _timer))
-            {
-                return;
-            }
-            _timer?.Destroy();
-            timers.Remove(entity);
-         }
-
-        public Dictionary<BaseCombatEntity, Timer> timers = new Dictionary<BaseCombatEntity, Timer>();
-
-
-        #region PlayerData
-
-        public class BasePlayerData
-        {
-            [JsonIgnore]
-            public BasePlayer Player { get; set; }
-
-            public string userID { get; set; } = "";
-
-            public BasePlayerData()
-            {
-
-            }
-            public BasePlayerData(BasePlayer player) : base()
-            {
-                userID = player.UserIDString;
-                Player = player;
+                GetEntityData(entity).Destroy();
+                EntityDictionary.Remove(entity);
             }
         }
 
-        public class PlayerDataController<T> where T : BasePlayerData
+        void OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
-            [JsonPropertyAttribute(Required = Required.Always)]
-            private Dictionary<string, T> playerData { get; set; } = new Dictionary<string, T>();
-            private JSONFile<Dictionary<string, T>> _file;
-            private Timer _timer;
-            public IEnumerable<T> All { get { return playerData.Values; } }
-
-            public PlayerDataController()
+            if ((entity is BuildingBlock || Settings.EntityUpgradeTime.ContainsKey(entity.ShortPrefabName)) == false)
             {
-
+                return;
             }
-
-            public PlayerDataController(string filename = null)
+            var data = GetEntityData(entity);
+            if (info.damageTypes.Has(Rust.DamageType.Explosion))
             {
-                if (filename == null)
+                data.Destroy();
+                data.NextRepairTime = Mathf.Max(UnityEngine.Time.time + Settings.ExplosiveDamageDelay, data.NextRepairTime);
+                data.NextUpgradeTime = data.NextRepairTime;
+                return;
+            }
+            if (info.damageTypes.Has(Rust.DamageType.Decay))
+            {
+                return;
+            }
+            data.NextRepairTime = Mathf.Max(UnityEngine.Time.time + Settings.NormalDamageDelay, data.NextRepairTime);
+            data.NextUpgradeTime = data.NextRepairTime;
+            data.ResetTimer();
+        }
+
+        object OnStructureUpgrade(BuildingBlock block, BasePlayer player, BuildingGrade.Enum grade)
+        {
+            var data = GetEntityData(block);
+            if (data.NextUpgradeTime > UnityEngine.Time.time)
+            {
+                return false;
+            }
+            float oldHealth = block.health;
+            NextFrame(() =>
+            {
+                if (block == null)
                 {
                     return;
                 }
-                _file = new JSONFile<Dictionary<string, T>>(filename);
-                _timer = _plugin.timer.Every(120f, () =>
-                {
-                    _file.Save();
-                });
-            }
-
-            public void Unload()
-            {
-                if (_file == null)
-                {
-                    return;
-                }
-                _file.Save();
-            }
-
-            public T Get(string identifer)
-            {
-                T data;
-                if (!playerData.TryGetValue(identifer, out data))
-                {
-                    data = Activator.CreateInstance<T>();
-                    playerData[identifer] = data;
-                }
-                return data;
-            }
-
-            public T Get(ulong userID)
-            {
-                return Get(userID.ToString());
-            }
-
-            public T Get(BasePlayer player)
-            {
-                var data = Get(player.UserIDString);
-                data.Player = player;
-                return data;
-            }
-
-            public bool Has(ulong userID)
-            {
-                return playerData.ContainsKey(userID.ToString());
-            }
-
-            public void Set(string userID, T data)
-            {
-                playerData[userID] = data;
-            }
-
-            public bool Remove(string userID)
-            {
-                return playerData.Remove(userID);
-            }
-
-            public void Update(T data)
-            {
-                playerData[data.userID] = data;
-            }
+                block.health = oldHealth;
+                data.ResetTimer();
+            });
+            return null;
         }
 
-        #endregion
+        object OnStructureRepair(BaseCombatEntity entity, BasePlayer player)
+        {
+            var block = entity as BuildingBlock;
+            if (block == null)
+            {
+                return null;
+            }
+            var data = GetEntityData(block);
+            if (data.NextRepairTime <= UnityEngine.Time.time)
+            {
+                return null;
+            }
+            return false;
+        }
 
         #region Configuration Files
 

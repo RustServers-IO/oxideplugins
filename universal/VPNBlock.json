@@ -1,0 +1,16 @@
+{
+    "name": "VPNBlock",
+    "description": "Automatically kick players using VPN",
+    "author": "Calytic",
+    "version": "0.0.3",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/vpnblock.2115",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

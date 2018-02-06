@@ -1,0 +1,16 @@
+{
+    "name": "Advertise Me",
+    "description": "Lets players place eye catching advertisement messages.",
+    "author": "",
+    "version": "1.0.3",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/advertise-me.2764",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

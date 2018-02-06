@@ -1,11 +1,11 @@
 {
-    "name": "Admin Inventory Cleaner",
-    "description": "This is simple plugin that will do what is says it does, clean your inventory :)",
-    "author": "",
-    "version": "1.4.1",
+    "name": "Inventory Cleaner",
+    "description": "This plugin allows players with permission to clean all\/their\/target's inventory.",
+    "author": "PaiN",
+    "version": "1.1.4",
     "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/admin-inventory-cleaner.973",
+    "url": "https:\/\/oxidemod.org\/plugins\/inventory-cleaner.1226",
     "games": [
         "rust"
     ],

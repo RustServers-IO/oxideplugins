@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Players can steal money, points, and\/or items from other players",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/robbery.736",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

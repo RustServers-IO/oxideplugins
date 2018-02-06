@@ -12,7 +12,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Finder", "Reneb", "3.0.3", ResourceId = 692)]
+    [Info("Finder", "Reneb", "3.0.4", ResourceId = 692)]
     class Finder : RustPlugin
     {
         //////////////////////////////////////////////////////////////////////////////////////////
@@ -47,6 +47,7 @@ namespace Oxide.Plugins
 
         void Loaded()
         {
+            permission.RegisterPermission(findPermission, this);
             lang.RegisterMessages(new Dictionary<string, string>
             {
                 {"You don't have the permission to use this command","You don't have the permission to use this command" },

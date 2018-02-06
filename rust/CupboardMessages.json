@@ -3,9 +3,9 @@
     "description": "Sends a configured message to a user when they place a tool cupboard",
     "author": "Ryan",
     "version": "1.1.0",
-    "configuration": true,
-    "language": "cs\r\n",
-    "url": "http:\/\/oxidemod.org\/plugins\/cupboardmessages.2721",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/cupboardmessages.2721",
     "games": [
         "rust"
     ],

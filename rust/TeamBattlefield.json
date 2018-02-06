@@ -3,12 +3,12 @@
     "description": "Two teams, adjustable friendly-fire, kits, individual team items, spectator mode",
     "author": "k1lly0u",
     "version": "2.1.42",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "Spawns": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/teambattlefield.1330",
+    "url": "https:\/\/oxidemod.org\/plugins\/teambattlefield.1330",
     "games": [
         "rust"
     ],

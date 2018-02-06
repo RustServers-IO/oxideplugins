@@ -3,7 +3,7 @@
     "description": "Set creation and management system with built-in purchasing",
     "author": "Absolut",
     "version": "1.0.3",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "EventManager": "*",
         "ServerRewards": "*",
@@ -13,7 +13,7 @@
         "ImageLibrary": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/customsets.2425",
+    "url": "https:\/\/oxidemod.org\/plugins\/customsets.2425",
     "games": [
         "rust"
     ],

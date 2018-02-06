@@ -1,14 +1,12 @@
 {
     "name": "Ragnarok",
     "description": "A constant barrage of meteors and crappy weather",
-    "author": "Wulf",
-    "version": "0.7.9",
-    "configuration": true,
-    "suggest": {
-        "Cornucopia": "*"
-    },
+    "author": "",
+    "version": "0.7.10",
+    "configuration": false,
+    "suggest": {},
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/ragnarok.1985",
+    "url": "https:\/\/oxidemod.org\/plugins\/ragnarok.1985",
     "games": [
         "rust"
     ],

@@ -1,0 +1,16 @@
+{
+    "name": "Welcome Messages",
+    "description": "Sends players welcome messages once they connect to the server",
+    "author": "Ankawi",
+    "version": "1.0.5",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/welcome-messages.2219",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

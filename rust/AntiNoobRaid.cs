@@ -6,20 +6,21 @@ using Oxide.Core.Libraries.Covalence;
 using Rust;
 using UnityEngine;
 using Newtonsoft.Json;
+using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiNoobRaid", "Slydelix", "1.4", ResourceId = 2697)]
+    [Info("AntiNoobRaid", "Slydelix", "1.5", ResourceId = 2697)]
     class AntiNoobRaid : RustPlugin
     {
         [PluginReference] Plugin PlaytimeTracker;
         [PluginReference] Plugin WipeProtection;
 
         //set this to true if you are having issues with the plugin
-        bool debug = false;
+        private bool debug = false;
 
-        List<BasePlayer> cooldown = new List<BasePlayer>();
-        Dictionary<string, string> raidtools = new Dictionary<string, string>
+        private List<BasePlayer> cooldown = new List<BasePlayer>();
+        private Dictionary<string, string> raidtools = new Dictionary<string, string>
         {
             {"ammo.rocket.fire", "rocket_fire"},
             {"ammo.rocket.hv", "rocket_hv"},
@@ -31,15 +32,17 @@ namespace Oxide.Plugins
             {"grenade.f1", "grenade.f1.deployed"}
         };
 
-        int layers = LayerMask.GetMask("Construction", "Deployed");
-        int time, refundTimes, frequency;
-        double steamInGameTime;
-        bool show, showTime, refund, preventnew, unnoobnew, checkSteam;
-        string apiKey = "";
+        private int layers = LayerMask.GetMask("Construction", "Deployed");
+        private int time, refundTimes, frequency;
+        private double steamInGameTime;
+        private bool show, showTime, refund, preventnew, unnoobnew, checkSteam, msgonfirstconnection, useGT;
+        private string apiKey = "";
 
         #region Config
         protected override void LoadDefaultConfig()
         {
+            Config["Notify player on first connection with protection time"] = msgonfirstconnection = GetConfig("Notify player on first connection with protection time", true);
+            Config["Use game tips to send first connection message to players"] = useGT = GetConfig("Use game tips to send first connection message to players", false);
             Config["Time inside which new players are protected"] = time = GetConfig("Time inside which new players are protected", 86400);
             Config["Prevent new players from raiding"] = preventnew = GetConfig("Prevent new players from raiding", false);
             Config["Remove noob status of a raider on raid attempt"] = unnoobnew = GetConfig("Remove noob status of a raider on raid attempt", false);
@@ -54,7 +57,7 @@ namespace Oxide.Plugins
             SaveConfig();
         }
 
-        T GetConfig<T>(string name, T defaultValue)
+        private T GetConfig<T>(string name, T defaultValue)
         {
             if (Config[name] == null) return defaultValue;
             return (T)Convert.ChangeType(Config[name], typeof(T));
@@ -67,12 +70,24 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>()
             {
+                {"console_removenewhelp", "Wrong syntax! antinoob.removenoob <steamID>"},
+                {"console_setnot", "Set {0} as a not-new player"},
+                {"console_alreadynot", "That player is already a marked as non noob"},
+                {"console_newhelp", "Wrong syntax! antinoob.addnoob <steamID>"},
+                {"console_setnew", "Set {0} as a new player"},
+                {"console_alreadynew", "That player is already a marked as noob"},
+                {"console_wrongSteamID", "Wrong steamID"},
+                {"console_cantfind", "Couldn't find a player with that ID"},
+                {"firstconnectionmessage", "You are a new player so your buildings are protected for first {0} hours of your time on server"},
+                {"steam_checkstart", "{0} connected, checking Steam"},
                 {"steam_marking", "Marking {0} as non noob"},
                 {"steam_connected", "{0} has connected with {1} in game hours"},
                 {"steam_private", "Steam profile of {0} is private"},
                 {"steam_responsewrong", "Failed to contact steam API, profile is private/wrong API key"},
                 {"steam_wrongapikey", "Invalid API key"},
+                {"pt_notInstalled_first", "Playtime Tracker is not installed, will check again in 30 seconds"},
                 {"pt_notInstalled", "Playtime Tracker is not installed!"},
+                {"pt_detected", "Playtime Tracker detected"},
                 {"userinfo_nofound", "Failed to get playtime info for {0}! trying again in 20 seconds!"},
                 {"userinfo_nofoundmsg", "Failed to find playtime info for player with steamID {0}"},
                 {"userinfo_found", "Found info for {0}"},
@@ -113,16 +128,16 @@ namespace Oxide.Plugins
         #endregion
         #region DataFile
 
-        class StoredData
+        private class StoredData
         {
             public Dictionary<ulong, double> players = new Dictionary<ulong, double>();
             public Dictionary<ulong, int> AttackAttempts = new Dictionary<ulong, int>();
             public Dictionary<string, string> ItemList = new Dictionary<string, string>();
             public List<ulong> playersWithNoData = new List<ulong>();
+            public List<ulong> FirstMessaged = new List<ulong>();
 
             public StoredData()
             {
-
             }
         }
 
@@ -130,7 +145,7 @@ namespace Oxide.Plugins
 
         #endregion
         #region Steam
-        class steamGames
+        private class steamGames
         {
             [JsonProperty("response")]
             public Content response;
@@ -154,78 +169,46 @@ namespace Oxide.Plugins
             }
         }
 
-        T Deserialise<T>(string file) => JsonConvert.DeserializeObject<T>(file);
+        private T Deserialise<T>(string file) => JsonConvert.DeserializeObject<T>(file);
 
         #endregion
         #region Hooks
 
-        void Unload() => SaveFile();
+        private void Unload() => SaveFile();
 
-        void Loaded()
+        private void Loaded()
         {
             StartChecking();
             CheckPlayersWithNoInfo();
-            if (PlaytimeTracker == null) PrintWarning(lang.GetMessage("pt_notInstalled", this, null));
+            if (PlaytimeTracker == null)
+            {
+                PrintWarning(lang.GetMessage("pt_notInstalled_first", this, null));
+                timer.In(30f, () => {
+                    if (PlaytimeTracker == null)
+                    {
+                        PrintWarning(lang.GetMessage("pt_notInstalled", this, null));
+                        return;
+                    }
+                    PrintWarning(lang.GetMessage("pt_detected", this, null));
+                });
+            }
         }
 
-        void Init()
+        private void Init()
         {
             permission.RegisterPermission("antinoobraid.admin", this);
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(this.Name);
             LoadDefaultConfig();
         }
 
-        void OnUserConnected(IPlayer player)
+        private void OnUserConnected(IPlayer player)
         {
             BasePlayer bp = player.Object as BasePlayer;
+            FirstMessage(bp);
+            if (checkSteam) SteamCheck(bp, true);
 
-            if (checkSteam)
-            {
-                if (string.IsNullOrEmpty(apiKey))
-                {
-                    Puts(lang.GetMessage("steam_wrongapikey", this, null));
-                    return;
-                }
-
-                webrequest.Enqueue("http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=" + apiKey + "&steamid=" + bp.UserIDString, null, (code, response) =>
-                {
-                    if (!valid((response)code))
-                    {
-                        Puts(lang.GetMessage("steam_responsewrong", this, null));
-                        return;
-                    }
-
-                    var des = Deserialise<steamGames>(response);
-                    if (des?.response?.games == null)
-                    {
-                        Puts(lang.GetMessage("steam_private", this, null), bp);
-                        return;
-                    }
-
-                    foreach (var game in des.response.games)
-                    {
-                        if(game.appid == 252490)
-                        {
-                            double hours = game.playtime_forever / 60d;
-                            Puts(lang.GetMessage("steam_connected", this, null), bp, Math.Round(hours, 2));
-                            if (hours >= steamInGameTime)
-                            {
-                                Puts(lang.GetMessage("steam_marking", this, null), bp.displayName);
-                                if (!storedData.players.ContainsKey(bp.userID))
-                                {
-                                    storedData.players.Add(bp.userID, -50d);
-                                    SaveFile();
-                                    return;
-                                }
-
-                                storedData.players[bp.userID] = -50d;
-                                SaveFile();
-                                return;
-                            }
-                        }
-                    }
-                }, this);        
-            }
+            if (storedData.players.ContainsKey(bp.userID))
+                if (storedData.players[bp.userID] == -50d || storedData.players[bp.userID] == -25d) return;
 
             double time = -1d;
             try
@@ -260,9 +243,7 @@ namespace Oxide.Plugins
             SaveFile();
         }
 
-        void OnServerSave() => Check();
-
-        object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
+        private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
         {
             if (hitinfo == null || entity == null || hitinfo?.InitiatorPlayer == null || entity.OwnerID == hitinfo?.InitiatorPlayer?.userID || entity?.OwnerID == 0 || hitinfo?.WeaponPrefab?.ShortPrefabName == null) return null;
             if (!(entity is BuildingBlock || entity is Door || entity.PrefabName.Contains("deployable"))) return null;
@@ -294,7 +275,7 @@ namespace Oxide.Plugins
 
             if (!storedData.players.ContainsKey(attacker.userID))
             {
-                Puts("This shouldn't happen");
+                Puts("This shouldn't happen (check at containskey of attacker userID)");
                 Check(attacker.userID);
                 return null;
             }
@@ -343,39 +324,50 @@ namespace Oxide.Plugins
                 return null;
             }
             //DEBUGGING!
-            Puts("No owner found for entity at " + entity.transform.position + " , attacker " + attacker.userID);
-            LogToFile(this.Name, "No owner found for entity at " + entity.transform.position + " , attacker " + attacker.userID, this, true);
+            string date = "[" + DateTime.Now.ToString() + "] ";
+            Puts("No owner found for entity at " + entity.transform.position + " , attacker " + attacker.userID + " (" + entity.ShortPrefabName + ")");
+            LogToFile(this.Name, date + "No owner found for entity at " + entity.transform.position + " , attacker " + attacker.userID, this, true);
             Check();
             return null;
         }
 
         #endregion
-        #region Functions&stuff
+        #region Other Stuff
 
-        enum response
+        private void FirstMessage(BasePlayer player)
         {
-            Valid = 200,
-            InvalidKey = 403,
-            Unavailable = 503,
+            if (!msgonfirstconnection) return;
+
+            if (storedData.FirstMessaged.Contains(player.userID)) return;
+
+            storedData.FirstMessaged.Add(player.userID);
+            SaveFile();
+
+            if (storedData.players.ContainsKey(player.userID))
+            {
+                //notsure
+                if (storedData.players[player.userID] > 100d || storedData.players[player.userID] == -50d || storedData.players[player.userID] == -25d) return;
+            }
+
+            if (useGT)
+            {
+                //not on by default because is sometimes hardly noticable
+                player.SendConsoleCommand("gametip.showgametip", lang.GetMessage("firstconnectionmessage", this, player.UserIDString), time / 3600);
+                return;
+            }
+
+            SendReply(player, lang.GetMessage("firstconnectionmessage", this, player.UserIDString), time / 3600);
+            return;
         }
 
-        bool valid(response code)
-        {
-            if (code == response.Valid) return true;
-            else return false;
-        }
-
-        void RemoveCD(BasePlayer player)
+        private void RemoveCD(BasePlayer player)
         {
             timer.In(0.1f, () => {
-                if (cooldown.Contains(player))
-                {
-                    cooldown.Remove(player);
-                }
+                if (cooldown.Contains(player)) cooldown.Remove(player);
             });
         }
 
-        void logPlayer(BasePlayer attacker)
+        private void logPlayer(BasePlayer attacker)
         {
             if (!storedData.AttackAttempts.ContainsKey(attacker.userID))
             {
@@ -388,7 +380,7 @@ namespace Oxide.Plugins
             SaveFile();
         }
 
-        void msgPlayer(BasePlayer attacker, BaseEntity entity)
+        private void msgPlayer(BasePlayer attacker, BaseEntity entity)
         {
             double time2 = PlaytimeTracker?.Call<double>("GetPlayTime", entity.OwnerID.ToString()) ?? -1d;
             if (time2 == -1d) return;
@@ -413,7 +405,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void Refund(BasePlayer attacker, string name, BaseEntity ent)
+        private void Refund(BasePlayer attacker, string name, BaseEntity ent)
         {
             //Possibly most f**ked up thing I've ever made
             if (refund)
@@ -467,66 +459,56 @@ namespace Oxide.Plugins
             }
         }
 
-        void CheckPlayersWithNoInfo()
+        private void CheckPlayersWithNoInfo()
         {
-            List<ulong> tempList = storedData.playersWithNoData;
-            int rate = 30;
-            if (frequency <= 10) rate = 10;
-            else rate = frequency - 10;
-            timer.Every(rate, () => {
-                tempList = storedData.playersWithNoData;
-                if (tempList.Count > 0)
+            int rate = (frequency <= 10) ? 10 : frequency - 10;
+
+            timer.Every(rate, () =>
+            {
+                if (storedData.playersWithNoData.Count < 1) return;
+
+                foreach (ulong ID in storedData.playersWithNoData.ToList())
                 {
-                    List<ulong> toremove = new List<ulong>();
-                    foreach (ulong ID in tempList)
+                    double time = -1d;
+                    try
                     {
-                        double time = -1d;
-                        try
+                        time = PlaytimeTracker?.Call<double>("GetPlayTime", ID.ToString()) ?? -1d;
+                        if (time == -1d)
                         {
-                            time = PlaytimeTracker?.Call<double>("GetPlayTime", ID.ToString()) ?? -1d;
-                            if (time == -1d)
-                            {
-                                Puts(lang.GetMessage("pt_notInstalled", this, null));
-                                return;
-                            }
+                            Puts(lang.GetMessage("pt_notInstalled", this, null));
+                            return;
                         }
+                    }
 
-                        catch (Exception exc)
-                        {
-                            continue;
-                        }
+                    catch (Exception exc)
+                    {
+                        //PTT doesn't contain info for the player
+                        continue;
+                    }
 
-                        if (storedData.players.ContainsKey(ID))
-                        {
-                            //This isn't supposed to happen
-                            LogToFile(this.Name, "Somehow info exists for player that is in data file already (" + ID + ")", this, true);
-                            storedData.players[ID] = time;
-                            toremove.Add(ID);
-                            //storedData.playersWithNoData.Remove(ID);
-                            SaveFile();
-                            continue;
-                        }
-
-                        storedData.players.Add(ID, time);
-                        toremove.Add(ID);
-                        //storedData.playersWithNoData.Remove(ID);
+                    if (storedData.players.ContainsKey(ID))
+                    {
+                        //This isn't supposed to happen
+                        string date = "[" + DateTime.Now.ToString() + "] ";
+                        LogToFile(this.Name, date + "Somehow info exists for player that is in data file already (" + ID + ")", this, true);
+                        storedData.players[ID] = time;
+                        storedData.playersWithNoData.Remove(ID);
                         SaveFile();
                         continue;
                     }
 
-                    foreach (var e in toremove)
-                    {
-                        if (storedData.playersWithNoData.Contains(e)) storedData.playersWithNoData.Remove(e);
-                    }
+                    storedData.players.Add(ID, time);
+                    storedData.playersWithNoData.Remove(ID);
                     SaveFile();
+                    continue;
                 }
             });
         }
 
-        void Check(ulong ID)
+        private void Check(ulong ID)
         {
             if (storedData.playersWithNoData.Contains(ID)) return;
-            if (storedData.players[ID] == -50d) return;
+            if (storedData.players[ID] == -50d || storedData.players[ID] == -25d) return;
 
             double time = -1d;
             try
@@ -560,7 +542,7 @@ namespace Oxide.Plugins
             Puts(lang.GetMessage("userinfo_found", this, null), ID);
         }
 
-        void Check()
+        private void Check()
         {
             if (BasePlayer.activePlayerList.Count > 0)
             {
@@ -570,7 +552,7 @@ namespace Oxide.Plugins
                     if (storedData.playersWithNoData.Contains(bp.userID)) continue;
                     if (storedData.players.ContainsKey(bp.userID))
                     {
-                        if (storedData.players[bp.userID] == -50d) continue;
+                        if (storedData.players[bp.userID] == -50d || storedData.players[bp.userID] == -25d) continue;
                     }
 
                     double time = -1d;
@@ -610,7 +592,7 @@ namespace Oxide.Plugins
                 if (storedData.playersWithNoData.Contains(bp.userID)) continue;
                 if (storedData.players.ContainsKey(bp.userID))
                 {
-                    if (storedData.players[bp.userID] == -50d) continue;
+                    if (storedData.players[bp.userID] == -50d || storedData.players[bp.userID] == -25d) continue;
                 }
 
                 double time = -1d;
@@ -645,26 +627,104 @@ namespace Oxide.Plugins
             }
         }
 
-        void StartChecking()
+        private void SteamCheck(BasePlayer bp, bool connecting)
+        {
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                Puts(lang.GetMessage("steam_wrongapikey", this, null));
+                return;
+            }
+
+            string date = "[" + DateTime.Now.ToString() + "] ";
+            if (bp == null)
+            {
+                Puts("BasePlayer is null?? Report this on oxide (at SteamCheck) " + bp);
+                return;
+            }
+
+            if (storedData.players.ContainsKey(bp.userID))
+            {
+                if (storedData.players[bp.userID] == -50d)
+                {
+                    LogToFile(this.Name, date + "Player " + bp + " is already marked as non noob", this, false);
+                    return;
+                }
+
+                else if(storedData.players[bp.userID] == -25d)
+                {
+                    LogToFile(this.Name, date + "Player " + bp + " is already marked as noob (-25)", this, false);
+                    return;
+                }
+            }
+
+            Puts(lang.GetMessage("steam_checkstart", this, null), bp);
+
+            webrequest.Enqueue("http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=" + apiKey + "&steamid=" + bp.UserIDString, null, (code, response) =>
+            {
+                if (code != 200)
+                {
+                    Puts(lang.GetMessage("steam_responsewrong", this, null));
+                    LogToFile(this.Name, date + "Wrong response for " + bp + " (" + code + ")", this, false);
+                    return;
+                }
+
+                var des = Deserialise<steamGames>(response);
+                if (des?.response?.games == null)
+                {
+                    Puts(lang.GetMessage("steam_private", this, null), bp);
+                    LogToFile(this.Name, date + "Steam profile of " + bp + " is private", this, false);
+                    return;
+                }
+
+                foreach (var game in des.response.games)
+                {
+                    if (game.appid == 252490)
+                    {
+                        double hours = game.playtime_forever / 60d;
+
+                        if (connecting) Puts(lang.GetMessage("steam_connected", this, null), bp, Math.Round(hours, 2));
+
+                        if (hours >= steamInGameTime)
+                        {
+                            Puts(lang.GetMessage("steam_marking", this, null), bp.displayName);
+                            LogToFile(this.Name, date + bp + " has " + hours + " in game", this, false);
+                            if (!storedData.players.ContainsKey(bp.userID))
+                            {
+                                LogToFile(this.Name, date + "Adding new entry for " + bp, this, false);
+                                storedData.players.Add(bp.userID, -50d);
+                                SaveFile();
+                                return;
+                            }
+
+                            LogToFile(this.Name, date + "Overwriting existing entry for " + bp, this, false);
+                            storedData.players[bp.userID] = -50d;
+                            SaveFile();
+                            return;
+                        }
+                    }
+                }
+            }, this);
+        }
+
+        private void StartChecking()
         {
             timer.Every(frequency, () => {
                 Check();
             });
         }
 
-        void SaveFile() => Interface.Oxide.DataFileSystem.WriteObject(this.Name, storedData);
+        private void SaveFile() => Interface.Oxide.DataFileSystem.WriteObject(this.Name, storedData);
 
-        private object CheckLeft(int intsecs)
+        private string CheckLeft(int intsecs)
         {
             string output;
             float hours, mins, days;
-            days = (float)intsecs / 86400;
-            hours = (float)intsecs / 3600;
+            days = (float) intsecs / 86400;
+            hours = (float) intsecs / 3600;
             mins = intsecs / 60;
-            var q = Math.Round(hours, 1);
-            var q2 = Math.Round(mins, 0);
-            var q3 = Math.Round(days, 1);
-
+            double q = Math.Round(hours, 1);
+            double q2 = Math.Round(mins, 0);
+            double q3 = Math.Round(days, 1);
 
             if (intsecs < 60)
             {
@@ -706,10 +766,11 @@ namespace Oxide.Plugins
                 output = q3 + lang.GetMessage("days", this, null);
                 return output;
             }
-            return null;
+
+            return "";
         }
 
-        BaseEntity GetLookAtEntity(BasePlayer player, float maxDist = 250, int coll = -1)
+        private BaseEntity GetLookAtEntity(BasePlayer player, float maxDist = 250, int coll = -1)
         {
             if (player == null || player.IsDead()) return null;
             RaycastHit hit;
@@ -723,42 +784,69 @@ namespace Oxide.Plugins
             return null;
         }
 
-        bool playerIsNew(ulong ID)
+        private bool playerIsNew(ulong ID)
         {
             if (!storedData.players.ContainsKey(ID)) return false;
             if (storedData.players[ID] == -50d) return false;
-            if (storedData.players[ID] < time) return true;
+            if (storedData.players[ID] < time || storedData.players[ID] == -25d) return true;
             return false;
         }
 
         #endregion
         #region Commands
 
-        [ConsoleCommand("antinoob.wipe.playerdata")]
-        void wipeDataCmd(ConsoleSystem.Arg arg)
+        [ConsoleCommand("antinoob.addnoob")]
+        private void AddCmd(ConsoleSystem.Arg arg)
         {
             if (arg.Connection != null) return;
-            storedData.players.Clear();
-            Puts(lang.GetMessage("dataFileWiped_playerdata", this, null));
-            SaveFile();
+            if (arg.Args == null || arg == null || arg.cmd == null || arg?.Args?.Length == 0 || arg.FullString == null)
+            {
+                Puts(lang.GetMessage("console_newhelp", this, null));
+                return;
+            }
+
+            ulong ID_u;
+
+            if (!ulong.TryParse(arg.Args[0], out ID_u))
+            {
+                Puts(lang.GetMessage("console_wrongSteamID", this, null));
+                return;
+            }
+
+            foreach (var entry in storedData.players)
+            {
+                if (entry.Key == ID_u)
+                {
+                    if (storedData.players[entry.Key] == -25d)
+                    {
+                        Puts(lang.GetMessage("console_alreadynew", this, null));
+                        return;
+                    }
+
+                    storedData.players[entry.Key] = -25d;
+                    Puts(lang.GetMessage("console_setnew", this, null), ID_u);
+                    SaveFile();
+                    return;
+                }
+            }
+            Puts(lang.GetMessage("console_cantfind", this, null));
         }
 
         [ConsoleCommand("antinoob.removenoob")]
-        void RemoveCmd(ConsoleSystem.Arg arg)
+        private void RemoveCmd(ConsoleSystem.Arg arg)
         {
             if (arg.Connection != null) return;
             if (arg.Args == null || arg == null || arg.cmd == null || arg.Args.Length == 0 || arg.FullString == null)
             {
-                Puts("Wrong syntax! antinoob.removenoob <steamID>");
+                Puts(lang.GetMessage("console_removenewhelp", this,null));
                 return;
             }
 
-            string ID = arg.Args[0];
-            ulong ID_u = 5u;
-            ulong.TryParse(ID, out ID_u);
-            if (ID_u == 5u)
+            ulong ID_u;
+
+            if (!ulong.TryParse(arg.Args[0], out ID_u))
             {
-                Puts("Wrong steamID");
+                Puts(lang.GetMessage("console_wrongSteamID", this, null));
                 return;
             }
 
@@ -768,21 +856,44 @@ namespace Oxide.Plugins
                 {
                     if (storedData.players[entry.Key] == -50d)
                     {
-                        Puts("That player is already a marked as non noob");
+                        Puts(lang.GetMessage("console_alreadynot", this, null));
                         return;
                     }
 
                     storedData.players[entry.Key] = -50d;
-                    Puts("Set " + ID_u + " as a not-new player");
+                    Puts(lang.GetMessage("console_setnot", this, null), ID_u);
                     SaveFile();
                     return;
                 }
             }
-            Puts("Couldn't find a player with that ID");
+            Puts(lang.GetMessage("console_cantfind", this, null));
+        }
+
+        [ConsoleCommand("antinoob.checksteam")]
+        private void checkSteamCmd(ConsoleSystem.Arg arg)
+        {
+            if (arg.Connection != null) return;
+
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                Puts(lang.GetMessage("steam_wrongapikey", this, null));
+                return;
+            }
+
+            foreach (BasePlayer player in BasePlayer.activePlayerList) SteamCheck(player, false);
+        }
+
+        [ConsoleCommand("antinoob.wipe.playerdata")]
+        private void wipeDataCmd(ConsoleSystem.Arg arg)
+        {
+            if (arg.Connection != null) return;
+            storedData.players.Clear();
+            Puts(lang.GetMessage("dataFileWiped_playerdata", this, null));
+            SaveFile();
         }
 
         [ConsoleCommand("antinoob.wipe.attempts")]
-        void wipeAttCmd(ConsoleSystem.Arg arg)
+        private void wipeAttCmd(ConsoleSystem.Arg arg)
         {
             if (arg.Connection != null) return;
             storedData.AttackAttempts.Clear();
@@ -791,7 +902,7 @@ namespace Oxide.Plugins
         }
 
         [ConsoleCommand("antinoob.wipe.all")]
-        void wipeAllCmd(ConsoleSystem.Arg arg)
+        private void wipeAllCmd(ConsoleSystem.Arg arg)
         {
             if (arg.Connection != null) return;
             storedData.AttackAttempts.Clear();
@@ -802,9 +913,10 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("docheck")]
-        void docheckCmd(BasePlayer player, string command, string[] args)
+        private void docheckCmd(BasePlayer player, string command, string[] args)
         {
-            if (!debug) return;
+            if (!debug || !player.IsAdmin) return;
+
             if (args.Length < 1) return;
             string ID = args[0];
             ulong r = -0u;
@@ -832,9 +944,10 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("testapi")]
-        void apiTest(BasePlayer player, string command, string[] args)
+        private void apiTest(BasePlayer player, string command, string[] args)
         {
-            if (!debug) return;
+            if (!debug || !player.IsAdmin) return;
+
             if (args.Length < 1)
             {
                 SendReply(player, "/testapi <steamID>");
@@ -845,7 +958,7 @@ namespace Oxide.Plugins
             string ID = args[0];
             ulong d;
 
-            if(!ulong.TryParse(ID, out d))
+            if (!ulong.TryParse(ID, out d))
             {
                 SendReply(player, "Wrong ID");
                 return;
@@ -853,14 +966,14 @@ namespace Oxide.Plugins
 
             webrequest.Enqueue("http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=" + apiKey + "&steamid=" + ID, null, (code, response) =>
             {
-                if (!valid((response)code))
+                if (code != 200)
                 {
-                    Puts("Failed to contact steam API, profile is private/wrong API key");
+                    Puts("Failed to contact steam API, profile is private/wrong API key (" + code + ")");
                     return;
                 }
 
                 var des = Deserialise<steamGames>(response);
-                if(des.response.games == null)
+                if (des.response.games == null)
                 {
                     SendReply(player, "Steam profile of " + d + " is private");
                     return;
@@ -875,7 +988,7 @@ namespace Oxide.Plugins
                         SendReply(player, "Got hours for " + ID + " : " + hours);
                         if (hours >= steamInGameTime)
                         {
-                            SendReply(player,"Marking " + ID + " as non noob");
+                            SendReply(player, "Marking " + ID + " as non noob");
                             if (!storedData.players.ContainsKey(d))
                             {
                                 storedData.players.Add(d, -50d);
@@ -912,10 +1025,11 @@ namespace Oxide.Plugins
             }
 
         }
+
         [ChatCommand("entdebug")]
-        void EntDebugCmd(BasePlayer player, string command, string[] args)
+        private void EntDebugCmd(BasePlayer player, string command, string[] args)
         {
-            if (!debug) return;
+            if (!debug || !player.IsAdmin) return;
 
             BaseEntity ent = GetLookAtEntity(player, 20f, layers);
 
@@ -937,7 +1051,7 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("refunditem")]
-        void refundCmd(BasePlayer player, string command, string[] args)
+        private void refundCmd(BasePlayer player, string command, string[] args)
         {
             if (!permission.UserHasPermission(player.UserIDString, "antinoobraid.admin"))
             {
@@ -1054,7 +1168,7 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("checknew")]
-        void checkNewCmd(BasePlayer player, string command, string[] args)
+        private void checkNewCmd(BasePlayer player, string command, string[] args)
         {
             BaseEntity hitEnt = GetLookAtEntity(player, 20f, layers);
 
@@ -1072,26 +1186,16 @@ namespace Oxide.Plugins
                 return;
             }
 
-            double ftime = -1d;
-            try
+            if (!storedData.players.ContainsKey(hitEnt.OwnerID))
             {
-                ftime = PlaytimeTracker?.Call<double>("GetPlayTime", hitEnt.OwnerID.ToString()) ?? -1d;
-            }
-
-            catch (Exception exc)
-            {
-                Puts(lang.GetMessage("userinfo_nofoundmsg", this, null), hitEnt.OwnerID);
-                storedData.playersWithNoData.Add(hitEnt.OwnerID);
-                SaveFile();
-            }
-
-            if (time == -1d)
-            {
-                Puts(lang.GetMessage("pt_notInstalled", this, null));
+                Puts("No info found for player " + hitEnt.OwnerID + " at " + hitEnt.transform.position + " report this on Oxidemod! (checknew) (" + hitEnt.ShortPrefabName + ")");
                 return;
             }
 
-            int left = (int)(time - ftime);
+            double ftime = storedData.players[hitEnt.OwnerID];
+
+            int left = (int) (time - ftime);
+
             if (show)
             {
                 if (playerIsNew(hitEnt.OwnerID))

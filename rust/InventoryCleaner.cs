@@ -1,107 +1,88 @@
-﻿using System;
-using System.Collections.Generic;
-using UnityEngine;
-using Rust;
-using System.Text;
+﻿using System.Collections.Generic;
+using System;
 
 namespace Oxide.Plugins
 {
-    [Info("Admin Inventory Cleaner", "TheDoc - Uprising Servers", "1.4.1", ResourceId = 973)]
-	[Description("A simple plugin that will do what is says it does, clean your inventory :)")]
+    [Info("Inventory Cleaner", "PaiN", "1.1.4", ResourceId = 1226)]
+    [Description("This plugin allows players with permission to clean all/their/target's inventory.")]
     class InventoryCleaner : RustPlugin
     {
-        void SendChatMessage(BasePlayer player, string message, string args = null) => PrintToChat(player, $"{message}", args);
+        void Loaded() => permission.RegisterPermission(this.Name.ToLower() + ".use", this);
 
-        void Init() => PluginSetup();
 
-        [ChatCommand("cleaninv")]
-        void cmdChatCleanInv(BasePlayer player, string command, string[] args)
+        [ChatCommand("invcleanall")]
+        void cmdInvCleanAll(BasePlayer player, string cmd, string[] args)
         {
-            if (IsAllowed(player, "inventorycleaner.allowed") && player != null)
+
+            string steamId = Convert.ToString(player.userID);
+            if (permission.UserHasPermission(steamId, "inventorycleaner.use"))
+            {
+                if (args.Length == 1)
+                {
+                    SendReply(player, "Commands: \n/invcleanme => Cleans your inventory.\n/invclean \"player\" => Cleans the target's inventory\n/invcleanall => Cleans everyones invetory.");
+                    return;
+                }
+
+                var players = BasePlayer.activePlayerList as List<BasePlayer>;
+                foreach (BasePlayer current in BasePlayer.activePlayerList)
+                {
+                    current.inventory.Strip();
+                    Puts(player.displayName + " has cleaned all the inventories!");
+                    PrintToChat("<color=orange>[Inventory Cleaner]</color> " + player.displayName + " has cleaned all the inventories (" + players.Count + ") !");
+                    SendReply(player, "<color=orange>[Inventory Cleaner]</color> " + "You have cleaned " + players.Count + " inventories!");
+
+                }
+
+            }
+            else
+            {
+                SendReply(player, "You do not have permission to use this command!");
+                return;
+            }
+        }
+
+
+        [ChatCommand("invclean")]
+        void cmdInvClean(BasePlayer player, string cmd, string[] args)
+        {
+            string steamId = Convert.ToString(player.userID);
+            if (permission.UserHasPermission(steamId, "inventorycleaner.use"))
             {
                 if (args.Length == 0)
                 {
-                    //player.inventory.Strip();
-					foreach(var item in player.inventory.containerBelt.itemList)
-                    {
-                        item.Remove();
-                    }
-                    foreach (var item in player.inventory.containerMain.itemList)
-                    {
-                        item.Remove();
-                    }
-                    foreach (var item in player.inventory.containerWear.itemList)
-                    {
-                        item.Remove();
-                    }					
-                    SendChatMessage(player, "<color=lime>Inventory Cleaner</color>: Your Complete Inventory is now clean!");
+                    SendReply(player, "Commands: \n/invcleanme => Cleans your inventory.\n/invclean \"player\" => Cleans the target's inventory\n/invcleanall => Cleans everyones invetory.");
                     return;
                 }
                 if (args.Length == 1)
                 {
-                    switch (args[0])
+                    var target = BasePlayer.Find(args[0]);
+                    if (target == null)
                     {
-                        case "help":
-                            var sb = new StringBuilder();
-                            sb.Append("<size=22><color=lime>Inventory Cleaner by TheDoc</color></size> v" + Version + " <color=#ce422b>http://www.uprisingserver.com</color>\n\n");
-                            sb.Append("<color=#ff0000>Warning:</color> Once items removed they are GONE !").Append("\n\n");
-                            sb.Append("<color=lime>Available commands</color> :").Append("\n");
-                            sb.Append("  ").Append("<color=#74c6ff>/cleaninv</color> - Strip you naked, all inv gone!").Append("\n");
-                            sb.Append("  ").Append("<color=#74c6ff>/cleaninv belt</color> - Remove all items on your Action Belt!").Append("\n");
-                            sb.Append("  ").Append("<color=#74c6ff>/cleaninv main</color> - Remove all items on your Main Inventory!").Append("\n");
-                            sb.Append("  ").Append("<color=#74c6ff>/cleaninv both</color> - Remove all items on your Main Inventory & Action Belt!").Append("\n");
-                            SendChatMessage(player, sb.ToString());
-                            break;
-						case "belt":		
-                            foreach(var item in player.inventory.containerBelt.itemList)
-                            {
-                                item.Remove();
-                            }
-                            SendChatMessage(player, "<color=lime>Inventory Cleaner</color>: Your Belt is now clean!");
-                            break;
-                        case "main":
-                            foreach (var item in player.inventory.containerMain.itemList)
-                            {
-                                item.Remove();
-                            }
-                            SendChatMessage(player, "<color=lime>Inventory Cleaner</color>: Your Main Inventory is now clean!");
-                            break;
-                        case "both":
-                            foreach (var item in player.inventory.containerBelt.itemList)
-                            {
-                                item.Remove();
-                            }
-                            foreach (var item in player.inventory.containerMain.itemList)
-                            {
-                                item.Remove();
-                            }
-                            SendChatMessage(player, "<color=lime>Inventory Cleaner</color>: Your Belt and Main Inventory is now clean!");
-                            break;							
-						case "fix":
-                            player.inventory.ServerInit(player);
-                            break;							
-                        default:
-                            break;
+                        SendReply(player, "Player not found!");
+                        return;
                     }
+                    target.inventory.Strip();
+                    SendReply(player, "<color=orange>[Inventory Cleaner]</color> " + "You have successfully cleaned <color=cyan>" + target.displayName + "</color>'s inventory!");
                 }
             }
+            else
+            {
+                SendReply(player, "You do not have permission to use this command!");
+                return;
+            }
+
         }
 
-        void PluginSetup()
+        [ChatCommand("invcleanme")]
+        void cmdInvCleanMe(BasePlayer player, string cmd, string[] args)
         {
-            LoadPermissions();
+            if (args.Length == 0)
+            {
+                player.inventory.Strip();
+                SendReply(player, "<color=orange>[Inventory Cleaner]</color> " + "You have cleaned your inventory!");
+            }
+
         }
 
-        void LoadPermissions()
-        {
-            if (!permission.PermissionExists("inventorycleaner.allowed")) permission.RegisterPermission("inventorycleaner.allowed", this);
-        }
-
-        bool IsAllowed(BasePlayer player, string perm)
-        {
-            if (permission.UserHasPermission(player.userID.ToString(), perm)) return true;
-            SendChatMessage(player, "You are <color=red>Not Allowed</color> To Use this command!");
-            return false;
-        }
     }
 }

@@ -3,9 +3,9 @@
     "description": "Allows players to crack code locks on boxes, etc.",
     "author": "HOUGAN_Y",
     "version": "1.1.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/codecracker.2568",
+    "url": "https:\/\/oxidemod.org\/plugins\/codecracker.2568",
     "games": [
         "rust"
     ],

@@ -3,9 +3,9 @@
     "description": "Automatically turns ON and OFF lanterns  after sunset and sunrise",
     "author": "k1lly0u",
     "version": "2.0.92",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/nightlantern.1182",
+    "url": "https:\/\/oxidemod.org\/plugins\/nightlantern.1182",
     "games": [
         "rust"
     ],

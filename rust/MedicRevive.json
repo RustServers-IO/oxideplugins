@@ -1,0 +1,16 @@
+{
+    "name": "Medic Revive",
+    "description": "Pick players up from being wounded by injecting them with a medical syringe",
+    "author": "k1lly0u",
+    "version": "0.1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/medic-revive.2322",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}
