@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Force another player to do an emote on command",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/forceemote.1684",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

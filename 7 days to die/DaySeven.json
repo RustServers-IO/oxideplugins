@@ -3,9 +3,9 @@
     "description": "Allows players to check when the next horde night is.",
     "author": "Mordeus",
     "version": "1.1.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/day-7.2390",
+    "url": "https:\/\/oxidemod.org\/plugins\/day-7.2390",
     "games": [
         "7 days to die"
     ],

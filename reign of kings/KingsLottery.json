@@ -3,10 +3,10 @@
     "description": "A way for players to gamble",
     "author": "Karltubing",
     "version": "7.7.7",
-    "configuration": true,
+    "configuration": false,
     "suggest": {},
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/kingslottery.2694",
+    "url": "https:\/\/oxidemod.org\/plugins\/kingslottery.2694",
     "games": [
         "reign of kings"
     ],

@@ -3,13 +3,13 @@
     "description": "Teleport to power plants",
     "author": "mcnovinho08",
     "version": "0.8.0",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "AdminControl": "*",
         "MoneySystem": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/teleportusine.2277",
+    "url": "https:\/\/oxidemod.org\/plugins\/teleportusine.2277",
     "games": [
         "rust legacy"
     ],

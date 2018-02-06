@@ -3,9 +3,9 @@
     "description": "Differentiated connection messages for your server!",
     "author": "mcnovinho08",
     "version": "0.1.1",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/connectingmsg.2392",
+    "url": "https:\/\/oxidemod.org\/plugins\/connectingmsg.2392",
     "games": [
         "rust legacy"
     ],

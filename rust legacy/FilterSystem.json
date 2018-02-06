@@ -3,9 +3,9 @@
     "description": "Filter nicknames, features, and block small nicknames...",
     "author": "mcnovinho08",
     "version": "1.0.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/filtersystem.2441",
+    "url": "https:\/\/oxidemod.org\/plugins\/filtersystem.2441",
     "games": [
         "rust legacy"
     ],

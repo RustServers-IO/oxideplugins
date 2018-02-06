@@ -3,9 +3,9 @@
     "description": "Some profiles to have more control in your admins, mods among others.",
     "author": "Gute",
     "version": "2.0.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/admincontrol.2365",
+    "url": "https:\/\/oxidemod.org\/plugins\/admincontrol.2365",
     "games": [
         "rust legacy"
     ],

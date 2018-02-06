@@ -3,9 +3,9 @@
     "description": "Automatically restart server every given time to reduce memory usage",
     "author": "Feramor",
     "version": "0.3",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/auto-server-restarter.1958",
+    "url": "https:\/\/oxidemod.org\/plugins\/auto-server-restarter.1958",
     "games": [
         "7 days to die"
     ],

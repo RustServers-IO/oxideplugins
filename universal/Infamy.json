@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Allows players with permission to add, remove, reset, or set infamy",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/infamy.2488",
+    "games": [
+        "hurtworld"
+    ],
+    "keywords": [
+        "oxide",
+        "hurtworld"
+    ]
+}

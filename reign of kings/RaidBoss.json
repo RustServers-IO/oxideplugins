@@ -2,10 +2,10 @@
     "name": "Raid Boss",
     "description": "Turn a player into a Psion of Death (Raid Boss) for everyone to take on in battle at once!",
     "author": "D-Kay",
-    "version": "1.3.0",
-    "configuration": true,
+    "version": "1.4.1",
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/raid-boss.1142",
+    "url": "https:\/\/oxidemod.org\/plugins\/raid-boss.1142",
     "games": [
         "reign of kings"
     ],

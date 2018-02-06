@@ -3,12 +3,12 @@
     "description": "Allows the easy addition of zones that have many options like noPvP, NoBuild, noDamage, etc",
     "author": "Mordeus",
     "version": "1.3.0",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "AntiLoot": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/protectedzone.2638",
+    "url": "https:\/\/oxidemod.org\/plugins\/protectedzone.2638",
     "games": [
         "reign of kings"
     ],

@@ -3,9 +3,9 @@
     "description": "Starts machines automatically on server startup and by manual control",
     "author": "Wulf",
     "version": "2.1.1",
-    "configuration": true,
-    "language": "cs\r\n",
-    "url": "http:\/\/oxidemod.org\/plugins\/startmachine.1586",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/startmachine.1586",
     "games": [
         "hurtworld"
     ],

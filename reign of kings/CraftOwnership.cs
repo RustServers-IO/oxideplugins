@@ -11,7 +11,7 @@ using CodeHatch.Engine.Networking;
 
 namespace Oxide.Plugins
 {
-    [Info("Crafting Ownership", "D-Kay", "1.0.0")]
+    [Info("Crafting Ownership", "D-Kay", "1.1.0")]
     [Description("Stores crafting station interactions and craftings")]
     public class CraftOwnership : ReignOfKingsPlugin
     {
@@ -90,16 +90,26 @@ namespace Oxide.Plugins
             {
                 return Crafting?.Amount ?? 0;
             }
+
+            public float GetTime()
+            {
+                return Crafting?.Time ?? 0f;
+            }
+
+            public string GetName()
+            {
+                return Crafting?.Name;
+            }
         }
 
         private class PlayerCraftingData : CraftingData
         {
-            public int SetCrafting(ulong player, int amount)
+            public int SetCrafting(ulong player, int amount, string name, float time)
             {
                 try
                 {
                     var result = Crafting == null ? 1 : 2;
-                    Crafting = new Craft(player, amount);
+                    Crafting = new Craft(player, amount, name, time);
                     return result;
                 }
                 catch
@@ -111,7 +121,15 @@ namespace Oxide.Plugins
 
         private class StationCraftingData : CraftingData
         {
+            private string Name { get; set; }
             public Interaction Interaction { get; set; }
+
+            public StationCraftingData() { }
+
+            public StationCraftingData(string name)
+            {
+                Name = name;
+            }
 
             public int SetInteraction(ulong player)
             {
@@ -127,13 +145,13 @@ namespace Oxide.Plugins
                 }
             }
 
-            public int SetCrafting(int amount)
+            public int SetCrafting(int amount, string name, float time)
             {
                 try
                 {
                     var result = Crafting == null ? 1 : 2;
                     if (Interaction == null) return -1;
-                    Crafting = new Craft(Interaction.PlayerId, amount);
+                    Crafting = new Craft(Interaction.PlayerId, amount, name, time);
                     return result;
                 }
                 catch
@@ -162,14 +180,18 @@ namespace Oxide.Plugins
         private class Craft : Action
         {
             public int Amount { get; set; }
+            public string Name { get; set; }
+            public float Time { get; set; }
 
             public Craft() { }
 
-            public Craft(ulong playerId, int amount)
+            public Craft(ulong playerId, int amount, string name, float time)
                 : this()
             {
                 PlayerId = playerId;
                 Amount = amount;
+                Name = name;
+                Time = time;
             }
         }
 
@@ -281,6 +303,32 @@ namespace Oxide.Plugins
             return Data.StationCraftingData[objectGUID]?.GetAmount();
         }
 
+        private float? GetCraftingTime(Entity entity)
+        {
+            if (entity.IsPlayer) return Data.PlayerCraftingData[entity.OwnerId]?.GetTime();
+
+            var objectGUID = entity.Get<ISecurable>()?.ObjectGUID;
+            return objectGUID == null ? null : GetCraftingTimeByObjectGUID((uint)objectGUID);
+        }
+
+        private float? GetCraftingTimeByObjectGUID(uint objectGUID)
+        {
+            return Data.StationCraftingData[objectGUID]?.GetTime();
+        }
+
+        private string GetItemName(Entity entity)
+        {
+            if (entity.IsPlayer) return Data.PlayerCraftingData[entity.OwnerId]?.GetName();
+
+            var objectGUID = entity.Get<ISecurable>()?.ObjectGUID;
+            return objectGUID == null ? null : GetItemNameByObjectGUID((uint)objectGUID);
+        }
+
+        private string GetItemNameByObjectGUID(uint objectGUID)
+        {
+            return Data.StationCraftingData[objectGUID]?.GetName();
+        }
+
         #endregion
 
         #region Hooks
@@ -303,7 +351,7 @@ namespace Oxide.Plugins
             StationCraftingData data;
             if (!Data.StationCraftingData.TryGetValue(objectGUID, out data))
             {
-                data = new StationCraftingData();
+                data = new StationCraftingData(interactEvent.Entity.name);
                 Data.Add(objectGUID, data);
             }
 
@@ -321,6 +369,9 @@ namespace Oxide.Plugins
             #endregion
 
             var amount = craftEvent.Crafter.QuantityEstimated;
+            var name = craftEvent.Crafter.Product.Name;
+            if (name.EqualsIgnoreCase("Charcoal") && amount > 1000000) return;
+            var time = craftEvent.Crafter.Duration;
             var security = craftEvent.Entity.TryGet<ISecurable>();
             if (security == null)
             {
@@ -333,7 +384,7 @@ namespace Oxide.Plugins
                     Data.Add(craftEvent.Entity.OwnerId, data);
                 }
 
-                data.SetCrafting(player.Id, amount);
+                data.SetCrafting(player.Id, amount, name, time);
             }
             else
             {
@@ -341,11 +392,11 @@ namespace Oxide.Plugins
                 StationCraftingData data;
                 if (!Data.StationCraftingData.TryGetValue(objectGUID, out data))
                 {
-                    data = new StationCraftingData();
+                    data = new StationCraftingData(craftEvent.Entity.name);
                     Data.Add(objectGUID, data);
                 }
 
-                data.SetCrafting(amount);
+                data.SetCrafting(amount, name, time);
             }
 
             SaveData();

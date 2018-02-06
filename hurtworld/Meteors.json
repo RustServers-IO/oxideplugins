@@ -3,9 +3,9 @@
     "description": "Meteors fall around the map. Treasures can be found where it lands.",
     "author": "Wulf",
     "version": "1.1.4",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/meteors.1944",
+    "url": "https:\/\/oxidemod.org\/plugins\/meteors.1944",
     "games": [
         "hurtworld"
     ],

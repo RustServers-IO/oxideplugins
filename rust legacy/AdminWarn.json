@@ -3,9 +3,9 @@
     "description": "System warnings for administrators!",
     "author": "mcnovinho08",
     "version": "1.0.7",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/adminwarn.2398",
+    "url": "https:\/\/oxidemod.org\/plugins\/adminwarn.2398",
     "games": [
         "rust legacy"
     ],

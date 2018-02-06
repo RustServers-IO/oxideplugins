@@ -3,12 +3,12 @@
     "description": "Easily break down hacker bases, abandoned builds, and repair damages.",
     "author": "D-Kay",
     "version": "2.0.1",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "HelpText": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/hulk.1463",
+    "url": "https:\/\/oxidemod.org\/plugins\/hulk.1463",
     "games": [
         "reign of kings"
     ],

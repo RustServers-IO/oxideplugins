@@ -3,9 +3,9 @@
     "description": "Advanced teleportation and homes",
     "author": "LaserHydra",
     "version": "1.5.2",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/teleportation.1519",
+    "url": "https:\/\/oxidemod.org\/plugins\/teleportation.1519",
     "games": [
         "hurtworld"
     ],

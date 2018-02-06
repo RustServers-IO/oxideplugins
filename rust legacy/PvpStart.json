@@ -3,12 +3,12 @@
     "description": "Plugin targeted to specific locations with Pvp kit spawn",
     "author": "",
     "version": "1.0.5",
-    "configuration": true,
+    "configuration": false,
     "require": {
         "Kits": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/pvpstart.2346",
+    "url": "https:\/\/oxidemod.org\/plugins\/pvpstart.2346",
     "games": [
         "rust legacy"
     ],

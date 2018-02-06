@@ -3,9 +3,9 @@
     "description": "Create easily zones which blocks the usage of C4 or a Drill",
     "author": "",
     "version": "1.3.0",
-    "configuration": true,
+    "configuration": false,
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/no-raid-zones.1837",
+    "url": "https:\/\/oxidemod.org\/plugins\/no-raid-zones.1837",
     "games": [
         "hurtworld"
     ],

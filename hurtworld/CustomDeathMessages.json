@@ -3,12 +3,12 @@
     "description": "Displays custom messages on player death",
     "author": "Mr. Blue",
     "version": "1.0.7",
-    "configuration": true,
+    "configuration": false,
     "suggest": {
         "KillCounter": "*"
     },
     "language": "cs",
-    "url": "http:\/\/oxidemod.org\/plugins\/custom-death-messages.1544",
+    "url": "https:\/\/oxidemod.org\/plugins\/custom-death-messages.1544",
     "games": [
         "hurtworld"
     ],
