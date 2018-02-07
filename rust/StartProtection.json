@@ -2,7 +2,7 @@
     "name": "StartProtection",
     "description": "Protect new players when they first connect",
     "author": "wazzzup",
-    "version": "2.2.0",
+    "version": "2.2.1",
     "configuration": false,
     "suggest": {
         "Friends": "*"

@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("StartProtection", "Norn / wazzzup", "2.2.0", ResourceId = 1342)]
+    [Info("StartProtection", "Norn / wazzzup", "2.2.1", ResourceId = 1342)]
     [Description("Give people some leeway when they first join the game.")]
     public class StartProtection : RustPlugin
     {
@@ -63,7 +63,10 @@ namespace Oxide.Plugins
         private bool canLootHeli;
         private bool canLootDrop;
         private bool canLootFriends;
-        private bool canLootFriendDeployables;        
+        private bool canLootFriendDeployables;
+        private bool showUIIcon;
+        private string UIIconAnchorMin;
+        private string UIIconAnchorMax;
         private int iTime;
         private int iPunishment;
         private int iInactiveDays;
@@ -83,6 +86,9 @@ namespace Oxide.Plugins
             iPunishment = Convert.ToInt32(GetConfig("Settings","iPunishment", 300));
             iInactiveDays = Convert.ToInt32(GetConfig("Settings", "iInactiveDays", 1));
             UIIcon = Convert.ToString(GetConfig("Settings", "UIIcon", "https://i.imgur.com/hom6JrH.png"));
+            showUIIcon = Convert.ToBoolean(GetConfig("Settings", "showUIIcon", true));
+            UIIconAnchorMin = Convert.ToString(GetConfig("Settings", "UIIconAnchorMin", "0.245 0.025"));
+            UIIconAnchorMax = Convert.ToString(GetConfig("Settings", "UIIconAnchorMax", "0.290 0.095"));
 
             if (Changed)
             {
@@ -158,7 +164,7 @@ namespace Oxide.Plugins
                         string parsed_config = GetMessage("tFirstSpawn", player.UserIDString);
                         parsed_config = parsed_config.Replace("{minutes_left}", minutes.ToString());
                         PrintToChatEx(player, parsed_config);
-                        SPUiUser(BasePlayer.Find(player.userID.ToString()),minutes.ToString());
+                        if (showUIIcon) SPUiUser(BasePlayer.Find(player.userID.ToString()),minutes.ToString());
                     }
                     else { Log($"Failed for {player.userID}..."); }
 
@@ -413,7 +419,7 @@ namespace Oxide.Plugins
                     parsed_config = parsed_config.Replace("{minutes_left}", minutes.ToString());
                     PrintToChatEx(player, parsed_config);
                 }
-                SPUiUser(player,minutes.ToString());
+                if (showUIIcon) SPUiUser(player,minutes.ToString());
             }
         }
 
@@ -424,14 +430,14 @@ namespace Oxide.Plugins
                 if (entity is BasePlayer)
                 {
                     var player = entity as BasePlayer;
-                    if (player.userID<76561200000000000L || player is NPCPlayer) return null;
+                    if (player.userID<76560000000000000L || player is NPCPlayer) return null;
 
                     ProtectionInfo p = null;
                     ProtectionInfo z = null;
                     if (hitInfo.Initiator is BasePlayer)
                     {
                         var attacker = hitInfo.Initiator as BasePlayer;
-                        if (attacker.userID<76561200000000000L || attacker is NPCPlayer) return null;
+                        if (attacker.userID<76560000000000000L || attacker is NPCPlayer) return null;
                         if (storedData.Players.TryGetValue(player.userID, out p))
                         {
                             if (storedData.Players.TryGetValue(attacker.userID, out z))
@@ -506,7 +512,7 @@ namespace Oxide.Plugins
                         }
                     }
                 }
-                else if(entity is LootableCorpse && (entity as LootableCorpse).playerSteamID > 76561200000000000L)
+                else if(entity is LootableCorpse && (entity as LootableCorpse).playerSteamID > 76560000000000000L)
                 {
                     if (hitInfo.Initiator is BasePlayer)
                     {
@@ -564,7 +570,7 @@ namespace Oxide.Plugins
                 parsed_config = parsed_config.Replace("{minutes_left}", minutes.ToString());
                 
                 //can loot corpses own and bots
-                if (corpse != null && corpse.playerSteamID!=player.userID && corpse.playerSteamID> 76561200000000000L)
+                if (corpse != null && corpse.playerSteamID!=player.userID && corpse.playerSteamID> 76560000000000000L)
                 {
                     SPUi(player,parsed_config);
                     timer.Once(0.01f, player.EndLooting);
@@ -583,7 +589,7 @@ namespace Oxide.Plugins
                         SPUi(player,parsed_config);
                         timer.Once(0.01f, player.EndLooting);
                     }
-                    else if ((entity as DroppedItemContainer).playerSteamID!=player.userID && (entity as DroppedItemContainer).playerSteamID> 76561200000000000L && !(canLootFriends && (bool) (Friends?.CallHook("AreFriends", entity.OwnerID,player.userID) ?? false)))
+                    else if ((entity as DroppedItemContainer).playerSteamID!=player.userID && (entity as DroppedItemContainer).playerSteamID> 76560000000000000L && !(canLootFriends && (bool) (Friends?.CallHook("AreFriends", entity.OwnerID,player.userID) ?? false)))
                     {
                         SPUi(player,parsed_config);
                         timer.Once(0.01f, player.EndLooting);
@@ -646,8 +652,8 @@ namespace Oxide.Plugins
                 },
                 RectTransform =
                 {
-                    AnchorMin = "0.245 0.025",
-                    AnchorMax = "0.290 0.095"
+                    AnchorMin = UIIconAnchorMin,
+                    AnchorMax = UIIconAnchorMax
                 }
             }, "Overlay", guiInfo[player.userID]);
 
@@ -793,7 +799,7 @@ namespace Oxide.Plugins
                         p.TimeLeft = p.TimeLeft - iUpdateTimerInterval;
                         if (init) {
                             int minutes = Convert.ToInt32(TimeSpan.FromSeconds(p.TimeLeft).TotalMinutes);
-                            SPUiUser(player,minutes.ToString());
+                            if (showUIIcon) SPUiUser(player,minutes.ToString());
                         }
                     }
                     else
@@ -896,9 +902,10 @@ namespace Oxide.Plugins
                     parsed_config = parsed_config.Replace("{minutes_left}", minutes.ToString());
                     PrintToChatEx(player, parsed_config);
                     SPUi(player,parsed_config);
-                    if (minutes>0) SPUiUser(player,minutes.ToString());
-                    else {
-                        DestroyUi(player);
+                    if (showUIIcon)
+                    {
+                        if (minutes > 0) SPUiUser(player, minutes.ToString());
+                        else DestroyUi(player);
                     }
                 }
             }
@@ -916,7 +923,7 @@ namespace Oxide.Plugins
                 {"tPunishment", "<color=red>You have been punished for attempting to PVP with Start Protection Enabled!</color>\n{minutes_revoked} minutes revoked.\nYou now have <color=#FF3300>{minutes_left}</color> minutes left before your Start Protection is disabled."},
                 {"tFirstSpawn", "Start protection enabled for {minutes_left} minutes, during this time you will not be able to pvp on any level.\nYou can check how much time you have left - /sp time\nTo turn protection off - /sp end" },
                 {"tSpawn", "You have {minutes_left} minutes left before your Start Protection is disabled."},
-                {"cantDo", "You have PVP Protection and can't loot/pickup that.\n{minutes_left} minutes left before your Start Protection is disabled."},
+                {"cantDo", "You have PVP Protection and can't loot/pickup that.\n{minutes_left} minutes left before your Start Protection is disabled.\nTo turn protection off - /sp end"},
                 {"tProtectionEnded", "Start protection <color=#FF3300>disabled</color>, you are now on your own."},
                 {"tNoProtection", "Start protection status is currently <color=#FF3300>disabled</color>."},
                 {"tAttackAttempt","The player you are trying to attack has Start Protection enabled and <color=#FF3300>cannot</color> be damaged."},
@@ -931,7 +938,7 @@ namespace Oxide.Plugins
                 {"tPunishment", "<color=red>Вы наказаны за пвп с включенной защитой!</color>\n{minutes_revoked} минут отнято от защиты.\nОсталось {minutes_left} минут до конца защиты."},
                 {"tFirstSpawn", "Защита от пвп включена на {minutes_left} минут, в это время нельзя пвп.\n\nСколько времени осталось, наберите - /sp time\n\nВыключить свою защиту - /sp end" },
                 {"tSpawn", "Осталось {minutes_left} минут до конца защиты."},
-                {"cantDo", "Ты находишься под защитой от пвп и не можешь открыть/взять это.\nОсталось {minutes_left} минут до конца защиты."},
+                {"cantDo", "Ты находишься под защитой от пвп и не можешь открыть/взять это.\nОсталось {minutes_left} минут до конца защиты.\nВыключить свою защиту - /sp end "},
                 {"tProtectionEnded", "Защита выключена."},
                 {"tNoProtection", "Защита на данный момент <color=#FF3300>выключена</color>"},
                 {"tAttackAttempt","Игрок находится под защитой, его <color=#FF3300>нельзя</color> убить"},
