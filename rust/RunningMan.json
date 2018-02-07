@@ -2,7 +2,7 @@
     "name": "Running Man",
     "description": "Plugin Runnung Man",
     "author": "sami37",
-    "version": "1.5.9",
+    "version": "1.6.0",
     "configuration": false,
     "suggest": {
         "Economics": "*",
