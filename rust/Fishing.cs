@@ -8,7 +8,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("Fishing", "Colon Blow", "1.3.2", ResourceId = 1537)]
+    [Info("Fishing", "Colon Blow", "1.3.3", ResourceId = 1537)]
     class Fishing : RustPlugin
     {
 
@@ -354,10 +354,12 @@ namespace Oxide.Plugins
         void SpawnLootBox(BasePlayer player, Vector3 hitloc)
         {
 	    var randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier1 lootbox.prefab";
-            int rlroll = UnityEngine.Random.Range(1, 4);
-            if (rlroll == 1) randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier1 lootbox.prefab";
-            if (rlroll == 2) randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier2 lootbox.prefab";
-            if (rlroll == 3) randomlootprefab = "assets/bundled/prefabs/radtown/dmloot/dm tier3 lootbox.prefab";
+            int rlroll = UnityEngine.Random.Range(1, 6);
+            if (rlroll == 1) randomlootprefab = "assets/bundled/prefabs/radtown/crate_basic.prefab";
+            if (rlroll == 2) randomlootprefab = "assets/bundled/prefabs/radtown/crate_elite.prefab";
+            if (rlroll == 3) randomlootprefab = "assets/bundled/prefabs/radtown/crate_mine.prefab";
+            if (rlroll == 4) randomlootprefab = "assets/bundled/prefabs/radtown/crate_normal.prefab";
+            if (rlroll == 5) randomlootprefab = "assets/bundled/prefabs/radtown/crate_normal_2.prefab";
             var createdPrefab = GameManager.server.CreateEntity(randomlootprefab, hitloc);
             BaseEntity treasurebox = createdPrefab?.GetComponent<BaseEntity>();
             treasurebox.enableSaving = false;

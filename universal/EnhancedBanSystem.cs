@@ -12,12 +12,11 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("EnhancedBanSystem", "Reneb/Slut", "5.1.14", ResourceId = 1951)]
+    [Info("EnhancedBanSystem", "Reneb/Slut", "5.2.0", ResourceId = 1951)]
     class EnhancedBanSystem : CovalencePlugin
     {
         [PluginReference]
-        Plugin PlayerDatabase;
-        Plugin DiscordMessages;
+        private Plugin PlayerDatabase, DiscordMessages;
 
         ////////////////////////////////////////////////////////////
         // Static fields
@@ -562,7 +561,7 @@ namespace Oxide.Plugins
 
             Interface.Oxide.LogInfo(returnstring);
 
-            if (Discord_use && (DiscordMessages == null || Discord_Webhook.Equals("https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks")))
+            if (Discord_use && (plugins.GetAll().FirstOrDefault(x => x.Name.Equals("DiscordMessages") && x.IsLoaded)) == null || Discord_Webhook.Equals("https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks"))
             {
                 LogError("DiscordMessages enabled but it isn't setup correctly.");
                 Discord_use = false;
@@ -1809,10 +1808,12 @@ namespace Oxide.Plugins
             TimeSpan duration = bandata.expire == 0.0 ? default(TimeSpan) : TimeSpan.FromSeconds(bandata.expire);
             player.Ban(bandata.reason, duration);
 #if RUST
-            return FormatReturn(BanSystem.Native, GetMsg("BanAdded"), bandata.steamid.ToString()) + "\nWARNING: NATIVE temporary bans are not supported in RUST! Temporary bans will stay permanent";
-#else
-            return FormatReturn(BanSystem.Native, GetMsg("BanAdded"), bandata.steamid.ToString());
+            if (bandata.expire != 0.0) 
+            {
+              return FormatReturn(BanSystem.Native, GetMsg("BanAdded"), bandata.steamid.ToString()) + "\nWARNING: NATIVE temporary bans are not supported in RUST! Temporary bans will stay permanent";
+            }
 #endif
+            return FormatReturn(BanSystem.Native, GetMsg("BanAdded"), bandata.steamid.ToString());
         }
 
         string Native_ExecuteUnban(string steamid, string name)
@@ -2268,7 +2269,7 @@ namespace Oxide.Plugins
                     new {name="Reason",value=bandata.reason, inline=false}
                 };
                 string json = JsonConvert.SerializeObject(payload);
-                DiscordMessages.Call("API_SendFancyMessage", Discord_Webhook, "Player Ban", json);
+                DiscordMessages?.Call("API_SendFancyMessage", Discord_Webhook, "Player Ban", json);
             }
             timer.Once(5f, () => { Subscribe(nameof(OnUserBanned)); });
             return returnstring;

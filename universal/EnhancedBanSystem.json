@@ -2,7 +2,7 @@
     "name": "Enhanced Ban System",
     "description": "Ban by steam or ip, online & offline players, local or webrequest banlist",
     "author": "Slut",
-    "version": "5.1.14",
+    "version": "5.2.0",
     "configuration": false,
     "suggest": {
         "DiscordMessages": "*"
