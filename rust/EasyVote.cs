@@ -12,7 +12,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("EasyVote", "Exel80", "2.0.32", ResourceId = 2102)]
+    [Info("EasyVote", "Exel80", "2.0.33", ResourceId = 2102)]
     [Description("Simple and smooth voting start by activating one scirpt.")]
     class EasyVote : RustPlugin
     {
@@ -78,6 +78,7 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
+                ["ClaimStatus"] = "<color=cyan>[{0}]</color> Checked {1}, Status: {2}",
                 ["ClaimError"] = "Something went wrong! Player <color=red>{0} got an error</color> from <color=yellow>{1}</color>. Please try again later!",
                 ["ClaimReward"] = "You just received your vote reward(s). Enjoy!",
                 ["ClaimPleaseWait"] = "Checking the voting websites. Please wait...",
@@ -340,8 +341,8 @@ namespace Oxide.Plugins
                             if (SitesApi.Key == PluginSettings.apiClaim)
                             {
                                 // Formating api claim =>
-                                // {0} = Key
-                                // {1} PlayerID
+                                // {0} APIKey
+                                // {1} SteamID
                                 // Example: "http://rust-servers.net/api/?action=custom&object=plugin&element=reward&key= {0} &steamid= {1} ",
                                 string _format = String.Format(SitesApi.Value, idKeySplit[1], player.userID);
 
@@ -368,19 +369,6 @@ namespace Oxide.Plugins
                 }
                 catch (Exception ex) { _Debug($"Error happen when try print \\claim status to \"{player.displayName}\"\n{ex.ToString()}"); PrintError("[ClaimStatus] Error printed to oxide/logs/EasyVote"); }
             });
-
-            // Wait 5.55 sec before execute this command.
-            // Because need make sure that plugin webrequest all api sites.
-            //timer.Once(5.55f, () =>
-            //{
-            //    if (!claimCooldown[player.userID])
-            //    {
-            //        Chat(player, $"{_lang("NoRewards", player.UserIDString)}");
-            //    }
-
-            //    // Remove player from cooldown list
-            //    claimCooldown.Remove(player.userID);
-            //});
         }
 
         [ChatCommand("reward")]
@@ -429,7 +417,6 @@ namespace Oxide.Plugins
                 }
                 catch (InvalidOperationException error) { _Debug($"Player {player.displayName} tried to claim a reward but this happened ...\n{error.ToString()}"); PrintError("[ClaimReward] Error printed to oxide/logs/EasyVote"); return; }
 
-                //TODO: Check this
                 if (closest > voted)
                 {
                     _Debug($"Closest ({closest}) number was bigger then voted number ({voted}). Changed closest from ({closest}) to 0");
@@ -505,11 +492,7 @@ namespace Oxide.Plugins
                 fields.Add(new Fields("Reward(s)", CleanHTML(rewardsString.ToString()), false));
 
                 json = JsonConvert.SerializeObject(fields);
-                DiscordMessages?.Call("API_SendFancyMessage", _config.Discord[PluginSettings.WebhookURL], _config.Discord[PluginSettings.Title], 0, json);
-
-                // Send @here in channel, if alert is true.
-                if (_config.Discord[PluginSettings.Alert].ToLower() == "true")
-                    DiscordMessages?.Call("API_SendTextMessage", _config.Discord[PluginSettings.WebhookURL], "@here");
+                DiscordMessages?.Call("API_SendFancyMessage", _config.Discord[PluginSettings.WebhookURL], _config.Discord[PluginSettings.Title], json, bool.Parse(_config.Discord[PluginSettings.Alert]) ? "@here" : null);
             }
 
             // Make sure that player has voted etc.
@@ -643,9 +626,10 @@ namespace Oxide.Plugins
             // Add response to StringBuilder
             if (claimCooldown.ContainsKey(player.userID))
             {
-                claimCooldown[player.userID].AppendLine(
-                    (!string.IsNullOrEmpty(serverName) ? $"<color=cyan>[{serverName}]</color> " : string.Empty)
-                    + $"Checked {url}, status: <color={voteStatusColor[responseNum]}>{voteStatus[responseNum]}</color>");
+                claimCooldown[player.userID].AppendLine(_lang("ClaimStatus", player.UserIDString, 
+                    (!string.IsNullOrEmpty(serverName) ? serverName : string.Empty), url, $"<color={voteStatusColor[responseNum]}>{voteStatus[responseNum]}</color>"));
+                    //(!string.IsNullOrEmpty(serverName) ? $"<color=cyan>[{serverName}]</color> " : string.Empty)
+                    //+ $"Checked {url}, status: <color={voteStatusColor[responseNum]}>{voteStatus[responseNum]}</color>");
             }
 
             // If response is 1 = Voted & not yet claimed
@@ -1116,12 +1100,13 @@ namespace Oxide.Plugins
                 return;
 
             // Reset voted data
+            int old = _storedData.Players[steamID].voted;
             _storedData.Players[steamID].voted = 0;
             Interface.GetMod().DataFileSystem.WriteObject("EasyVote", _storedData);
 
             // Print console message
             if (displayMessage)
-                Puts($"Player '{steamID}' voted data has been reseted.");
+                Puts($"Player '{steamID}' vote(s) data has been reseted from {old} to 0.");
         }
 
         // Output : Only console message.
