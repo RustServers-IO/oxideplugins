@@ -2,7 +2,7 @@
     "name": "R",
     "description": "Building and entity removal tool",
     "author": "Fujikura",
-    "version": "4.2.8",
+    "version": "4.2.9",
     "configuration": false,
     "suggest": {
         "BuildingOwners": "*",

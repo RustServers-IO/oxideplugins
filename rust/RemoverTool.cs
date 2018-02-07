@@ -14,7 +14,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("RemoverTool", "Reneb/Fuji", "4.2.8", ResourceId = 651)]
+    [Info("RemoverTool", "Reneb/Fuji", "4.2.9", ResourceId = 651)]
     class RemoverTool : RustPlugin
     {
         [PluginReference]
@@ -1281,7 +1281,15 @@ namespace Oxide.Plugins
             }
 
 			if (rt.RemoveWithToolCupboards && hasTotalAccess(player, TargetEntity))
-                return true;
+			{
+				if (rt.RemoveWithEntityOwners)
+				{
+					if (TargetEntity.OwnerID == player.userID || rt.AreFriends(TargetEntity.OwnerID.ToString(), player.userID.ToString()))
+						return true;
+					return false;
+				}
+				return true;
+			}
 			return false;
         }
 
