@@ -2,7 +2,7 @@
     "name": "NoDecay",
     "description": "Scales or disables decay of items, and deployables.",
     "author": "Diesel 42o",
-    "version": "1.0.20",
+    "version": "1.0.22",
     "configuration": false,
     "language": "cs",
     "url": "https:\/\/oxidemod.org\/plugins\/nodecay.1160",
