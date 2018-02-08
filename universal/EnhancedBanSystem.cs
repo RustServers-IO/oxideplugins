@@ -12,7 +12,7 @@ using System.Text.RegularExpressions;
 
 namespace Oxide.Plugins
 {
-    [Info("EnhancedBanSystem", "Reneb/Slut", "5.2.0", ResourceId = 1951)]
+    [Info("EnhancedBanSystem", "Reneb/Slut", "5.2.1", ResourceId = 1951)]
     class EnhancedBanSystem : CovalencePlugin
     {
         [PluginReference]
@@ -561,7 +561,7 @@ namespace Oxide.Plugins
 
             Interface.Oxide.LogInfo(returnstring);
 
-            if (Discord_use && (plugins.GetAll().FirstOrDefault(x => x.Name.Equals("DiscordMessages") && x.IsLoaded)) == null || Discord_Webhook.Equals("https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks"))
+            if (Discord_use && (plugins.GetAll().FirstOrDefault(x => x.Name.Equals("DiscordMessages") && x.IsLoaded) == null || Discord_Webhook.Equals("https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks")))
             {
                 LogError("DiscordMessages enabled but it isn't setup correctly.");
                 Discord_use = false;
