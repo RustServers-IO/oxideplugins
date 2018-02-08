@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AntiNoobRaid", "Slydelix", "1.5", ResourceId = 2697)]
+    [Info("AntiNoobRaid", "Slydelix", "1.5.1", ResourceId = 2697)]
     class AntiNoobRaid : RustPlugin
     {
         [PluginReference] Plugin PlaytimeTracker;
@@ -353,6 +353,10 @@ namespace Oxide.Plugins
             {
                 //not on by default because is sometimes hardly noticable
                 player.SendConsoleCommand("gametip.showgametip", lang.GetMessage("firstconnectionmessage", this, player.UserIDString), time / 3600);
+                timer.In(10f, () => {
+                    player.SendConsoleCommand("gametip.hidegametip");
+                    return;
+                });
                 return;
             }
 
@@ -650,7 +654,7 @@ namespace Oxide.Plugins
                     return;
                 }
 
-                else if(storedData.players[bp.userID] == -25d)
+                else if (storedData.players[bp.userID] == -25d)
                 {
                     LogToFile(this.Name, date + "Player " + bp + " is already marked as noob (-25)", this, false);
                     return;
@@ -719,8 +723,8 @@ namespace Oxide.Plugins
         {
             string output;
             float hours, mins, days;
-            days = (float) intsecs / 86400;
-            hours = (float) intsecs / 3600;
+            days = (float)intsecs / 86400;
+            hours = (float)intsecs / 3600;
             mins = intsecs / 60;
             double q = Math.Round(hours, 1);
             double q2 = Math.Round(mins, 0);
@@ -838,7 +842,7 @@ namespace Oxide.Plugins
             if (arg.Connection != null) return;
             if (arg.Args == null || arg == null || arg.cmd == null || arg.Args.Length == 0 || arg.FullString == null)
             {
-                Puts(lang.GetMessage("console_removenewhelp", this,null));
+                Puts(lang.GetMessage("console_removenewhelp", this, null));
                 return;
             }
 
@@ -1194,7 +1198,7 @@ namespace Oxide.Plugins
 
             double ftime = storedData.players[hitEnt.OwnerID];
 
-            int left = (int) (time - ftime);
+            int left = (int)(time - ftime);
 
             if (show)
             {
