@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Dangerous Treasures", "nivex", "1.1.3", ResourceId = 2479)]
+    [Info("Dangerous Treasures", "nivex", "1.1.4", ResourceId = 2479)]
     [Description("Event with treasure chests.")]
     public class DangerousTreasures : RustPlugin
     {
@@ -33,6 +33,7 @@ namespace Oxide.Plugins
         static string rocketResourcePath;
         DynamicConfigFile dataFile;
         StoredData storedData = new StoredData();
+        Vector3 sd_customPos;
 
         static int playerMask = LayerMask.GetMask("Player (Server)");
         static int blockedMask = LayerMask.GetMask(new[] { "Player (Server)", "Trigger", "Prevent Building" });
@@ -87,6 +88,7 @@ namespace Oxide.Plugins
             public int TotalEvents = 0;
             public readonly Dictionary<string, PlayerInfo> Players = new Dictionary<string, PlayerInfo>();
             public List<uint> Markers = new List<uint>();
+            public string CustomPosition;
             public StoredData() { }
         }
 
@@ -772,18 +774,30 @@ namespace Oxide.Plugins
                 eventTimer = timer.Repeat(1f, 0, () => CheckSecondsUntilEvent());
             }
 
-            if (wipeChestsSeed && storedData.Players.Count > 0)
+            if (!string.IsNullOrEmpty(storedData.CustomPosition))
+                sd_customPos = storedData.CustomPosition.ToVector3();
+            else
+                sd_customPos = Vector3.zero;
+
+            if (wipeChestsSeed)
             {
-                var ladder = storedData.Players.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.StolenChestsSeed).ToList<KeyValuePair<string, int>>();
-
-                if (AssignTreasureHunters(ladder))
+                if (storedData.Players.Count > 0)
                 {
-                    foreach (var kvp in storedData.Players.ToList())
-                        storedData.Players[kvp.Key].StolenChestsSeed = 0;
+                    var ladder = storedData.Players.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.StolenChestsSeed).ToList<KeyValuePair<string, int>>();
 
-                    SaveData();
-                    wipeChestsSeed = false;
+                    if (AssignTreasureHunters(ladder))
+                    {
+                        foreach (var kvp in storedData.Players.ToList())
+                        {
+                            storedData.Players[kvp.Key].StolenChestsSeed = 0;
+                        }
+                    }
                 }
+
+                sd_customPos = Vector3.zero;
+                storedData.CustomPosition = "";
+                wipeChestsSeed = false;
+                SaveData();
             }
 
             if (useRocketOpener)
@@ -918,8 +932,15 @@ namespace Oxide.Plugins
 
         private object OnNpcPlayerTarget(NPCPlayerApex npc, BaseEntity entity)
         {
-            var player = entity as BasePlayer;
-            if (player != null && newmanProtections.Contains(player.net.ID)) return 0f;
+            if (entity is BasePlayer)
+            {
+                var player = entity as BasePlayer;
+
+                if (player.net != null && newmanProtections.Contains(player.net.ID))
+                {
+                    return 0f;
+                }
+            }
 
             return null;
         }
@@ -1272,6 +1293,9 @@ namespace Oxide.Plugins
 
         public Vector3 GetEventPosition()
         {
+            if (sd_customPos != Vector3.zero)
+                return sd_customPos;
+
             var eventPos = Vector3.zero;
             int maxRetries = 100;
 
@@ -1648,7 +1672,6 @@ namespace Oxide.Plugins
             var epos = entity.transform.position;
 
             apex.Spawn();
-            apex.GuardPosition = epos;
             apex.Stats.AggressionRange = 250f;
             apex.Stats.VisionRange = 250f;
             apex.Stats.MaxRoamRange = eventRadius;
@@ -1685,7 +1708,6 @@ namespace Oxide.Plugins
                 //apex.StopMoving();
                 apex.Pause();
                 player.ServerPosition = spawnpoint;
-                apex.GuardPosition = spawnpoint;
                 //apex.RandomMove();
                 apex.Resume();
                 ins.timer.Once(10f, () => UpdateDestination(apex, spawnpoint, uid));
@@ -2181,10 +2203,30 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (args.Length == 1 && args[0].ToLower() == "help")
+            if (args.Length == 1)
             {
-                player.ChatMessage(msg(szHelp, player.UserIDString, szEventChatCommand));
-                return;
+                if (args[0].ToLower() == "help")
+                {
+                    player.ChatMessage(msg(szHelp, player.UserIDString, szEventChatCommand));
+                    return;
+                }
+                else if (args[0].ToLower() == "custom" && player.IsAdmin)
+                {
+                    if (string.IsNullOrEmpty(storedData.CustomPosition))
+                    {
+                        storedData.CustomPosition = player.transform.position.ToString();
+                        sd_customPos = player.transform.position;
+                        player.ChatMessage(msg("CustomPositionSet", player.UserIDString, storedData.CustomPosition));
+                    }
+                    else
+                    {
+                        storedData.CustomPosition = "";
+                        sd_customPos = Vector3.zero;
+                        player.ChatMessage(msg("CustomPositionRemoved", player.UserIDString));
+                    }
+                    SaveData();
+                    return;
+                }
             }
 
             if (treasureChests.Count >= maxEvents)
@@ -2349,7 +2391,7 @@ namespace Oxide.Plugins
         static bool spawnsDespawnInventory;
         static bool showXZ;
         static bool spawnNpcsRandomNames;
-
+        
         List<object> DefaultTimesInSeconds
         {
             get
@@ -2582,6 +2624,14 @@ namespace Oxide.Plugins
                 {
                     {"en", "Added item: {0} amount: {1}, skin: {2}"},
                 }},
+                {"CustomPositionSet", new Dictionary<string, string>()
+                {
+                    {"en", "Custom event spawn location set to: {0}"},
+                }},
+                {"CustomPositionRemoved", new Dictionary<string, string>()
+                {
+                    {"en", "Custom event spawn location removed."},
+                }},
             };
         }
 
@@ -2700,7 +2750,7 @@ namespace Oxide.Plugins
 
             if (eventRadius > 150f)
                 eventRadius = 150f;
-
+            
             permName = Convert.ToString(GetConfig("Settings", "Permission Name", "dangeroustreasures.use"));
 
             if (!string.IsNullOrEmpty(permName) && !permission.PermissionExists(permName))
