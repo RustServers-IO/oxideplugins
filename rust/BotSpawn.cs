@@ -16,9 +16,8 @@ using Facepunch;
 
 namespace Oxide.Plugins
 //comments are wide to the right --->
-//reload loop fixed
 {
-    [Info("BotSpawn", "Steenamaroo", "1.4.5", ResourceId = 2580)]
+    [Info("BotSpawn", "Steenamaroo", "1.4.6", ResourceId = 2580)]
     
     [Description("Spawn tailored AI with kits at monuments and custom locations.")]
 
@@ -284,8 +283,6 @@ namespace Oxide.Plugins
                 
                 TempRecord.NPCPlayers.Add(botapex);
 
-                botapex.GuardPosition = newPos;
-                
                 if (zone.Roam_Range < 20)
                 zone.Roam_Range = 20;
                 botapex.Spawn();
@@ -1327,14 +1324,14 @@ namespace Oxide.Plugins
                 }
                 void Update()
                 {
-                    if (botapex.AttackTarget == null && (Vector3.Distance(botapex.transform.position, botapex.GuardPosition) > roamRange))
+                    if (botapex.AttackTarget == null && (Vector3.Distance(botapex.transform.position, spawnPoint) > roamRange))
                     {
                         goingHome = true;
                     }
-                    if (Vector3.Distance(botapex.transform.position, botapex.GuardPosition) > (10) && goingHome == true)
+                    if (Vector3.Distance(botapex.transform.position, spawnPoint) > (10) && goingHome == true)
                     {
                         if (botapex.GetNavAgent.isOnNavMesh)
-                        botapex.GetNavAgent.SetDestination(botapex.GuardPosition);
+                        botapex.GetNavAgent.SetDestination(spawnPoint);
                     }
                     else
                     goingHome = false;
