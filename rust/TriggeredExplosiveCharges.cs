@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Triggered Explosive Charges", "EnigmaticDragon", "1.0.14", ResourceId = 2383)]
+    [Info("Triggered Explosive Charges", "EnigmaticDragon", "1.0.15", ResourceId = 2383)]
     [Description("Adds the option to set off C4 manually without a timer")]
     public class TriggeredExplosiveCharges : RustPlugin
     {
@@ -200,6 +200,11 @@ namespace Oxide.Plugins
                     return;
 
                 c4_mode = (ulong)C4_MODE.TIMED;
+            }
+
+            public string GetC4Mode()
+            {
+                return c4_mode == (ulong)C4_MODE.TIMED ? "Timed" : "Triggered"; 
             }
 
             private void UpdateTriggerSkin()
@@ -630,6 +635,8 @@ namespace Oxide.Plugins
             }
 
             TriggeredExplosivesManager.allManagers[player.userID].Toggle_C4_Mode(true);
+            if (player != null)
+                ChatMessage(player, L_MODE_TOGGLE, new object[] { TriggeredExplosivesManager.allManagers[player.userID].GetC4Mode() });
         }
 
         [ChatCommand("tec.explode")]
@@ -900,6 +907,7 @@ namespace Oxide.Plugins
         private const string L_GIVE_SUCCESS = "Give | Success";
         private const string L_CONFIG_ERROR = "Config | Error";
         private const string L_INVENTORY_FULL = "Inventory | NotEnoughSpace";
+        private const string L_MODE_TOGGLE = "Mode | Toggle";
 
         private static void ChatMessage(BasePlayer player, string key) { player.ChatMessage(Instance.lang.GetMessage(key, Instance, player.UserIDString)); }
         private static void ChatMessage(BasePlayer player, string key, object[] args) { player.ChatMessage(String.Format(Instance.lang.GetMessage(key, Instance, player.UserIDString), args)); }
@@ -922,7 +930,8 @@ namespace Oxide.Plugins
                 [L_GIVE_NOT_FOUND] = "Player not found",
                 [L_GIVE_SUCCESS] = "Gave \"{0}\" {1} triggers {2}",
                 [L_CONFIG_ERROR] = "Configuration Error: Invalid Value for \"{0}\" (loading default value: {1})",
-                [L_INVENTORY_FULL] = "Not enough inventory space"
+                [L_INVENTORY_FULL] = "Not enough inventory space",
+                [L_MODE_TOGGLE] = "C4 Mode: {0}"
             }, this);
 
             // German
@@ -939,7 +948,8 @@ namespace Oxide.Plugins
                 [L_GIVE_NOT_FOUND] = "Spieler nicht gefunden",
                 [L_GIVE_SUCCESS] = "\"{0}\" {1} Trigger gegeben {2}",
                 [L_CONFIG_ERROR] = "Configuration Fehler: Ungültiger Wert für \"{0}\" (lade Standardwert: {1})",
-                [L_INVENTORY_FULL] = "Nicht genug Platz im Inventar"
+                [L_INVENTORY_FULL] = "Nicht genug Platz im Inventar",
+                [L_MODE_TOGGLE] = "C4 Modus: {0}"
             }, this, "de");
         }
 
