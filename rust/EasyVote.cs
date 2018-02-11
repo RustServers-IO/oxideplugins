@@ -12,7 +12,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("EasyVote", "Exel80", "2.0.33", ResourceId = 2102)]
+    [Info("EasyVote", "Exel80", "2.0.34", ResourceId = 2102)]
     [Description("Simple and smooth voting start by activating one scirpt.")]
     class EasyVote : RustPlugin
     {
@@ -78,6 +78,7 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
+                ["NoPermission"] = "You do not have permission to use this command!",
                 ["ClaimStatus"] = "<color=cyan>[{0}]</color> Checked {1}, Status: {2}",
                 ["ClaimError"] = "Something went wrong! Player <color=red>{0} got an error</color> from <color=yellow>{1}</color>. Please try again later!",
                 ["ClaimReward"] = "You just received your vote reward(s). Enjoy!",
@@ -188,8 +189,10 @@ namespace Oxide.Plugins
         [ChatCommand("vote")]
         void cmdVote(BasePlayer player, string command, string[] args)
         {
-            if (!hasPermission(player, permUse))
+            if (!hasPermission(player, permUse)){
+                Chat(player, _lang("NoPermission", player.UserIDString));
                 return;
+            }
 
             // Check how many time player has voted.
             int voted = 0;
@@ -292,8 +295,10 @@ namespace Oxide.Plugins
         [ChatCommand("claim")]
         void cmdClaim(BasePlayer player, string command, string[] args)
         {
-            if (!hasPermission(player, permUse))
+            if (!hasPermission(player, permUse)){
+                Chat(player, _lang("NoPermission", player.UserIDString));
                 return;
+            }
 
             // Check if player exist in cooldown list or not
             if (!claimCooldown.ContainsKey(player.userID))
@@ -374,8 +379,10 @@ namespace Oxide.Plugins
         [ChatCommand("reward")]
         void cmdReward(BasePlayer player, string command, string[] args)
         {
-            if (!hasPermission(player, permUse))
+            if (!hasPermission(player, permUse)){
+                Chat(player, _lang("NoPermission", player.UserIDString));
                 return;
+            }
 
             if (args?.Length > 1)
                 return;
