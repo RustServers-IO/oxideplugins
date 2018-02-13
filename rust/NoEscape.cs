@@ -18,7 +18,7 @@ using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("NoEscape", "rustservers.io", "2.0.1", ResourceId = 1394)]
+    [Info("NoEscape", "rustservers.io", "2.0.2", ResourceId = 1394)]
     [Description("Prevent commands/actions while raid and/or combat is occuring")]
     class NoEscape : RustPlugin
     {
@@ -245,7 +245,7 @@ namespace Oxide.Plugins
         void Unload()
         {
             if (useZoneManager)
-                foreach (var zone in zones)
+                foreach (var zone in zones.ToList())
                     EraseZone(zone.Value.zoneid);
 
             var objects = GameObject.FindObjectsOfType(typeof(RaidBlock));
@@ -1566,7 +1566,7 @@ namespace Oxide.Plugins
             if (result is string)
             {
                 SendReply(player, result.ToString());
-                return true;
+                return false;
             }
 
             return null;
@@ -1645,6 +1645,11 @@ namespace Oxide.Plugins
         }
 
         object canTeleport(BasePlayer player) // ALIAS FOR MagicTeleportation
+        {
+            return CanTeleport(player);
+        }
+
+        object CanGridTeleport(BasePlayer player) // ALIAS FOR GrTeleport
         {
             return CanTeleport(player);
         }
