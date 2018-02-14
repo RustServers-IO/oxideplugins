@@ -9,7 +9,7 @@ using Network;
 
 namespace Oxide.Plugins
 {
-    [Info("Gyrocopter", "ColonBlow", "1.1.5", ResourceId = 2521)]
+    [Info("Gyrocopter", "ColonBlow", "1.1.6", ResourceId = 2521)]
     class Gyrocopter : RustPlugin
     {
 
@@ -180,7 +180,6 @@ namespace Oxide.Plugins
             if (activecopter == null) return;
             if (!isAllowed(player, "gyrocopter.fly")) { SendReply(player, lang.GetMessage("notauthorized", this, player.UserIDString)); return; }
             if (activecopter.islanding || !activecopter.engineon) return;
-
             activecopter.DropNet();
         }
 
@@ -822,9 +821,10 @@ namespace Oxide.Plugins
 
             void RefreshEntities()
             {
-                entity.UpdateNetworkGroup();
                 entity.transform.hasChanged = true;
+                ClntDstry(entity); EnttSnpsht(entity);
                 entity.SendNetworkUpdateImmediate();
+                entity.UpdateNetworkGroup();
 
                 if (floor != null) floor.transform.hasChanged = true;
                 if (floor != null) floor.SendNetworkUpdateImmediate();
@@ -912,21 +912,6 @@ namespace Oxide.Plugins
                 if (copterlock != null) copterlock.SendNetworkUpdateImmediate();
                 if (copterlock != null) copterlock.UpdateNetworkGroup();
 
-                var hasnet = entity.GetComponent<CopterNet>();
-                if (hasnet != null)
-                {
-                    hasnet.transform.hasChanged = true;
-                    ClntDstry(hasnet.netting1); EnttSnpsht(hasnet.netting1);
-                    hasnet.netting1.SendNetworkUpdateImmediate();
-                    hasnet.netting1.UpdateNetworkGroup();
-                    ClntDstry(hasnet.netting2); EnttSnpsht(hasnet.netting2);
-                    hasnet.netting2.SendNetworkUpdateImmediate();
-                    hasnet.netting2.UpdateNetworkGroup();
-                    ClntDstry(hasnet.netting3); EnttSnpsht(hasnet.netting3);
-                    hasnet.netting3.SendNetworkUpdateImmediate();
-                    hasnet.netting3.UpdateNetworkGroup();
-                }
-
                 if (panel != null) panel.transform.hasChanged = true;
                 if (panel != null) panel.SendNetworkUpdateImmediate();
                 if (panel != null) panel.UpdateNetworkGroup();
@@ -989,6 +974,48 @@ namespace Oxide.Plugins
                 var netstab3 = netting3.GetComponent<StabilityEntity>();
                 netstab3.grounded = true;
                 netting3.SetParent(entity);
+            }
+
+            void ClntDstry(BaseNetworkable entity)
+            {
+                if (Net.sv.write.Start())
+                {
+                    Net.sv.write.PacketID(Message.Type.EntityDestroy);
+                    Net.sv.write.UInt32(entity.net.ID);
+                    Net.sv.write.UInt8(0);
+                    Net.sv.write.Send(new SendInfo(entity.net.group.subscribers));
+                }
+            }
+
+            void EnttSnpsht(BaseNetworkable entity)
+            {
+                entity.InvalidateNetworkCache(); List<Connection> subscribers = entity.net.group == null ? Net.sv.connections : entity.net.group.subscribers; if (subscribers != null && subscribers.Count > 0) { for (int i = 0; i < subscribers.Count; i++) { Connection connection = subscribers[i]; BasePlayer basePlayer = connection.player as BasePlayer; if (!(basePlayer == null)) { if (Net.sv.write.Start()) { connection.validate.entityUpdates = connection.validate.entityUpdates + 1u; BaseNetworkable.SaveInfo saveInfo = new BaseNetworkable.SaveInfo { forConnection = connection, forDisk = false }; Net.sv.write.PacketID(Message.Type.Entities); Net.sv.write.UInt32(connection.validate.entityUpdates); entity.ToStreamForNetwork(Net.sv.write, saveInfo); Net.sv.write.Send(new SendInfo(connection)); } } } }
+            }
+
+            void RefreshNetting()
+            {
+                if (netting1 != null) netting1.transform.hasChanged = true;
+                if (netting1 != null) ClntDstry(netting1);
+                if (netting1 != null) EnttSnpsht(netting1);
+                if (netting1 != null) netting1.SendNetworkUpdateImmediate();
+                if (netting1 != null) netting1.UpdateNetworkGroup();
+
+                if (netting2 != null) netting2.transform.hasChanged = true;
+                if (netting2 != null) ClntDstry(netting2);
+                if (netting2 != null) EnttSnpsht(netting2);
+                if (netting2 != null) netting2.SendNetworkUpdateImmediate();
+                if (netting2 != null) netting2.UpdateNetworkGroup();
+
+                if (netting3 != null) netting3.transform.hasChanged = true;
+                if (netting3 != null) ClntDstry(netting3);
+                if (netting3 != null) EnttSnpsht(netting3);
+                if (netting3 != null) netting3.SendNetworkUpdateImmediate();
+                if (netting3 != null) netting3.UpdateNetworkGroup();
+            }
+
+            void FixedUpdate()
+            {
+                RefreshNetting();
             }
 
             void OnDestroy()
