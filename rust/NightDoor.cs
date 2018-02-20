@@ -1,17 +1,21 @@
 using Oxide.Core;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Night Door", "Slydelix", "1.6.3", ResourceId = 2684)]
+    [Info("Night Door", "Slydelix", "1.6.4", ResourceId = 2684)]
     class NightDoor : RustPlugin
     {
-        int layers = LayerMask.GetMask("Construction");
-        bool debug = false;
-        bool BypassAdmin, BypassPerm, UseRealTime, AutoDoor, useMulti, intialized = false;
-        string startTime, endTime;
+
+        //TODO
+        //when entity is a gate print that the gate cannot be opened
+
+        private bool debug = false;
+        private bool hideTime, BypassAdmin, BypassPerm, UseRealTime, AutoDoor, useMulti, intialized = false;
+        private string startTime, endTime;
 
         #region config
 
@@ -29,6 +33,7 @@ namespace Oxide.Plugins
             Config["Use multiple time intervals"] = useMulti = GetConfig("Use multiple time intervals", false);
             Config["End time (HH:mm)"] = endTime = GetConfig("End time (HH:mm)", "00:00");
             Config["Use system (real) time"] = UseRealTime = GetConfig("Use system (real) time", false);
+            Config["Don't show time to player when unable to open door"] = hideTime = GetConfig("Don't show time to player when unable to open door", false);
             Config["Automatic door closing/opening"] = AutoDoor = GetConfig("Automatic door closing/opening", false);
             SaveConfig();
         }
@@ -41,6 +46,7 @@ namespace Oxide.Plugins
             lang.RegisterMessages(new Dictionary<string, string>()
             {
                 {"serverWipe_NEW", "Server wipe detected, wiping data file"},
+                {"NotOpenable_notime", "This door/hatch/gate cannot be opened."},
                 {"NotOpenable", "This door/hatch/gate cannot be opened until {0}"},
                 {"CantPlace_NEW", "The code lock cannot be placed on this door/hatch/gate"},
                 {"ManualWipe_NEW", "Manually wiped Night Door data file"},
@@ -79,27 +85,16 @@ namespace Oxide.Plugins
             }, this);
         }
 
-        T GetConfig<T>(string name, T defaultValue)
+        private T GetConfig<T>(string name, T defaultValue)
         {
             if (Config[name] == null) return defaultValue;
             return (T)Convert.ChangeType(Config[name], typeof(T));
         }
 
         #endregion
-        #region DataFiles
+        #region DataFile
 
-        class StoredData2
-        {
-            public List<uint> IDlist = new List<uint>();
-
-            public StoredData2()
-            {
-            }
-        }
-
-        StoredData2 storedData2;
-
-        class StoredData
+        private class StoredData
         {
             public Dictionary<uint, string> IDlist = new Dictionary<uint, string>();
             public HashSet<TimeInfo> TimeEntries = new HashSet<TimeInfo>();
@@ -110,15 +105,11 @@ namespace Oxide.Plugins
             }
         }
 
-        class TimeInfo
+        private class TimeInfo
         {
             public string name;
             public string start;
             public string end;
-
-            public TimeInfo()
-            {
-            }
 
             public TimeInfo(string nameIn, string startInput, string endInput)
             {
@@ -128,53 +119,51 @@ namespace Oxide.Plugins
             }
         }
 
-        StoredData storedData;
+        private StoredData storedData;
 
         #endregion
         #region Hooks
 
-        void OnNewSave(string filename)
+        private void OnNewSave(string filename)
         {
             PrintWarning(lang.GetMessage("serverWipe_NEW", this));
             storedData.IDlist.Clear();
             SaveFile();
         }
 
-        void OnServerInitialized()
+        private void OnServerInitialized()
         {
             timer.In(10f, () =>
             {
-                //DUMB WAY TO CHECK WHEN THE SERVER IS FULLY INIT.
                 intialized = true;
             });
             Repeat();
-            UpgradeSaveFile();
             DoDefaultT();
         }
 
-        void Init()
+        private void Init()
         {
             LoadDefaultConfig();
             permission.RegisterPermission("nightdoor.use", this);
             permission.RegisterPermission("nightdoor.createinterval", this);
             permission.RegisterPermission("nightdoor.bypass", this);
             storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>("NightDoor_NEW");
-            storedData2 = Interface.Oxide.DataFileSystem.ReadObject<StoredData2>("NightDoor");
             if (GetDateTime(startTime) > GetDateTime(endTime)) PrintWarning(lang.GetMessage("Start>End_NEW", this));
             if (startTime == "00:00" && endTime == "00:00") PrintWarning(lang.GetMessage("Start&EndValIs0_NEW", this));
         }
 
-        void SaveFile() => Interface.Oxide.DataFileSystem.WriteObject("NightDoor_NEW", storedData);
+        private void SaveFile() => Interface.Oxide.DataFileSystem.WriteObject("NightDoor_NEW", storedData);
 
-        void Unload() => SaveFile();
+        private void Unload() => SaveFile();
 
-        void OnServerSave() => CheckAllEntites();
+        private void OnServerSave() => CheckAllEntites();
 
-        void OnEntityKill(BaseNetworkable entity) => CheckAllEntites();
+        private void OnEntityKill(BaseNetworkable entity) => CheckAllEntites();
 
-        void OnDoorOpened(Door door, BasePlayer player)
+        private void OnDoorOpened(Door door, BasePlayer player)
         {
-            uint entID = door.GetEntity().net.ID;
+            BaseEntity doorEnt = door.GetEntity();
+            uint entID = doorEnt.net.ID;
             if (storedData.IDlist.ContainsKey(door.net.ID))
             {
                 float time = ConVar.Env.time;
@@ -187,6 +176,12 @@ namespace Oxide.Plugins
                 {
                     if (entry.name == entname)
                     {
+                        if (hideTime)
+                        {
+                            SendReply(player, lang.GetMessage("NotOpenable_notime", this, player.UserIDString), entry.start);
+                            return;
+                        }
+
                         SendReply(player, lang.GetMessage("NotOpenable", this, player.UserIDString), entry.start);
                         return;
                     }
@@ -195,7 +190,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void OnItemDeployed(Deployer deployer, BaseEntity entity)
+        private void OnItemDeployed(Deployer deployer, BaseEntity entity)
         {
             BasePlayer player = deployer.GetOwnerPlayer();
 
@@ -216,16 +211,16 @@ namespace Oxide.Plugins
             }
         }
 
-        bool CanPickupEntity(BaseCombatEntity entity, BasePlayer player)
+        private bool CanPickupEntity(BaseCombatEntity entity, BasePlayer player)
         {
             if (storedData.IDlist.ContainsKey(entity.net.ID)) return false;
             else return true;
         }
 
         #endregion
-        #region functions
+        #region stuff
 
-        void Repeat()
+        private void Repeat()
         {
             timer.Every(5f, () => {
                 CheckDoors();
@@ -233,35 +228,20 @@ namespace Oxide.Plugins
             });
         }
 
-        void UpgradeSaveFile()
-        {
-            if (storedData2.IDlist == null) return;
-            foreach (var entry in storedData2.IDlist)
-            {
-                if (!storedData.IDlist.ContainsKey(entry))
-                {
-                    storedData.IDlist.Add(entry, "default");
-                    SaveFile();
-                }
-
-            }
-            storedData2.IDlist = null;
-            Interface.Oxide.DataFileSystem.WriteObject("NightDoor", storedData2);
-            //END OF OLD DATA FILE
-            return;
-        }
-
-        void DoDefaultT()
+        private void DoDefaultT()
         {
             timer.Once(1f, () => {
-                foreach (var entry in storedData.TimeEntries) if (entry.name == "default")
+                foreach (var entry in storedData.TimeEntries)
+                {
+                    if (entry.name == "default")
                     {
                         entry.start = startTime;
                         entry.end = endTime;
                         SaveFile();
                         return;
                     }
-
+                }
+                
                 var cfgTime = new TimeInfo("default", startTime, endTime);
                 storedData.TimeEntries.Add(cfgTime);
                 SaveFile();
@@ -269,40 +249,35 @@ namespace Oxide.Plugins
             });
         }
 
-        void CheckDoors()
+        private void CheckDoors()
         {
             if (!AutoDoor) return;
 
-            Dictionary<uint, string> tempList = new Dictionary<uint, string>();
-            float time;
+            float time = ConVar.Env.time;
 
-            tempList = storedData.IDlist ?? tempList;
-            time = ConVar.Env.time;
+            if (storedData.IDlist.Count == 0) return;
 
-            if (tempList.Count > 1)
+            foreach (var entry in storedData.IDlist.ToList())
             {
-                foreach (var entry in tempList)
+                BaseEntity ent = BaseNetworkable.serverEntities.Find(entry.Key) as BaseEntity;
+
+                if (ent == null || ent.IsDestroyed) continue;
+
+                if (CanOpen(null, ent.net.ID, time))
                 {
-                    BaseEntity ent = BaseNetworkable.serverEntities.Find(entry.Key) as BaseEntity;
+                    ent.SetFlag(BaseEntity.Flags.Open, true);
+                    ent.SendNetworkUpdateImmediate();
+                }
 
-                    if (ent == null || ent.IsDestroyed) continue;
-
-                    if (CanOpen(null, ent.net.ID, time))
-                    {
-                        ent.SetFlag(BaseEntity.Flags.Open, true);
-                        ent.SendNetworkUpdateImmediate();
-                    }
-
-                    else
-                    {
-                        ent.SetFlag(BaseEntity.Flags.Open, false);
-                        ent.SendNetworkUpdateImmediate();
-                    }
+                else
+                {
+                    ent.SetFlag(BaseEntity.Flags.Open, false);
+                    ent.SendNetworkUpdateImmediate();
                 }
             }
         }
 
-        bool CanOpen(BasePlayer player, uint ID, float now)
+        private bool CanOpen(BasePlayer player, uint ID, float now)
         {
             if (player != null)
             {
@@ -316,14 +291,12 @@ namespace Oxide.Plugins
                 {
                     if (entry.Key == ID)
                     {
-                        string name = entry.Value;
                         foreach (var ent in storedData.TimeEntries)
                         {
-                            if (ent.name == name)
+                            if (ent.name == entry.Value)
                             {
                                 string ending = ent.end;
-                                string val = ending.Split(':')[0];
-                                int valInt = Convert.ToInt32(val);
+                                int valInt = int.Parse(ending.Split(':')[0]);
                                 if (valInt > 24)
                                 {
                                     DateTime start_changed = GetDateTime(ID, true);
@@ -347,6 +320,7 @@ namespace Oxide.Plugins
                 }
             }
 
+            //wtf is this even
             float a = GetFloat(ID, true);
             float b = GetFloat(ID, false);
             float c = b - 24f;
@@ -360,94 +334,71 @@ namespace Oxide.Plugins
             return false;
         }
 
-        void CheckAllEntites()
+        private void CheckAllEntites()
         {
-            if (!intialized) return;
-            List<uint> temp = new List<uint>();
-            if (storedData.IDlist.Count < 1) return;
-            foreach (var entry in storedData.IDlist)
+            if (!intialized || storedData.IDlist.Count == 0) return;
+
+            foreach (var entry in storedData.IDlist.ToList())
             {
                 BaseNetworkable ent = BaseNetworkable.serverEntities.Find(entry.Key) ?? null;
-                if (ent == null || ent.IsDestroyed) temp.Add(entry.Key);
-                
-                else continue;
-            }
 
-            if (temp.Count < 1) return;
-
-            foreach (uint id in temp) storedData.IDlist.Remove(id);
-            SaveFile();
+                if (ent == null || ent.IsDestroyed)
+                {
+                    storedData.IDlist.Remove(entry.Key);
+                    SaveFile();
+                }
+            }   
         }
 
-        float GetFloat(uint ID, bool start)
+        private float GetFloat(uint ID, bool start)
         {
-            string temp = storedData.IDlist[ID];
             string input = "";
             foreach (var entry in storedData.TimeEntries)
             {
-                if (entry.name == temp)
+                if (entry.name == storedData.IDlist[ID])
                 {
-                    if (start)
-                    {
-                        input = entry.start;
-                    }
-
-                    else
-                    {
-                        input = entry.end;
-                    }
+                    if (start) input = entry.start;
+                    else input = entry.end;
                 }
             }
-            float final = 0f;
+
             string[] parts = input.Split(':');
             string h = "", m = "";
-            int hourInt = Convert.ToInt32(parts[0]);
-            int minInt = Convert.ToInt32(parts[1]);
+            int hourInt = int.Parse(parts[0]);
+            int minInt = int.Parse(parts[1]);
 
             float min = (float)minInt / 60;
-            final = hourInt + min;
-            return final;
+
+            return (hourInt + min);
         }
 
-        float GetFloat(string in2)
+        private float GetFloat(string in2)
         {
-            float final = 0f;
             string[] parts = in2.Split(':');
             string h = "", m = "";
-            int hourInt = Convert.ToInt32(parts[0]);
-            int minInt = Convert.ToInt32(parts[1]);
+            int hourInt = int.Parse(parts[0]);
+            int minInt = int.Parse(parts[1]);
 
             float min = (float)minInt / 60;
-            final = hourInt + min;
-            return final;
+            return (hourInt + min);
         }
 
-        DateTime GetDateTime(uint ID, bool start)
+        private DateTime GetDateTime(uint ID, bool start)
         {
             DateTime final = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, 0, 0, 0);
-            string temp = storedData.IDlist[ID];
             string input = "";
             foreach (var entry in storedData.TimeEntries)
             {
-                if (entry.name == temp)
+                if (entry.name == storedData.IDlist[ID])
                 {
-                    if (start)
-                    {
-                        input = entry.start;
-                    }
-
-                    else
-                    {
-                        input = entry.end;
-                    }
+                    if (start) input = entry.start;
+                    else input = entry.end;
                 }
             }
+
             string[] parts = input.Split(':');
-            string h, m;
-            h = parts[0].ToString();
-            m = parts[1].ToString();
-            int mInt = Convert.ToInt32(m);
-            int hInt = Convert.ToInt32(h);
+            int mInt = int.Parse(parts[1]);
+            int hInt = int.Parse(parts[0]);
 
             if (hInt > 24 && start)
             {
@@ -462,27 +413,24 @@ namespace Oxide.Plugins
             return final;
         }
 
-        DateTime GetDateTime(string input)
+        private DateTime GetDateTime(string input)
         {
             DateTime final = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, 0, 0, 0);
             string[] parts = input.Split(':');
-            string h, m;
-            h = parts[0].ToString();
-            m = parts[1].ToString();
-            int mInt = Convert.ToInt32(m);
-            int hInt = Convert.ToInt32(h);
+            int mInt = int.Parse(parts[1]);
+            int hInt = int.Parse(parts[0]);
             final = final.AddHours(hInt);
             final = final.AddMinutes(mInt);
             return final;
         }
 
-        BaseEntity GetLookAtEntity(BasePlayer player, float maxDist = 250, int coll = -1)
+        private BaseEntity GetLookAtEntity(BasePlayer player, float maxDist = 250, int coll = -1)
         {
             if (player == null || player.IsDead()) return null;
             RaycastHit hit;
             var currentRot = Quaternion.Euler(player?.serverInput?.current?.aimAngles ?? Vector3.zero) * Vector3.forward;
             var ray = new Ray((player?.eyes?.position ?? Vector3.zero), currentRot);
-            if (UnityEngine.Physics.Raycast(ray, out hit, maxDist, ((coll != -1) ? coll : layers)))
+            if (Physics.Raycast(ray, out hit, maxDist))
             {
                 var ent = hit.GetEntity() ?? null;
                 if (debug)
@@ -503,7 +451,7 @@ namespace Oxide.Plugins
         #region commands
 
         [ConsoleCommand("wipedoordata")]
-        void nightdoorwipeccmd(ConsoleSystem.Arg arg)
+        private void nightdoorwipeccmd(ConsoleSystem.Arg arg)
         {
             if (arg.Connection != null) return;
             storedData.IDlist.Clear();
@@ -513,7 +461,7 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("timeperiod")]
-        void timeCmd(BasePlayer player, string command, string[] args)
+        private void timeCmd(BasePlayer player, string command, string[] args)
         {
             if (!permission.UserHasPermission(player.UserIDString, "nightdoor.createinterval"))
             {
@@ -675,7 +623,7 @@ namespace Oxide.Plugins
         }
 
         [ChatCommand("nd")]
-        void nightdoorcmd(BasePlayer player, string command, string[] args)
+        private void nightdoorcmd(BasePlayer player, string command, string[] args)
         {
             if (!permission.UserHasPermission(player.UserIDString, "nightdoor.use"))
             {
@@ -694,7 +642,7 @@ namespace Oxide.Plugins
             {
                 case "add":
                     {
-                        BaseEntity ent = GetLookAtEntity(player, 10f, layers);
+                        BaseEntity ent = GetLookAtEntity(player, 10f);
 
                         if (!(ent is Door))
                         {
@@ -739,7 +687,7 @@ namespace Oxide.Plugins
 
                 case "remove":
                     {
-                        BaseEntity ent = GetLookAtEntity(player, 10f, layers);
+                        BaseEntity ent = GetLookAtEntity(player, 10f);
 
                         if (!(ent is Door))
                         {
@@ -761,7 +709,7 @@ namespace Oxide.Plugins
 
                 case "info":
                     {
-                        BaseEntity ent = GetLookAtEntity(player, 10f, layers);
+                        BaseEntity ent = GetLookAtEntity(player, 10f);
 
                         if (!(ent is Door))
                         {
@@ -860,7 +808,7 @@ namespace Oxide.Plugins
                             return;
                         }
 
-                        BaseEntity ent = GetLookAtEntity(player, 10f, layers);
+                        BaseEntity ent = GetLookAtEntity(player, 10f);
 
                         if (ent == null || ent.IsDestroyed)
                         {

@@ -1,0 +1,16 @@
+{
+    "name": "Offline Doors",
+    "description": "Automagically closes all doors owned by player when he disconnects",
+    "author": "Slydelix",
+    "version": "1.0",
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/offline-doors.2782",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust"
+    ]
+}

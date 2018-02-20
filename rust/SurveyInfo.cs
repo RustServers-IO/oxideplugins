@@ -7,7 +7,7 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Survey Info", "Diesel_42o", "0.1.6", ResourceId = 2463)]
+    [Info("Survey Info", "Diesel_42o", "0.1.7", ResourceId = 2463)]
     [Description("Displays Loot from Survey Charges")]
 
     class SurveyInfo : RustPlugin
@@ -16,21 +16,13 @@ namespace Oxide.Plugins
         Plugin GatherManager;
 
         private const string UsePermission = "surveyinfo.use";
-        private bool BroadcastScore;
-        private string ServerBroadcastColor;
         private string Icon;
         private string PrefixColor;
-        private string ScoreChatColor;
         private string ResultsAmountColor;
-        private string SeperatorColor;
         private string ResultResourseNameColor;
-        private string ScoreColor;
-        private string PlayerColor;
         private bool configChanged;
 
         private readonly Hash<int, SurveyData> _activeSurveyCharges = new Hash<int, SurveyData>();
-
-        private double _bestPossibleSurveyScore = 25;
         private enum SurveyLootItemIdEnum { Stones = -892070738, MetalOre = -1059362949, MetalFrag = 688032252, SulfurOre = 889398893, HighQualityMetal = 2133577942 }
 
         private void Loaded()
@@ -44,16 +36,10 @@ namespace Oxide.Plugins
 
         void LoadConfigValues()
         {
-            BroadcastScore = Convert.ToBoolean(GetConfig("Settings", "BroadcastScore", true));
             Icon = Convert.ToString(GetConfig("Settings", "icon", "0"));
             PrefixColor = Convert.ToString(GetConfig("Colors", "PrefixColor", "#fa58ac")); // Pink
-            PlayerColor = Convert.ToString(GetConfig("Colors", "PlayerColor", "#55aaff")); // Player Blue
             ResultsAmountColor = Convert.ToString(GetConfig("Colors", "ResultsAmountColor", "#05eb59")); // Green
-            ResultResourseNameColor = Convert.ToString(GetConfig("Colors", "ResultResourseNameColor", "#ffa500"));  // Orange			
-            SeperatorColor = Convert.ToString(GetConfig("Colors", "SeperatorColor", "#ffa500"));  // Orange
-            ScoreChatColor = Convert.ToString(GetConfig("Colors", "ScoreChatColor", "#ffa500"));  // Orange
-            ServerBroadcastColor = Convert.ToString(GetConfig("Colors", "ServerBroadcastColor", "#ffa500")); // Orange
-            ScoreColor = Convert.ToString(GetConfig("Colors", "ScoreColor", "#05eb59")); // Green
+            ResultResourseNameColor = Convert.ToString(GetConfig("Colors", "ResultResourseNameColor", "#ffa500"));  // Orange
             SaveConfig();
 
             if (configChanged)
@@ -86,10 +72,7 @@ namespace Oxide.Plugins
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
-                ["Prefix"] = "[ Survey Info ]: ",
-                ["Score"] = "Score: {0}%",
-                ["Broadcast"] = "{0} received a survey score of {1}%",
-                ["Seperator"] = "-------------------------------------",
+                ["Prefix"] = "[ Survey Info ]",
             }, this);
         }
 
@@ -123,18 +106,7 @@ namespace Oxide.Plugins
                     gatherManagerMulitiplier = val;
                 else if (surveyResourceModifiers.TryGetValue("*", out val))
                     gatherManagerMulitiplier = val;
-
-                if (item != SurveyLootItemIdEnum.HighQualityMetal)
-                {
-                    newBestScore += (int)(gatherManagerMulitiplier * 5);
-                }
-                else
-                {
-                    newBestScore += (int)(gatherManagerMulitiplier) * 5;
-                }
             }
-
-            _bestPossibleSurveyScore = newBestScore;
         }
 
         private void OnSurveyGather(SurveyCharge survey, Item item)
@@ -164,21 +136,6 @@ namespace Oxide.Plugins
             {
                 if (data.Items.Count > 0)
                 {
-                    float score = 0f;
-
-                    foreach (KeyValuePair<int, SurveyItem> item in data.Items)
-                    {
-                        if (item.Key != (int)SurveyLootItemIdEnum.HighQualityMetal)
-                        {
-                            score += item.Value.Amount;
-                        }
-                        else
-                        {
-                            score += 5 * item.Value.Amount;
-                        }
-                    }
-                    data.Score = (float)((score / _bestPossibleSurveyScore) * 100);
-
                     if (HasPermission(player, UsePermission))
                     {
                         DisplaySurveyLoot(player, data);
@@ -189,10 +146,7 @@ namespace Oxide.Plugins
 
         private void DisplaySurveyLoot(BasePlayer player, SurveyData data)
         {
-            if (BroadcastScore)
-                PrintToChat("<color=" + GetConfig("Colors", "PrefixColor", player) + ">" + Lang("Prefix", player.UserIDString) + "</color>" + "<color=" + GetConfig("Colors", "ServerBroadcastColor", player) + ">" + Lang("Broadcast", player.UserIDString, "<color=" + GetConfig("Colors", "PlayerColor", player) + ">" + player.displayName + "</color>", "<color=" + GetConfig("Colors", "ScoreColor", player) + ">" + data.Score + "</color>") + "</color>", null, Icon);
-
-            SendReply(player, "<color=" + GetConfig("Colors", "SeperatorColor", player) + ">" + Lang("Seperator", player.UserIDString) + "</color>\n" + "<color=" + GetConfig("Colors", "PrefixColor", player) + ">" + Lang("Prefix", player.UserIDString) + "</color>" + "<color=" + GetConfig("Colors", "ScoreChatColor", player) + ">" + Lang("Score", player.UserIDString, "<color=" + GetConfig("Colors", "ScoreColor", player) + ">" + data.Score + "</color>") + "</color>\n" + "<color=" + GetConfig("Colors", "SeperatorColor", player) + ">" + Lang("Seperator", player.UserIDString) + "</color>", null, Icon);
+            SendReply(player, "<color=" + GetConfig("Colors", "PrefixColor", player) + ">" + Lang("Prefix", player.UserIDString) + "</color>", null, Icon);
 
             foreach (KeyValuePair<int, SurveyItem> item in data.Items)
             {
@@ -222,7 +176,6 @@ namespace Oxide.Plugins
 
         private class SurveyData
         {
-            public float Score { get; set; }
             public Hash<int, SurveyItem> Items { get; }
 
             public SurveyData(int surveyId)

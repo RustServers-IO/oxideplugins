@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Prevents players from destroying buildings they're not associated with",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/noraid.2530",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}

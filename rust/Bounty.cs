@@ -5,1317 +5,1075 @@ using Oxide.Core.Plugins;
 using System.Linq;
 using Oxide.Core.Configuration;
 using UnityEngine;
+using Newtonsoft.Json;
+using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("Bounty", "k1lly0u", "0.1.74", ResourceId = 1649)]
+    [Info("Bounty", "k1lly0u", "0.2.0", ResourceId = 1649)]
     class Bounty : RustPlugin
     {
-        [PluginReference]
-        Plugin Clans;
-        [PluginReference]
-        Plugin Friends;
-        [PluginReference]
-        Plugin PopupNotifications;
-        [PluginReference]
-        Plugin Economics;
+        [PluginReference] Plugin Clans, Friends, PopupNotifications, Economics, ServerRewards;
 
-        private bool Changed;
+        private StoredData storedData;
+        private DynamicConfigFile data;
 
-        BountyDataStorage bountyData;
-        private DynamicConfigFile BountyData;
+        private Dictionary<ulong, ulong> bountyCreator = new Dictionary<ulong, ulong>();
+        private Dictionary<StorageContainer, ulong> openContainers = new Dictionary<StorageContainer, ulong>();
+        private Dictionary<int, string> idToDisplayName = new Dictionary<int, string>();
 
-        RewardDataStorage rewardData;
-        private DynamicConfigFile RewardData;
+        private string boxPrefab = "assets/prefabs/deployable/woodenbox/woodbox_deployed.prefab";
 
-        PlayerTimeStamp playerTimeData = new PlayerTimeStamp();
-
-        private Dictionary<string, string> itemInfo;
-
-        private Dictionary<ulong, OpenBox> rewardBoxs = new Dictionary<ulong, OpenBox>();
-        string rBox = "assets/prefabs/deployable/woodenbox/woodbox_deployed.prefab";
-
-        #region oxide hooks
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Oxide Hooks ///////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-        void Loaded()
+        #region Oxide Hooks     
+        private void Loaded()
         {
             permission.RegisterPermission("bounty.use", this);
             permission.RegisterPermission("bounty.admin", this);
-            permission.RegisterPermission("bounty.ban", this);
 
             lang.RegisterMessages(messages, this);
-            
-            BountyData = Interface.Oxide.DataFileSystem.GetFile("bounty_players");
-            RewardData = Interface.Oxide.DataFileSystem.GetFile("bounty_rewards");
-            itemInfo = new Dictionary<string, string>();            
 
+            data = Interface.Oxide.DataFileSystem.GetFile("Bounty/bounty_data");
+        }
+
+        private void OnServerInitialized()
+        {
+            idToDisplayName = ItemManager.itemList.ToDictionary(x => x.itemid, y => y.displayName.english);
             LoadData();
-            LoadVariables();           
 
+            foreach (BasePlayer player in BasePlayer.activePlayerList)
+                OnPlayerInit(player);
         }
-        void OnServerInitialized()
+        
+        private void OnPlayerInit(BasePlayer player)
         {
-            CheckDependencies();   
-            foreach (var player in BasePlayer.activePlayerList)
+            PlayerData playerData;
+            if (storedData.players.TryGetValue(player.userID, out playerData))
             {
-                if (bountyData.players.ContainsKey(player.userID))
-                {
-                    if (bountyData.players[player.userID].Bountys.Count > 0)
-                        initTimestamp(player);
-                }
+                if (playerData.activeBounties.Count > 0)                
+                    BroadcastToPlayer(player, string.Format(msg("bounties_outstanding", player.userID), playerData.activeBounties.Count));
+                
+                playerData.displayName = player.displayName;
+            }            
+        }
+
+        private void OnPlayerDisconnected(BasePlayer player)
+        {
+            PlayerData playerData;
+            if (storedData.players.TryGetValue(player.userID, out playerData))
+                playerData.UpdateWantedTime();
+        }
+
+        private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
+        {
+            if (entity == null || info == null)
+                return null;
+
+            if (entity is StorageContainer && openContainers.ContainsKey(entity as StorageContainer))
+                return false;
+
+            return null;
+        }
+
+        private void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
+        {
+            if (entity == null || info == null)
+                return;
+
+            BasePlayer victim = entity.ToPlayer();
+            BasePlayer attacker = info.InitiatorPlayer;
+
+            if (victim == null || attacker == null || attacker.GetComponent<NPCPlayer>())
+                return;
+            
+            PlayerData victimData;
+            if (!storedData.players.TryGetValue(victim.userID, out victimData))
+                return;
+
+            if (victimData.activeBounties.Count == 0)
+                return;
+
+            if (IsFriendlyPlayer(victim.userID, attacker.userID))
+            {
+                BroadcastToPlayer(attacker, msg("is_friend", attacker.userID));
+                return;
             }
-            InitializeTable();
-            SaveDataLoop();
-            if (useReminders)
-                RemindPlayers();
-        }
-        void CheckDependencies()
-        {
-            if (Friends == null)
+           
+            victimData.UpdateWantedTime();
+
+            List<int> rewards = victimData.activeBounties.Select(x => x.rewardId).ToList();
+            victimData.activeBounties.Clear();
+
+            PlayerData attackerData;
+            if (!storedData.players.TryGetValue(attacker.userID, out attackerData))
             {
-                if (useFriendsAPI)
-                {
-                    PrintWarning($"FriendsAPI could not be found! Disabling friends feature");
-                    useFriendsAPI = false;
-                }
+                attackerData = new PlayerData(attacker.displayName);
+                storedData.players.Add(attacker.userID, attackerData);
             }
 
-            if (Clans == null)
-            {
-                if (useClans)
-                {
-                    PrintWarning($"Clans could not be found! Disabling clans feature");
-                    useClans = false;
-                }
-            }
-            if (PopupNotifications == null)
-            {
-                if (usePopup)
-                {
-                    PrintWarning($"Popup Notifications could not be found! Disabling feature");
-                    usePopup = false;
-                }
-            }
-            if (Economics == null)
-            {
-                if (useEconomics)
-                {
-                    PrintWarning($"Economics could not be found! Disabling money feature");
-                    useEconomics = false;
-                }
-            }
+            attackerData.ClaimRewards(rewards);
+            BroadcastToPlayer(attacker, string.Format(msg("rewards_pending"), victim.displayName, rewards.Count));            
         }
-        void OnPlayerInit(BasePlayer player)
+
+        private object CanLootEntity(BasePlayer player, StorageContainer container)
         {
-            if (bountyData.players.ContainsKey(player.userID))
-            {
-                int count = bountyData.players[player.userID].Bountys.Count;
-                if (count > 0)
-                {
-                    initTimestamp(player);
-                    if (usePopup && PopupNotifications)
-                    {
-                        timer.Once(15, ()=> SendPopup(player, string.Format(lang.GetMessage("numOutstand", this, player.UserIDString), count)));
-                    }
-                    else
-                        timer.Once(15, () => SendMSG(player, string.Format(lang.GetMessage("numOutstand", this, player.UserIDString), count)));                    
-                }
-            }
+            if (player == null || container == null || !openContainers.ContainsKey(container))
+                return null;
+
+            if (openContainers[container] != player.userID)
+                return false;
+            
+            return null;
         }
-        protected override void LoadDefaultConfig()
-        {
-            Puts("Creating a new config file");
-            Config.Clear();
-            LoadVariables();
-        }
-        void Unload()
-        {
-            SaveData();
-            playerTimeData.playerTime.Clear();
-            rewardBoxs.Clear();
-        }        
-       
-        void OnEntityDeath(BaseCombatEntity entity, HitInfo info)
-        {
-            try
-            {
-                if (entity == null || info.Initiator == null) return;
-                if (entity is BasePlayer && info.Initiator is BasePlayer)
-                {
-                    if ((BasePlayer)entity != (BasePlayer)info.Initiator)
-                    {                        
-                        BasePlayer victim = (BasePlayer)entity;
-                        ulong VID = victim.userID;
-                        BasePlayer attacker = (BasePlayer)info.Initiator;
-                        ulong AID = attacker.userID;
-                        if (isBanned(attacker))
-                        {
-                            if (usePopup && PopupNotifications)
-                            {
-                                SendPopup(attacker, lang.GetMessage("title", this, attacker.UserIDString) + lang.GetMessage("playerBanned", this, attacker.UserIDString));
-                            }
-                            else
-                                SendMSG(attacker, lang.GetMessage("playerBanned", this, attacker.UserIDString));
-                            return;
-                        }
-                        if (bountyData.players.ContainsKey(VID))
-                        {
-                            if (bountyData.players[VID].Bountys.Count > 0)
-                            {
-                                if (useClans)
-                                {
-                                    if (IsClanmate(VID, AID))
-                                    {
-                                        if (usePopup && PopupNotifications)
-                                        {
-                                            SendPopup(attacker, lang.GetMessage("title", this, attacker.UserIDString) + lang.GetMessage("clanMate", this, attacker.UserIDString));
-                                        }
-                                        else
-                                            SendMSG(attacker, lang.GetMessage("clanMate", this, attacker.UserIDString));
-                                        return;
-                                    }
-                                }
-                                if (useFriendsAPI)
-                                {
-                                    if (IsFriend(victim, attacker.userID))
-                                    {
-                                        if (usePopup && PopupNotifications)
-                                        {
-                                            SendPopup(attacker, lang.GetMessage("title", this, attacker.UserIDString) + lang.GetMessage("isFriend", this, attacker.UserIDString));
-                                        }
-                                        else
-                                            SendMSG(attacker, lang.GetMessage("isFriend", this, attacker.UserIDString));
-                                        return;
-                                    }
-                                }
-                                recordEarnings(attacker, victim);
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-            }
-        }
-        void OnPlayerLootEnd(PlayerLoot inventory)
+
+        private void OnPlayerLootEnd(PlayerLoot inventory)
         {
             BasePlayer player = inventory.GetComponent<BasePlayer>();
 
-            if (rewardBoxs.ContainsKey(player.userID))
-                StoreRewardData(player);            
+            if (bountyCreator.ContainsKey(player.userID))
+            {
+                StorageContainer container = inventory.entitySource.GetComponent<StorageContainer>();
+                if (container != null)
+                {
+                    if (container.inventory.itemList.Count == 0)
+                        SendReply(player, msg("no_items_deposited", player.userID));
+                    else CreateNewBounty(player, bountyCreator[player.userID], 0, 0, container.inventory);
+
+                    openContainers.Remove(container);
+                    ClearContainer(container.inventory);
+                    container.DieInstantly();
+                }
+                bountyCreator.Remove(player.userID);
+            }
+        }
+
+        private void OnServerSave() => SaveData();
+       
+        private void Unload()
+        {
+            SaveData();            
+        }  
+        #endregion
+
+        #region Functions  
+        private void BroadcastToPlayer(BasePlayer player, string message)
+        {
+            if (configData.Notifications.UsePopupNotifications && PopupNotifications)
+                PopupNotifications?.Call("CreatePopupOnPlayer", message, player, configData.Notifications.PopupDuration);
+            else SendReply(player, message);
+        }
+
+        private void CreateNewBounty(BasePlayer initiator, ulong targetId, int rpAmount, int ecoAmount, ItemContainer container)
+        {
+            IPlayer target = covalence.Players.FindPlayerById(targetId.ToString());
+            
+            PlayerData playerData;
+            if (!storedData.players.TryGetValue(targetId, out playerData))
+            {
+                playerData = new PlayerData(target?.Name ?? "No Name");
+                storedData.players.Add(targetId, playerData);
+            }
+
+            playerData.totalBounties++;
+
+            int rewardId = GetUniqueId();
+            storedData.rewards.Add(rewardId, new RewardInfo(rpAmount, ecoAmount, container));
+            playerData.activeBounties.Add(new PlayerData.BountyInfo(initiator.userID, initiator.displayName, rewardId));
+
+            BasePlayer targetPlayer = target?.Object as BasePlayer;
+            if (targetPlayer != null)
+                BroadcastToPlayer(targetPlayer, string.Format(msg("bounty_placed_target", targetPlayer.userID), initiator.displayName));
+
+            BroadcastToPlayer(initiator, string.Format(msg("bounty_placed_initiator", initiator.userID), target?.Name ?? "No Name"));
+        }
+
+        private void CancelBounty(BasePlayer player, IPlayer target)
+        {
+            PlayerData playerData;
+            if (!storedData.players.TryGetValue(ulong.Parse(target.Id), out playerData))
+            {
+                SendReply(player, string.Format(msg("no_bounty_placed", player.userID), target.Name));
+                return;
+            }
+
+            PlayerData.BountyInfo bountyInfo = playerData.activeBounties.Find(x => x.initiatorId == player.userID) ?? null;
+            if (bountyInfo == null)
+            {
+                SendReply(player, string.Format(msg("no_bounty_placed", player.userID), target.Name));
+                return;
+            }
+
+            RewardInfo rewardInfo = storedData.rewards[bountyInfo.rewardId];
+            GivePlayerRewards(player, rewardInfo);
+            storedData.rewards.Remove(bountyInfo.rewardId);
+            playerData.activeBounties.Remove(bountyInfo);
+
+            BasePlayer targetPlayer = target.Object as BasePlayer;
+            if (targetPlayer != null)            
+                BroadcastToPlayer(targetPlayer, string.Format(msg("bounty_cancelled_target", targetPlayer.userID), player.displayName));
+
+            BroadcastToPlayer(player, string.Format(msg("bounty_cancelled_initiator", player.userID), target.Name));
+        }
+
+        private void GivePlayerRewards(BasePlayer player, RewardInfo rewardInfo)
+        {
+            if (rewardInfo.econAmount > 0 && Economics)            
+                Economics?.Call("Deposit", player.UserIDString, (double)rewardInfo.econAmount);
+            
+            if (rewardInfo.rpAmount > 0 && ServerRewards)
+                ServerRewards?.Call("AddPoints", player.userID, rewardInfo.rpAmount);
+
+            if (rewardInfo.rewardItems.Count > 0)
+            {
+                foreach (RewardInfo.ItemData itemData in rewardInfo.rewardItems)
+                {
+                    Item item = CreateItem(itemData);
+                    player.GiveItem(item, BaseEntity.GiveItemReason.PickedUp);
+                }
+            }
+
+            SendReply(player, msg("reward_claimed", player.userID));
+        }
+
+        private Item CreateItem(RewardInfo.ItemData itemData)
+        {
+            Item item = ItemManager.CreateByItemID(itemData.itemid, itemData.amount, itemData.skin);
+            item.condition = itemData.condition;
+
+            if (itemData.instanceData != null)
+                itemData.instanceData.Restore(item);
+
+            BaseProjectile weapon = item.GetHeldEntity() as BaseProjectile;
+            if (weapon != null)
+            {
+                if (!string.IsNullOrEmpty(itemData.ammotype))
+                    weapon.primaryMagazine.ammoType = ItemManager.FindItemDefinition(itemData.ammotype);
+                weapon.primaryMagazine.contents = itemData.ammo;
+            }
+            if (itemData.contents != null)
+            {
+                foreach (var contentData in itemData.contents)
+                {
+                    var newContent = ItemManager.CreateByItemID(contentData.itemid, contentData.amount);
+                    if (newContent != null)
+                    {
+                        newContent.condition = contentData.condition;
+                        newContent.MoveToContainer(item.contents);
+                    }
+                }
+            }
+            return item;
+        }
+
+        private void SpawnItemContainer(BasePlayer player)
+        {
+            StorageContainer container = (StorageContainer)GameManager.server.CreateEntity(boxPrefab, player.transform.position + player.eyes.BodyForward(), new Quaternion(), true);
+            container.enableSaving = false;
+            container.Spawn();
+            
+            openContainers.Add(container, player.userID);
+            timer.In(0.15f, ()=> OpenInventory(player, container));            
+        }
+        
+        private void OpenInventory(BasePlayer player, StorageContainer container)
+        {
+            player.inventory.loot.Clear();
+            player.inventory.loot.entitySource = container;
+            player.inventory.loot.itemSource = null;
+            player.inventory.loot.AddContainer(container.inventory);
+            player.inventory.loot.SendImmediate();
+            player.ClientRPCPlayer(null, player, "RPC_OpenLootPanel", "generic");
+            player.SendNetworkUpdate();
+        }
+
+        private void ClearContainer(ItemContainer itemContainer)
+        {
+            if (itemContainer == null || itemContainer.itemList == null) return;
+            while (itemContainer.itemList.Count > 0)
+            {
+                var item = itemContainer.itemList[0];
+                item.RemoveFromContainer();
+                item.Remove(0f);
+            }
+        }
+
+        private int GetUniqueId()
+        {
+            int uid = UnityEngine.Random.Range(0, 10000);
+            if (storedData.rewards.ContainsKey(uid))
+                return GetUniqueId();
+            return uid;
+        }
+        
+        private double CurrentTime() => DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;
+
+        private List<BasePlayer> FindPlayer(string partialNameOrId)
+        {
+            List<BasePlayer> players = new List<BasePlayer>();
+            foreach(BasePlayer player in BasePlayer.activePlayerList)
+            {
+                if (partialNameOrId == player.UserIDString)
+                    return new List<BasePlayer>() { player };
+
+                if (player.displayName.ToLower().Contains(partialNameOrId.ToLower()))
+                    players.Add(player);
+            }
+            return players;
+        }
+
+        private string FormatTime(double time)
+        {
+            TimeSpan dateDifference = TimeSpan.FromSeconds((float)time);
+            var days = dateDifference.Days;
+            var hours = dateDifference.Hours;
+            hours += (days * 24);
+            var mins = dateDifference.Minutes;
+            var secs = dateDifference.Seconds;
+            if (hours > 0)
+                return string.Format("{0:00}h {1:00}m {2:00}s", hours, mins, secs);
+            else return string.Format("{0:00}m {1:00}s", mins, secs);
         }
         #endregion
 
-        #region methods
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Bounty Methods ////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-        
-        void addBounty(BasePlayer player, BasePlayer target, string item, int amount)
+        #region Friends
+        public bool IsFriendlyPlayer(ulong playerId, ulong friendId)
         {
-
-            if (checkExisting(player, target))
-            {
-                SendMSG(player, lang.GetMessage("existBounty", this, player.UserIDString));
-                return;
-            }
-            if (rewardBoxs.ContainsKey(player.userID))
-            {
-                SendMSG(player, lang.GetMessage("existBox", this, player.UserIDString));
-                return;
-            }
-            ulong TID = target.userID;
-            if (item == "Money")
-            {
-                List<ItemStorage> items = new List<ItemStorage>();
-                ItemStorage bItem = new ItemStorage();
-                bItem.money = true;
-                bItem.amount = amount;
-                bItem.itemname = item;
-                items.Add(bItem);
-                bountyData.players[TID].Bountys.Add(player.userID, new BountyInfo() { InitiatorName = player.displayName, BountyItems = items });
-                bountyData.players[TID].TotalBountys++;
-                initTimestamp(target);
-                SaveData();
-                notifyBounty(player, target);
-                return;
-            }
-            var pos = player.transform.position;
-
-            Vector3 newPos = pos + player.eyes.BodyForward() + new Vector3(0, 1, 0);
-            BaseEntity box = GameManager.server.CreateEntity(rBox, newPos);           
-            box.SendMessage("SetDeployedBy", player, UnityEngine.SendMessageOptions.DontRequireReceiver);
-            box.Spawn();
-            ItemContainer loot = box.GetComponent<ItemContainer>();
-            var ownerloot = player.inventory.loot;
-            ownerloot.StartLootingEntity(box, true);
-            ownerloot.AddContainer(loot);
-            ownerloot.SendImmediate();
-            SendMSG(player, lang.GetMessage("setReward", this, player.UserIDString));
-            rewardBoxs[player.userID] = new OpenBox() { entity = box, target = target };
-        }
-       
-        void StoreRewardData(BasePlayer player)
-        {
-            ulong ID = player.userID;
-            if (rewardBoxs.ContainsKey(ID))
-            {
-                BasePlayer target = rewardBoxs[ID].target;
-                ulong TID = target.userID;
-                BaseEntity box = rewardBoxs[ID].entity.GetComponent<BaseEntity>();
-                StorageContainer loot = box.GetComponent<StorageContainer>();
-                List<ItemStorage> items = new List<ItemStorage>();
-
-                foreach (Item item in loot.inventory.itemList)
-                {
-                    ItemStorage bItem = new ItemStorage();
-                    bItem.amount = item.amount;
-                    bItem.itemname = item.info.displayName.english;
-                    items.Add(bItem);
-                }
-                if (items.Count == 0)
-                {
-                    SendMSG(player, lang.GetMessage("noItems", this, player.UserIDString));
-                    loot.inventory.itemList.Clear();
-                    rewardBoxs.Remove(ID);
-                    loot.KillMessage();
-                    loot.SendNetworkUpdateImmediate(false);
-                    return;
-                }
-
-                bountyData.players[TID].Bountys.Add(ID, new BountyInfo() { InitiatorName = player.displayName, BountyItems = items });
-                bountyData.players[TID].TotalBountys++;
-                initTimestamp(target);
-                SaveData();
-
-                loot.inventory.itemList.Clear();
-                rewardBoxs.Remove(ID);
-                notifyBounty(player, target);
-                
-                loot.KillMessage();
-                loot.SendNetworkUpdateImmediate(false);
-            }
-        }
-        private void notifyBounty(BasePlayer player, BasePlayer target)
-        {
-            if (usePopup && PopupNotifications)
-            {
-                if (globalBroadcast)
-                {
-                    foreach (var p in BasePlayer.activePlayerList)
-                    {
-                        SendPopup(p, string.Format(lang.GetMessage("addBounty", this, player.UserIDString), target.displayName));
-                    }
-                }
-                else { SendPopup(player, string.Format(lang.GetMessage("addBounty", this, player.UserIDString), target.displayName)); }
-                
-                SendPopup(target, string.Format(lang.GetMessage("bountyAdded", this, player.UserIDString), player.displayName));
-            }
-            else
-            {
-                if (globalBroadcast)
-                {
-                    foreach (var p in BasePlayer.activePlayerList)
-                    {
-                        SendMSG(p, string.Format(lang.GetMessage("addBounty", this, player.UserIDString), target.displayName));
-                    }
-                }
-                else { SendMSG(player, string.Format(lang.GetMessage("addBounty", this, player.UserIDString), target.displayName)); }
-                SendMSG(target, string.Format(lang.GetMessage("bountyAdded", this, player.UserIDString), player.displayName));
-            }
-        }
-        private void SendMSG(BasePlayer player, string msg)
-        {
-            SendReply(player, mainColor + lang.GetMessage("title", this, player.UserIDString) + "</color>" + msgColor + msg + "</color>");
-        }
-        private bool checkExisting(BasePlayer player, BasePlayer target)
-        {
-            ulong TID = target.userID;
-            if (!bountyData.players.ContainsKey(TID))
-            {
-                bountyData.players.Add(TID, new PlayerData()
-                {
-                    PlayerName = target.displayName,
-                    PlayerID = TID,                    
-                    Bountys = new Dictionary<ulong, BountyInfo>()
-                });
-                return false;
-            }           
-            if (bountyData.players[TID].Bountys.ContainsKey(player.userID))
+            if (playerId == friendId || IsFriend(playerId, friendId) || IsClanmate(playerId, friendId))
                 return true;
             return false;
         }
-        private bool itemCosts(BasePlayer player, string item, int amount)
-        {
-            if (item == "Money")
-            {
-                return true;
-            }
-            string itemshortname = itemInfo[item];
-            var definition = ItemManager.FindItemDefinition(itemshortname);
 
-            int itemID = definition.itemid;
-            int invAmount = player.inventory.GetAmount(itemID);
-            Puts(invAmount.ToString());
-
-            if (amount <= invAmount)
-            {
-                player.inventory.Take(null, itemID, amount);
-
-                return true;
-            }
-            return false;
-        }
-        private void recordEarnings(BasePlayer player, BasePlayer victim)
-        {
-            ulong VID = victim.userID;
-            ulong PID = player.userID;
-            if (!rewardData.rewards.ContainsKey(PID))
-            {
-                rewardData.rewards.Add(PID, new RewardInfo()
-                {
-                    PlayerID = PID,
-                    PlayerName = player.displayName,                    
-                    Rewards = new Dictionary<int, UnclaimedData>()
-                });
-            }
-            foreach (var bounty in bountyData.players[VID].Bountys)
-            {
-                int rewardCount = rewardData.rewards[PID].Rewards.Count;
-                rewardData.rewards[PID].Rewards.Add((rewardCount + 1), new UnclaimedData()
-                {
-                    VictimID = VID,
-                    VictimName = victim.displayName,
-                    Rewards = bounty.Value.BountyItems
-                });
-                rewardData.rewards[PID].TotalCount++;
-            }
-            int bountyCount = bountyData.players[VID].Bountys.Count;
-            calculateTimestamp(victim);
-            bountyData.players[VID].Bountys.Clear();
-            if (usePopup && PopupNotifications)
-            {
-                SendPopup(player, string.Format(lang.GetMessage("numEarnt", this, player.UserIDString), victim.displayName, bountyCount.ToString()));
-            }
-            else
-                SendMSG(player, string.Format(lang.GetMessage("numEarnt", this, player.UserIDString), victim.displayName, bountyCount.ToString()));
-        }
-        private bool claimBounty(BasePlayer player, int ID)
-        {           
-            foreach (var entry in rewardData.rewards[player.userID].Rewards[ID].Rewards)
-            {
-                if (entry.money)
-                {
-                    if (RewardMoney(player, entry.amount))
-                        return true;
-                }
-                else
-                {
-                    GiveItem(player, entry.itemname, entry.amount, player.inventory.containerMain);                    
-                }
-            }
-            return true;
-        }
-        private void InitializeTable()
-        {
-            itemInfo.Clear();
-            List<ItemDefinition> ItemsDefinition = ItemManager.GetItemDefinitions();
-            foreach (ItemDefinition itemdef in ItemsDefinition)
-            {
-                itemInfo.Add(itemdef.displayName.english.ToString().ToLower(), itemdef.shortname.ToLower());
-            }
-        }
-        private object GiveItem(BasePlayer player, string itemname, int amount, ItemContainer pref)
-        {
-            itemname = itemname.ToLower();            
-            if (itemInfo.ContainsKey(itemname))
-                itemname = itemInfo[itemname];
-            var definition = ItemManager.FindItemDefinition(itemname);
-            if (definition == null)
-                return string.Format("{0} {1}", "Item not found: ", itemname);
-            player.inventory.GiveItem(ItemManager.CreateByItemID((int)definition.itemid, amount), pref);
-            return true;
-        }
-        List<BasePlayer> FindPlayer(string arg)
-        {
-            var foundPlayers = new List<BasePlayer>();
-
-            ulong steamid;
-            ulong.TryParse(arg, out steamid);
-            string lowerarg = arg.ToLower();
-
-            foreach (var player in BasePlayer.activePlayerList)
-            {
-                if (steamid != 0L)
-                    if (player.userID == steamid)
-                    {
-                        foundPlayers.Clear();
-                        foundPlayers.Add(player);
-                        return foundPlayers;
-                    }
-                string lowername = player.displayName.ToLower();
-                if (lowername.Contains(lowerarg))
-                {
-                    foundPlayers.Add(player);
-                }
-            }
-            if (foundPlayers.Count == 0)
-            {
-                foreach (var player in BasePlayer.sleepingPlayerList)
-                {
-                    if (steamid != 0L)
-                        if (player.userID == steamid)
-                        {
-                            foundPlayers.Clear();
-                            foundPlayers.Add(player);
-                            return foundPlayers;
-                        }
-                    string lowername = player.displayName.ToLower();
-                    if (lowername.Contains(lowerarg))
-                    {
-                        foundPlayers.Add(player);
-                    }
-                }
-            }
-            return foundPlayers;
-        }
-        List<string> FindItem(string arg)
-        {
-            var foundItems = new List<string>();
-
-            foreach (var item in itemInfo)
-            {
-                string lowername = arg.ToLower();
-
-                if (lowername == item.Key)
-                {
-                    foundItems.Add(item.Key);
-                    Puts(foundItems.Count.ToString());
-                }
-                else if (lowername == item.Value)
-                {
-                    foundItems.Add(item.Key);
-                    Puts(foundItems.Count.ToString());
-                }
-            }
-            return foundItems;
-        }
         private bool IsClanmate(ulong playerId, ulong friendId)
         {
+            if (!Clans || !configData.IgnoreClans) return false;
             object playerTag = Clans?.Call("GetClanOf", playerId);
             object friendTag = Clans?.Call("GetClanOf", friendId);
-            if (playerTag is string && friendTag is string)
+            if ((playerTag is string && !string.IsNullOrEmpty((string)playerTag)) && (friendTag is string && !string.IsNullOrEmpty((string)friendTag)))
                 if (playerTag == friendTag) return true;
             return false;
         }
-        private bool IsFriend(BasePlayer player, ulong friendID)
+
+        private bool IsFriend(ulong playerID, ulong friendID)
         {
-            bool isFriend = (bool)Friends?.Call("IsFriend", player.userID, friendID);
-            return isFriend;
+            if (!Friends || !configData.IgnoreFriends) return false;
+            return (bool)Friends?.Call("AreFriends", playerID, friendID);
         }
-        private void RemindPlayers()
-        {
-            foreach (var player in BasePlayer.activePlayerList)
-            {
-                if (bountyData.players.ContainsKey(player.userID))
-                {
-                    int count = bountyData.players[player.userID].Bountys.Count;
-                    if (count > 0)
-                    {
-                        if (usePopup && PopupNotifications)
-                        {
-                            SendPopup(player, string.Format(lang.GetMessage("numOutstand", this, player.UserIDString), count));
-                        }
-                        else
-                            SendMSG(player, string.Format(lang.GetMessage("numOutstand", this, player.UserIDString), count));
-                    }
-                }
-            }
-            timer.Once(remindTime * 60, () => RemindPlayers());
-        }
-        private void SendPopup(BasePlayer player, string msg)
-        {
-            PopupNotifications?.Call("CreatePopupOnPlayer", lang.GetMessage("title", this, player.UserIDString) + msg, player, popupTime);
-        }
-        private bool CheckPlayerMoney(BasePlayer player, int amount)
-        {
-            if (useEconomics)
-            {
-                double money = (double)Economics?.CallHook("GetPlayerMoney", player.userID);
-                if (money >= amount)
-                {
-                    money = money - amount;
-                    Economics?.CallHook("Set", player.userID, money);
-                    return true;
-                }
-                return false;
-            }
-            return false;
-        }
-        private bool RewardMoney(BasePlayer player, double amount)
-        {
-            if (useEconomics)
-            {
-                double money = (double)Economics?.CallHook("GetPlayerMoney", player.userID);
-                if (amount >= 1)
-                {
-                    var setmoney = money + amount;
-                    Economics?.CallHook("Set", player.userID, setmoney);
-                    return true;
-                }
-
-                return false;
-            }
-            return false;
-        }
-       
-
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Time //////////////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-
-        private void initTimestamp(BasePlayer player)
-        {
-            long currentTimestamp = getCurrentTime();
-            var state = new PlayerStateInfo(player);
-            var ID = player.userID;
-
-            if (!playerTimeData.playerTime.ContainsKey(ID))
-            {
-                playerTimeData.playerTime.Add(ID, state);
-            }
-            playerTimeData.playerTime[ID].InitTimeStamp = currentTimestamp;
-        }
-        private void calculateTimestamp(BasePlayer player)
-        {
-            var ID = player.userID;
-            if (!bountyData.players.ContainsKey(ID)) return;
-            if (bountyData.players[ID].Bountys.Count > 0)
-            {
-                long currentTimestamp = getCurrentTime();
-                long initTimeStamp = playerTimeData.playerTime[ID].InitTimeStamp;
-                long totalPlayed = currentTimestamp - initTimeStamp;
-
-                bountyData.players[ID].TotalWantedSec += totalPlayed;
-                TimeSpan ClockPlayTime = TimeSpan.FromSeconds(bountyData.players[ID].TotalWantedSec);
-                bountyData.players[ID].TotalWantedClock = string.Format("{0:c}", ClockPlayTime);
-
-                foreach (var bounty in bountyData.players[ID].Bountys)
-                {
-                    var e = bounty.Value;
-                    e.WantedTime += totalPlayed;
-                    e.WantedTimeClock = string.Format("{0:c}", ClockPlayTime);
-                }
-
-                playerTimeData.playerTime[ID].InitTimeStamp = currentTimestamp;
-
-            }
-        }
-        private long getCurrentTime()
-        {
-            long timestamp = 0;
-            long ticks = DateTime.UtcNow.Ticks - DateTime.Parse("01/01/1970 00:00:00").Ticks;
-            ticks /= 10000000;
-            timestamp = ticks;
-
-            return timestamp;
-        }        
-        
         #endregion
 
-        #region chat commands
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Chat Commands /////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
+        #region Commands       
         [ChatCommand("bounty")]
         private void cmdBounty(BasePlayer player, string command, string[] args)
         {
-            if (!canBountyPlayer(player)) return;
-            
+            if (!permission.UserHasPermission(player.UserIDString, "bounty.use"))
+            {
+                SendReply(player, msg("no_permission", player.userID));
+                return;
+            }
+
             if (args.Length == 0)
             {
-                SendMSG(player, lang.GetMessage("commands", this, player.UserIDString));
-                SendMSG(player, "</color>" + "<color=#8dc63f>/bounty add</color>" + msgColor + " - Adds a bounty");
-                SendMSG(player, "</color>" + "<color=#8dc63f>/bounty claim</color>" + msgColor + " - Lists your current rewards");
-                SendMSG(player, "</color>" + "<color=#8dc63f>/bounty claim #ID#</color>" + msgColor + " - Claim reward with ID number");
-                SendMSG(player, "</color>" + "<color=#8dc63f>/bounty close</color>" + msgColor + " - Close a open bounty box");
-                SendMSG(player, "</color>" + "<color=#8dc63f>/bounty check</color>" + msgColor + " - Check yourself for bounty(s)");
-                SendMSG(player, "</color>" + "<color=#8dc63f>/bounty check playername</color>" + msgColor + " - Check player for bounty(s)");
-                SendMSG(player, "</color>" + "<color=#8dc63f>/bounty top</color>" + msgColor + " - List the top bounty hunters / top wanted time");
-                SendMSG(player, "</color>" + "<color=#8dc63f>/bounty wanted</color>" + msgColor + " - List the most wanted / most current wanted time");
+                SendReply(player, string.Format(msg("title", player.userID), Title, Version));
+                if (configData.Rewards.AllowItems)
+                    SendReply(player, msg("help1", player.userID));
+                if (configData.Rewards.AllowServerRewards && ServerRewards)
+                    SendReply(player, msg("help2", player.userID));
+                if (configData.Rewards.AllowEconomics && Economics)
+                    SendReply(player, msg("help3", player.userID));
+                SendReply(player, msg("help4", player.userID));
+                SendReply(player, msg("help5", player.userID));
+                SendReply(player, msg("help6", player.userID));
+                SendReply(player, msg("help7", player.userID));
+                SendReply(player, msg("help8", player.userID));
 
-                if (canBountyAdmin(player))
-                {
-                    SendMSG(player, "</color>" + "<color=#8dc63f>/bounty clear playername</color>" + msgColor + " - Clear player bounty(s)");
-                    SendMSG(player, "</color>" + "<color=#8dc63f>/bounty wipe</color>" + msgColor + " - Wipe all bounty data");
-                }
-                return;
-            }
-            ulong ID = player.userID;
-            var data = bountyData.players;
-            var rdata = rewardData.rewards;
-            if (args.Length == 1)
-            {
-                switch (args[0].ToLower())
-                {
-                    case "add":
-                        if (!useEconomyOnly)
-                            SendMSG(player, lang.GetMessage("addFormat", this, player.UserIDString));
-                        if (Economics && useEconomics)
-                            SendMSG(player, lang.GetMessage("addFormatMoney", this, player.UserIDString));
-                        return;
-                    case "claim":
-                        if (rdata.ContainsKey(ID))
-                        {
-                            if (rdata[ID].Rewards.Count > 0)
-                            {
-                                SendMSG(player, string.Format(lang.GetMessage("claimRewards", this, player.UserIDString), rdata[ID].Rewards.Count));
-                                foreach (var reward in rdata[ID].Rewards)
-                                {
-                                    SendReply(player, string.Format(lang.GetMessage("rewardInfo", this, player.UserIDString), reward.Key.ToString()));
-                                    foreach (var item in reward.Value.Rewards)
-                                    {
-                                        SendReply(player, mainColor + item.itemname + "</color>" + msgColor + " --- </color>" + mainColor + item.amount.ToString() + "</color>");
-                                    }
-                                }
-                                return;
-                            }
-                        }
-                        SendMSG(player, lang.GetMessage("noRewards", this, player.UserIDString));
-                        return;
+                if (player.IsAdmin || permission.UserHasPermission(player.UserIDString, "bounty.admin"))                
+                    SendReply(player, msg("help9", player.userID));
 
-                    case "check":
-                        if (data.ContainsKey(ID))
-                        {
-                            if (data[ID].Bountys.Count > 0)
-                            {
-                                SendMSG(player, string.Format(lang.GetMessage("numOutstand", this, player.UserIDString), data[ID].Bountys.Count));
-                                foreach (var entry in data[ID].Bountys)
-                                {
-                                    SendReply(player, string.Format(lang.GetMessage("checkInfo", this, player.UserIDString), entry.Value.InitiatorName));
-                                    foreach (var item in entry.Value.BountyItems)
-                                    {
-                                        SendReply(player, mainColor + item.itemname + "</color>" + msgColor + " --- </color>" + mainColor + item.amount.ToString() + "</color>");
-                                    }
-                                }
-                                return;
-                            }
-                        }
-                        SendMSG(player, lang.GetMessage("noOutstand", this, player.UserIDString));
-                        return;
-
-                    case "close":
-                        if (rewardBoxs.ContainsKey(player.userID))
-                            StoreRewardData(player);
-                        return;
-
-                    case "top":
-                        if (rdata.Count > 0)
-                        {
-                            Dictionary<string, int> topHunters = new Dictionary<string, int>();
-                            foreach (var entry in rdata)
-                            {
-                                topHunters.Add(entry.Value.PlayerName, entry.Value.TotalCount);
-                            }
-                            Dictionary<string, int> top5 = topHunters.OrderByDescending(pair => pair.Value).Take(5).ToDictionary(pair => pair.Key, pair => pair.Value);
-                            if (top5.Count > 0)
-                            {
-                                SendMSG(player, lang.GetMessage("mostKills", this, player.UserIDString));
-                                foreach (var name in top5)
-                                {
-                                    SendReply(player, string.Format(lang.GetMessage("topList", this, player.UserIDString), name.Key, name.Value));
-                                }
-                            }
-                            /////////////////////////////////
-
-                            Dictionary<string, long> topWanted = new Dictionary<string, long>();
-                            foreach (var entry in data)
-                            {
-                                topWanted.Add(entry.Value.PlayerName, entry.Value.TotalWantedSec);
-                            }
-                            Dictionary<string, long> top5w = topWanted.OrderByDescending(pair => pair.Value).Take(5).ToDictionary(pair => pair.Key, pair => pair.Value);
-                            if (top5w.Count > 0)
-                            {
-                                SendMSG(player, lang.GetMessage("mostOverallTime", this, player.UserIDString));
-                                foreach (var name in top5w)
-                                {
-                                    TimeSpan ClockPlayTime = TimeSpan.FromSeconds(name.Value);
-                                    string time = string.Format("{0:c}", ClockPlayTime);
-                                    SendReply(player, string.Format(lang.GetMessage("wantedOverallTime", this, player.UserIDString), name.Key, time));
-                                }
-                            }
-                            return;
-                        }
-                        SendMSG(player, lang.GetMessage("noTop", this, player.UserIDString));
-                        return;
-                    case "save":
-                        if (rewardBoxs.ContainsKey(player.userID))
-                            StoreRewardData(player);
-                        return;
-                    case "wanted":
-                        if (data.Count > 0)
-                        {
-                            Dictionary<string, int> mostWanted = new Dictionary<string, int>();
-                            foreach (var entry in data)
-                            {
-                                mostWanted.Add(entry.Value.PlayerName, entry.Value.Bountys.Count);
-                            }
-                            Dictionary<string, int> top5 = mostWanted.OrderByDescending(pair => pair.Value).Take(5).ToDictionary(pair => pair.Key, pair => pair.Value);
-                            if (top5.Count > 0)
-                            {
-                                SendMSG(player, lang.GetMessage("mostWanted", this, player.UserIDString));
-                                foreach (var name in top5)
-                                {
-                                    SendReply(player, string.Format(lang.GetMessage("wantedList", this, player.UserIDString), name.Key, name.Value));
-                                }                                
-                            }
-                            Dictionary<string, long> longestWanted = new Dictionary<string, long>();
-                            foreach (var entry in data)
-                            {
-                                List<long> times = new List<long>();
-                                long best = 0;
-                                foreach (var bounty in entry.Value.Bountys)
-                                {
-                                    long t = bounty.Value.WantedTime;
-                                    if (t > best)
-                                        best = t;
-                                }
-
-                                longestWanted.Add(entry.Value.PlayerName, best);
-                            }
-                            Dictionary<string, long> long5 = longestWanted.OrderByDescending(pair => pair.Value).Take(5).ToDictionary(pair => pair.Key, pair => pair.Value);
-                            if (long5.Count > 0)
-                            {
-                                SendMSG(player, lang.GetMessage("mostCurrentTime", this, player.UserIDString));
-                                foreach (var name in long5)
-                                {
-                                    TimeSpan ClockPlayTime = TimeSpan.FromSeconds(name.Value);
-                                    string time = string.Format("{0:c}", ClockPlayTime);
-                                    SendReply(player, string.Format(lang.GetMessage("wantedCurrentTime", this, player.UserIDString), name.Key, time));
-                                }
-                            }
-                            return;
-                        }
-                        SendMSG(player, lang.GetMessage("noWanted", this, player.UserIDString));
-                        return;
-
-                    case "wipe":
-                        if (isAuth(player))
-                        {
-                            rdata.Clear();
-                            data.Clear();
-                            SaveData();
-                            SendMSG(player, lang.GetMessage("wipedData", this, player.UserIDString));
-                        }
-                        return;
-                }
-            }
-            if (args[0].ToLower() == "claim" && args.Length == 2)
-            {
-                if (rdata.ContainsKey(ID))
-                {
-                    int rewardNum;
-                    if (!int.TryParse(args[1], out rewardNum))
-                    {
-                        SendMSG(player, lang.GetMessage("invRNum", this, player.UserIDString));
-                        return;
-                    }
-                    if (!rdata[ID].Rewards.ContainsKey(rewardNum))
-                    {
-                        SendMSG(player, lang.GetMessage("invRNum", this, player.UserIDString));
-                        return;
-                    }
-
-                    bool success = claimBounty(player, rewardNum);
-                    if (success)
-                    {
-                        SendMSG(player, string.Format(lang.GetMessage("claimSuccess", this, player.UserIDString), rewardNum));
-                        rdata[ID].Rewards.Remove(rewardNum);
-                        return;
-                    }
-                }
-                SendMSG(player, lang.GetMessage("claimFormat", this, player.UserIDString));
                 return;
             }
 
-            BasePlayer target = null;
-            if (args.Length >= 2)
+            switch (args[0].ToLower())
             {
-                var players = FindPlayer(args[1]);
-                if (players.Count == 0)
-                {
-                    SendMSG(player, lang.GetMessage("noPlayers", this, player.UserIDString));
-                    return;
-                }
-                if (players.Count > 1)
-                {
-                    SendMSG(player, lang.GetMessage("multiplePlayers", this, player.UserIDString));
-                    return;
-                }
-                target = players[0];
-            }          
-            if (target != null)
-            {
-                
-                var TID = target.userID;
-                switch (args[0].ToLower())
-                {
-                    case "add":
-                        if (args.Length >= 2)
+                case "add":
+                    {                        
+                        if (args.Length < 3)
                         {
-                            int amount = 1;
-                            if (isBanned(player))
-                            {
-                                if (usePopup && PopupNotifications)
-                                {
-                                    SendPopup(player, lang.GetMessage("title", this, player.UserIDString) + lang.GetMessage("playerBanned", this, player.UserIDString));
-                                }
-                                else
-                                    SendMSG(player, lang.GetMessage("playerBanned", this, player.UserIDString));
-                                return;
-                            }                            
-                            if (target == player)
-                            {
-                                SendMSG(player, lang.GetMessage("noSelf", this, player.UserIDString));
-                                return;
-                            }
-                            if (args.Length == 4)
-                            {                                
-                                if (args[2].ToLower() == "money" && useEconomics)
-                                {
-                                    if (!int.TryParse(args[3], out amount))
-                                    {
-                                        SendMSG(player, lang.GetMessage("invAmount", this, player.UserIDString));
-                                        return;
-                                    }
-                                    if (CheckPlayerMoney(player, amount))
-                                    {
-                                        addBounty(player, target, "Money", amount);
-                                        return;
-                                    }
-                                    SendMSG(player, lang.GetMessage("noMoney", this, player.UserIDString));
-                                    return;
-                                }                                
-                            }
-                            if (useEconomyOnly) SendMSG(player, lang.GetMessage("addFormatMoney", this, player.UserIDString));
-                            else                                  
-                                addBounty(player, target, "", 0);
+                            SendReply(player, msg("invalid_syntax", player.userID));
                             return;
                         }
-                        SendMSG(player, lang.GetMessage("addFormat", this, player.UserIDString));
-                        if (Economics && useEconomics)
-                            SendMSG(player, lang.GetMessage("addFormatMoney", this, player.UserIDString));
-                        return;
-                    case "check":
-                        if (args.Length == 2)
-                        {
-                            if (data.ContainsKey(TID))
-                            {
-                                if (data[TID].Bountys.Count > 0)
-                                {
-                                    SendMSG(player, string.Format(lang.GetMessage("checkBounty", this, player.UserIDString), data[TID].Bountys.Count, data[TID].PlayerName));
-                                    foreach (var entry in data[TID].Bountys)
-                                    {
-                                        SendReply(player, string.Format(msgColor + lang.GetMessage("checkInfo", this, player.UserIDString) + "</color>", entry.Value.InitiatorName));
-                                        foreach (var item in entry.Value.BountyItems)
-                                        {
-                                            SendReply(player, mainColor + item.itemname + "</color>" + msgColor + " --- </color>" + mainColor + item.amount.ToString() + "</color>");
-                                        }
-                                    }
-                                    return;
-                                }                                
-                            }
-                            SendMSG(player, string.Format(lang.GetMessage("pnoOutstand", this, player.UserIDString), target.displayName));
-                            return;
-                        }
-                        SendMSG(player, lang.GetMessage("checkFormat", this, player.UserIDString));
-                        return;
 
-                    case "clear":
-                        if (isAuth(player))
+                        List<BasePlayer> players = FindPlayer(args[2]);
+                        if (players.Count == 0)
                         {
-                            if (args.Length == 2)
-                            {
-                                if (data.ContainsKey(TID))
-                                {
-                                    if (data[TID].Bountys.Count > 0)
-                                    {
-                                        int icount = data[TID].Bountys.Count;
-                                        data[TID].Bountys.Clear();
-                                        SendMSG(player, string.Format(lang.GetMessage("clearBounty", this, player.UserIDString), icount, target.displayName));
-                                        return;
-                                    }
-                                }
-                                SendMSG(player, string.Format(lang.GetMessage("pnoOutstand", this, player.UserIDString), target.displayName));
-                            }
+                            SendReply(player, msg("no_player_found", player.userID));
+                            return;
                         }
-                        return;
-                }
-            }
-        }
-        [ConsoleCommand("bounty.wipe")]
-        void ccmdbWipe(ConsoleSystem.Arg arg)
-        {
-            if (!isAuthCon(arg)) return;
-            var data = bountyData.players;
-            var rdata = rewardData.rewards;
-            rdata.Clear();
-            data.Clear();
-            SaveData();
-            Puts("Bounty data wiped!");
-        }
-        [ConsoleCommand("bounty.list")]
-        void ccmdbList(ConsoleSystem.Arg arg)
-        {
-            if (!isAuthCon(arg)) return;
-            foreach (var entry in bountyData.players)
-            {
-                if (entry.Value.Bountys.Count > 0)
-                {
-                    Puts("Name: " + entry.Value.PlayerName);
-                    Puts("ID: " + entry.Value.PlayerID);
-                    foreach (var reward in entry.Value.Bountys)
-                    {
-                        Puts("-- Initiator: " + reward.Value.InitiatorName);
-                        Puts("-- Items;");
-                        foreach (var ientry in reward.Value.BountyItems)
+                        if (players.Count > 1)
                         {
-                            Puts("---- " + ientry.itemname + " X " + ientry.amount);
+                            SendReply(player, msg("multiple_players_found", player.userID));
+                            return;
+                        }
+
+                        BasePlayer targetPlayer = players[0];
+                        if (targetPlayer == null)
+                        {
+                            SendReply(player, msg("no_player_found", player.userID));
+                            return;
+                        }
+
+                        if (targetPlayer == player)
+                        {
+                            SendReply(player, msg("cant_bounty_self", player.userID));
+                            return;
+                        }
+
+                        PlayerData playerData;
+                        if (!storedData.players.TryGetValue(targetPlayer.userID, out playerData))
+                        {
+                            playerData = new PlayerData(targetPlayer.displayName);
+
+                            storedData.players.Add(targetPlayer.userID, playerData);
+                        }
+
+                        if (playerData.activeBounties.Find(x => x.initiatorId == player.userID) != null)
+                        {
+                            SendReply(player, msg("has_active_bounty", player.userID));
+                            return;
+                        }
+
+                        switch (args[1].ToLower())
+                        {
+                            case "items":
+                                SpawnItemContainer(player);
+
+                                if (bountyCreator.ContainsKey(player.userID))
+                                    bountyCreator[player.userID] = targetPlayer.userID;
+                                else bountyCreator.Add(player.userID, targetPlayer.userID);
+                                return;
+                            case "rp":
+                                if (!configData.Rewards.AllowServerRewards || !ServerRewards || args.Length != 4)
+                                {
+                                    SendReply(player, msg("invalid_syntax", player.userID));
+                                    return;
+                                }
+
+                                int rpAmount;
+                                if (!int.TryParse(args[3], out rpAmount))
+                                {
+                                    SendReply(player, msg("no_value_entered", player.userID));
+                                    return;
+                                }
+
+                                int availableRp = (int)ServerRewards?.Call("CheckPoints", player.userID);
+
+                                if (availableRp < rpAmount || !(bool)ServerRewards?.Call("TakePoints", player.userID, rpAmount))
+                                {
+                                    SendReply(player, msg("not_enough_rp", player.userID));
+                                    return;
+                                }
+
+                                CreateNewBounty(player, targetPlayer.userID, rpAmount, 0, null);
+                                return;
+                            case "eco":
+                                if (!configData.Rewards.AllowEconomics || !Economics || args.Length != 4)
+                                {
+                                    SendReply(player, msg("invalid_syntax", player.userID));
+                                    return;
+                                }
+
+                                int ecoAmount;
+                                if (!int.TryParse(args[3], out ecoAmount))
+                                {
+                                    SendReply(player, msg("no_value_entered", player.userID));
+                                    return;
+                                }
+
+                                double availableEco = (double)Economics?.Call("Balance", player.UserIDString);
+
+                                if (availableEco < ecoAmount || !(bool)Economics?.Call("Withdraw", player.UserIDString, (double)ecoAmount))
+                                {
+                                    SendReply(player, msg("not_enough_eco", player.userID));
+                                    return;
+                                }
+
+                                CreateNewBounty(player, targetPlayer.userID, 0, ecoAmount, null);
+                                return;
+
+                            default:
+                                SendReply(player, msg("invalid_syntax", player.userID));
+                                return;
                         }
                     }
-                }
-            }
-        }
+                case "cancel":
+                    {
+                        if (args.Length < 2)
+                        {
+                            SendReply(player, msg("invalid_syntax", player.userID));
+                            return;
+                        }
 
+                        IPlayer targetPlayer = covalence.Players.FindPlayer(args[1]);
+                        if (targetPlayer == null)
+                        {
+                            SendReply(player, msg("no_player_found", player.userID));
+                            return;
+                        }
 
-        #endregion
+                        CancelBounty(player, targetPlayer);
+                    }
+                    return;
+                case "claim":
+                    {
+                        PlayerData playerData;
+                        if (!storedData.players.TryGetValue(player.userID, out playerData) || playerData.unclaimedRewards.Count == 0)
+                        {
+                            SendReply(player, msg("no_rewards_pending", player.userID));
+                            return;
+                        }
 
-        #region permissions/auth
+                        if (args.Length < 2)
+                        {
+                            SendReply(player, msg("help10", player.userID));
+                            foreach(int rewardId in playerData.unclaimedRewards)
+                            {
+                                RewardInfo rewardInfo = storedData.rewards[rewardId];
+                                string reward = string.Empty;
+                                if (rewardInfo.rewardItems.Count > 1)
+                                {
+                                    for (int i = 0; i < rewardInfo.rewardItems.Count; i++)
+                                    {
+                                        RewardInfo.ItemData itemData = rewardInfo.rewardItems.ElementAt(i);
+                                        reward += (string.Format(msg("reward_item", player.userID), itemData.amount, idToDisplayName[itemData.itemid]) + (i < rewardInfo.rewardItems.Count - 1 ? ", " : ""));
+                                    }
+                                }
+                                else reward = rewardInfo.econAmount > 0 ? string.Format(msg("reward_econ", player.userID), rewardInfo.econAmount) : string.Format(msg("reward_rp", player.userID), rewardInfo.rpAmount);
 
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Permissions/Auth //////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
+                                SendReply(player, string.Format(msg("reward_info", player.userID), rewardId, reward));
+                            }
+                        }
+                        else
+                        {
+                            int rewardId;
+                            if (!int.TryParse(args[1], out rewardId) || !playerData.unclaimedRewards.Contains(rewardId))
+                            {
+                                SendReply(player, msg("invalid_reward_id", player.userID));
+                                return;
+                            }
 
-        bool canBountyPlayer(BasePlayer player)
-        {
-            if (permission.UserHasPermission(player.userID.ToString(), "bounty.use")) return true;
-            else if (canBountyAdmin(player)) return true;            
-            return false;
-        }
-        bool canBountyAdmin(BasePlayer player)
-        {
-            if (permission.UserHasPermission(player.userID.ToString(), "bounty.admin")) return true;
-            else if (isAuth(player)) return true;
-            return false;
-        }
-        bool isBanned(BasePlayer player)
-        {
-            if (permission.UserHasPermission(player.userID.ToString(), "bounty.ban")) return true;            
-            return false;
-        }
-        bool isAuth(BasePlayer player)
-        {
-            if (player.net.connection.authLevel >= auth) return true;
-            return false;
-        }
-        bool isAuthCon(ConsoleSystem.Arg arg)
+                            RewardInfo rewardInfo = storedData.rewards[rewardId];
+                            GivePlayerRewards(player, rewardInfo);
+                            storedData.rewards.Remove(rewardId);
+                            playerData.unclaimedRewards.Remove(rewardId);
+                        }
+                    }
+                    return;
+                case "view":
+                    {
+                        if (args.Length < 2)
+                        {
+                            SendReply(player, msg("invalid_syntax", player.userID));
+                            return;
+                        }
+
+                        IPlayer targetPlayer = covalence.Players.FindPlayer(args[1]);
+                        if (targetPlayer == null)
+                        {
+                            SendReply(player, msg("no_player_found", player.userID));
+                            return;
+                        }
+
+                        PlayerData playerData;
+                        if (!storedData.players.TryGetValue(ulong.Parse(targetPlayer.Id), out playerData) || playerData.activeBounties.Count == 0)
+                        {
+                            SendReply(player, msg("no_active_bounties", player.userID));
+                            return;
+                        }
+
+                        SendReply(player, string.Format(msg("player_has_bounties", player.userID), targetPlayer.Name, playerData.activeBounties.Count));
+                        foreach(var bounty in playerData.activeBounties)
+                        {
+                            RewardInfo rewardInfo = storedData.rewards[bounty.rewardId];
+                            string reward = string.Empty;
+                            if (rewardInfo.rewardItems.Count > 1)
+                            {
+                                for (int i = 0; i < rewardInfo.rewardItems.Count; i++)
+                                {
+                                    RewardInfo.ItemData itemData = rewardInfo.rewardItems.ElementAt(i);
+                                    reward += (string.Format(msg("reward_item", player.userID), itemData.amount, idToDisplayName[itemData.itemid]) + (i < rewardInfo.rewardItems.Count - 1 ? ", " : ""));
+                                }
+                            }
+                            else reward = rewardInfo.econAmount > 0 ? string.Format(msg("reward_econ", player.userID), rewardInfo.econAmount) : string.Format(msg("reward_rp", player.userID), rewardInfo.rpAmount);
+
+                            SendReply(player, string.Format(msg("bounty_info", player.userID), bounty.initiatorName, FormatTime(CurrentTime() - bounty.initiatedTime), reward));
+                        }
+                    }
+                    return;
+                case "top":
+                    IEnumerable<PlayerData> top10Hunters = storedData.players.Values.OrderByDescending(x => x.bountiesClaimed).Take(10);
+                    string hunterMessage = msg("top_hunters", player.userID);
+
+                    foreach (PlayerData playerData in top10Hunters)
+                        hunterMessage += string.Format(msg("top_hunter_entry", player.userID), playerData.displayName, playerData.bountiesClaimed);
+
+                    SendReply(player, hunterMessage);
+                    return;
+                case "wanted":
+                    IEnumerable<PlayerData> top10Hunted = storedData.players.Values.OrderByDescending(x => x.totalWantedTime + x.GetCurrentWantedTime()).Take(10);
+                    string wantedMessage = msg("top_wanted", player.userID);
+
+                    foreach (PlayerData playerData in top10Hunted)
+                        wantedMessage += string.Format(msg("top_wanted_entry", player.userID), playerData.displayName, FormatTime(playerData.totalWantedTime + playerData.GetCurrentWantedTime()), playerData.totalBounties);
+
+                    SendReply(player, wantedMessage);
+                    return;
+                case "clear":
+                    {
+                        if (args.Length < 2)
+                        {
+                            SendReply(player, msg("invalid_syntax", player.userID));
+                            return;
+                        }
+
+                        IPlayer targetPlayer = covalence.Players.FindPlayer(args[1]);
+                        if (targetPlayer == null)
+                        {
+                            SendReply(player, msg("no_player_found", player.userID));
+                            return;
+                        }
+
+                        PlayerData playerData;
+                        if (!storedData.players.TryGetValue(ulong.Parse(targetPlayer.Id), out playerData) || playerData.activeBounties.Count == 0)
+                        {
+                            SendReply(player, msg("no_active_bounties", player.userID));
+                            return;
+                        }
+
+                        foreach(var bounty in playerData.activeBounties)                        
+                            storedData.rewards.Remove(bounty.rewardId);
+                        playerData.activeBounties.Clear();
+                        
+                        SendReply(player, string.Format(msg("bounties_cleared", player.userID), targetPlayer.Name));
+                    }
+                    return;
+                default:
+                    SendReply(player, msg("invalid_syntax", player.userID));
+                    break;
+            }            
+        }   
+        
+        [ConsoleCommand("bounty")]
+        private void ccmdBounty(ConsoleSystem.Arg arg)
         {
             if (arg.Connection != null)
+                return;
+
+            if (arg.Args == null || arg.Args.Length == 0)
             {
-                if (arg.Connection.authLevel < 1)
-                {
-                    SendReply(arg, lang.GetMessage("noPerms", this));
-                    return false;
-                }
+                SendReply(arg, "bounty view <target name or ID> - View active bounties on the specified player");
+                SendReply(arg, "bounty top - View the top 20 bounty hunters");
+                SendReply(arg, "bounty wanted - View the top 20 most wanted players");
+                SendReply(arg, "bounty clear <target name or ID> - Clear all active bounties on the specified player");
+                SendReply(arg, "bounty wipe - Wipe all bounty data");
+                return;
             }
-            return true;
-        }
-        #endregion
 
-        #region config
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Configuration /////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-
-        static int auth = 1;
-        static bool useClans = true;
-        static bool useFriendsAPI = true;
-        static bool usePopup = true;
-        static bool useReminders = true;
-        static bool useEconomics = true;
-        static bool globalBroadcast = true;
-        static bool useEconomyOnly = false;
-
-        static int saveLoop = 10;
-        static int popupTime = 30;
-        static int remindTime = 20;
-
-        static string mainColor = "<color=orange>";
-        static string msgColor = "<color=#939393>";
-
-        private void LoadVariables()
-        {
-            LoadConfigVariables();
-            SaveConfig();
-        }
-        private void LoadConfigVariables()
-        {
-            CheckCfg("Authlevel to access admin commands", ref auth);
-            CheckCfg("Use FriendsAPI", ref useFriendsAPI);
-            CheckCfg("Use Clans", ref useClans);
-            CheckCfg("Broadcast new bounty's to global", ref globalBroadcast);
-            CheckCfg("Popups - Use Popup Notifications", ref usePopup);
-            CheckCfg("Popups - Popup Notification time", ref popupTime);
-            CheckCfg("Reminders - Use reminders", ref useReminders);
-            CheckCfg("Reminders - Timer (mins)", ref remindTime);
-            CheckCfg("Economics - Use money as bounty", ref useEconomics);
-            CheckCfg("Economics - Only use money to set a bounty", ref useEconomyOnly);
-            CheckCfg("Colors - Main color", ref mainColor);
-            CheckCfg("Colors - Message color", ref msgColor);
-        }
-        private void CheckCfg<T>(string Key, ref T var)
-        {
-            if (Config[Key] is T)
-                var = (T)Config[Key];
-            else
-                Config[Key] = var;
-        }
-        private void CheckCfgFloat(string Key, ref float var)
-        {
-
-            if (Config[Key] != null)
-                var = Convert.ToSingle(Config[Key]);
-            else
-                Config[Key] = var;
-        }
-        object GetConfig(string menu, string datavalue, object defaultValue)
-        {
-            var data = Config[menu] as Dictionary<string, object>;
-            if (data == null)
+            switch (arg.Args[0].ToLower())
             {
-                data = new Dictionary<string, object>();
-                Config[menu] = data;
-                Changed = true;
+                case "view":
+                    {
+                        if (arg.Args.Length < 2)
+                        {
+                            SendReply(arg, "Invalid command syntax! Type 'bounty' to see available commands");
+                            return;
+                        }                        
+
+                        IPlayer targetPlayer = covalence.Players.FindPlayer(arg.Args[1]);
+                        if (targetPlayer == null)
+                        {
+                            SendReply(arg, "Unable to find a player with that name or ID");
+                            return;
+                        }
+
+                        PlayerData playerData;
+                        if (!storedData.players.TryGetValue(ulong.Parse(targetPlayer.Id), out playerData) || playerData.activeBounties.Count == 0)
+                        {
+                            SendReply(arg, "That player does not have any active bounties");
+                            return;
+                        }
+
+                        SendReply(arg, string.Format("{0} has {1} active bounties", targetPlayer.Name, playerData.activeBounties.Count));
+                        foreach (var bounty in playerData.activeBounties)
+                        {
+                            RewardInfo rewardInfo = storedData.rewards[bounty.rewardId];
+                            string reward = string.Empty;
+                            if (rewardInfo.rewardItems.Count > 1)
+                            {
+                                for (int i = 0; i < rewardInfo.rewardItems.Count; i++)
+                                {
+                                    RewardInfo.ItemData itemData = rewardInfo.rewardItems.ElementAt(i);
+                                    reward += (string.Format("{0}x {1}", itemData.amount, idToDisplayName[itemData.itemid]) + (i < rewardInfo.rewardItems.Count - 1 ? ", " : ""));
+                                }
+                            }
+                            else reward = rewardInfo.econAmount > 0 ? string.Format("{0} economics", rewardInfo.econAmount) : string.Format("{0} rp", rewardInfo.rpAmount);
+
+                            SendReply(arg, string.Format("Placed by {0} {1} ago. Reward: {2}", bounty.initiatorName, FormatTime(CurrentTime() - bounty.initiatedTime), reward));
+                        }
+                    }
+                    return;
+                case "top":
+                    IEnumerable<PlayerData> top20Hunters = storedData.players.Values.OrderByDescending(x => x.bountiesClaimed).Take(20);
+                    string hunterMessage = "Top 20 Hunters:";
+
+                    foreach (PlayerData playerData in top20Hunters)
+                        hunterMessage += string.Format("\n{0} - {1} bounties collected", playerData.displayName, playerData.bountiesClaimed);
+
+                    SendReply(arg, hunterMessage);
+                    return;
+                case "wanted":
+                    IEnumerable<PlayerData> top20Hunted = storedData.players.Values.OrderByDescending(x => x.totalWantedTime + x.GetCurrentWantedTime()).Take(20);
+                    string wantedMessage = "Top 20 Most Wanted:";
+
+                    foreach (PlayerData playerData in top20Hunted)
+                        wantedMessage += string.Format("\n{0} has all together been on the run for {1} with a total of {2} bounties", playerData.displayName, FormatTime(playerData.totalWantedTime + playerData.GetCurrentWantedTime()), playerData.totalBounties);
+
+                    SendReply(arg, wantedMessage);
+                    return;
+                case "clear":
+                    {
+                        if (arg.Args.Length < 2)
+                        {
+                            SendReply(arg, "Invalid command syntax! Type 'bounty' to see available commands");
+                            return;
+                        }
+
+                        IPlayer targetPlayer = covalence.Players.FindPlayer(arg.Args[1]);
+                        if (targetPlayer == null)
+                        {
+                            SendReply(arg, "Unable to find a player with that name or ID");
+                            return;
+                        }
+
+                        PlayerData playerData;
+                        if (!storedData.players.TryGetValue(ulong.Parse(targetPlayer.Id), out playerData) || playerData.activeBounties.Count == 0)
+                        {
+                            SendReply(arg, "That player does not have any active bounties");
+                            return;
+                        }
+
+                        foreach (var bounty in playerData.activeBounties)
+                            storedData.rewards.Remove(bounty.rewardId);
+                        playerData.activeBounties.Clear();
+
+                        SendReply(arg, $"You have cleared all pending bounties from {targetPlayer.Name}");
+                    }
+                    return;
+                case "wipe":
+                    storedData = new StoredData();
+                    SaveData();
+                    SendReply(arg, "All data has been wiped!");
+                    return;
+                default:
+                    SendReply(arg, "Invalid command syntax! Type 'bounty' to see available commands");
+                    break;
             }
-            object value;
-            if (!data.TryGetValue(datavalue, out value))
-            {
-                value = defaultValue;
-                data[datavalue] = value;
-                Changed = true;
-            }
-            return value;
         }
         #endregion        
 
-        #region data
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Data Management ///////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-                
-        void SaveData()
+        #region Config        
+        private ConfigData configData;
+        private class ConfigData
         {
-            foreach (var player in BasePlayer.activePlayerList)
+            [JsonProperty(PropertyName = "Ignore kills by clan members")]
+            public bool IgnoreClans { get; set; }
+            [JsonProperty(PropertyName = "Ignore kills by friends")]
+            public bool IgnoreFriends { get; set; }
+            [JsonProperty(PropertyName = "Notification Options")]
+            public NotificationOptions Notifications { get; set; }
+            [JsonProperty(PropertyName = "Reward Options")]
+            public RewardOptions Rewards { get; set; }
+
+            public class NotificationOptions
             {
-                if (bountyData.players.ContainsKey(player.userID))
+                [JsonProperty(PropertyName = "PopupNotifications - Broadcast using PopupNotifications")]
+                public bool UsePopupNotifications { get; set; }
+                [JsonProperty(PropertyName = "PopupNotifications - Duration of notification")]
+                public float PopupDuration { get; set; }
+                [JsonProperty(PropertyName = "Broadcast new bounties globally")]
+                public bool BroadcastNewBounties { get; set; }
+                [JsonProperty(PropertyName = "Reminders - Remind targets they have a bounty on them")]
+                public bool ShowReminders { get; set; }
+                [JsonProperty(PropertyName = "Reminders - Amount of time between reminders (in minutes)")]
+                public int ReminderTime { get; set; }
+            }
+
+            public class RewardOptions
+            {
+                [JsonProperty(PropertyName = "Allow bounties to be placed using Economics")]
+                public bool AllowEconomics { get; set; }
+                [JsonProperty(PropertyName = "Allow bounties to be placed using RP")]
+                public bool AllowServerRewards { get; set; }
+                [JsonProperty(PropertyName = "Allow bounties to be placed using items")]
+                public bool AllowItems { get; set; }
+            }
+            public Oxide.Core.VersionNumber Version { get; set; }
+        }
+
+        protected override void LoadConfig()
+        {
+            base.LoadConfig();
+            configData = Config.ReadObject<ConfigData>();
+
+            if (configData.Version < Version)
+                UpdateConfigValues();
+
+            Config.WriteObject(configData, true);
+        }
+
+        protected override void LoadDefaultConfig() => configData = GetBaseConfig();
+
+        private ConfigData GetBaseConfig()
+        {
+            return new ConfigData
+            {
+                IgnoreClans = true,
+                IgnoreFriends = true,
+                Notifications = new ConfigData.NotificationOptions
                 {
-                    if (bountyData.players[player.userID].Bountys.Count > 0)
-                        calculateTimestamp(player);
-                }
-            }
-            BountyData.WriteObject(bountyData);
-            RewardData.WriteObject(rewardData);
-        }
-        void SaveDataLoop()
-        {
-            SaveData();
-            timer.Once(saveLoop, () => SaveDataLoop());
-        }
-        void LoadData()
-        {
-            try
-            {
-                bountyData = BountyData.ReadObject<BountyDataStorage>();
-            }
-            catch
-            {
-                Puts("Couldn't load Bounty player data, creating new datafile");
-                bountyData = new BountyDataStorage();
-            }
-            try
-            {
-                rewardData = RewardData.ReadObject<RewardDataStorage>();
-            }
-            catch
-            {
-                Puts("Couldn't load Bounty reward data, creating new datafile");
-                rewardData = new RewardDataStorage();
-            }
+                    BroadcastNewBounties = true,
+                    PopupDuration = 8f,
+                    ReminderTime = 30,
+                    ShowReminders = true,
+                    UsePopupNotifications = false
+                },
+                Rewards = new ConfigData.RewardOptions
+                {
+                    AllowEconomics = true,
+                    AllowItems = true,
+                    AllowServerRewards = true
+                },
+                Version = Version
+            };
         }
 
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Data Class ////////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
+        protected override void SaveConfig() => Config.WriteObject(configData, true);
 
-        class BountyDataStorage
+        private void UpdateConfigValues()
         {
-            public Dictionary<ulong, PlayerData> players = new Dictionary<ulong, PlayerData>();
-            public BountyDataStorage() { }
-        }
-        class PlayerData
-        {
-            public ulong PlayerID;
-            public string PlayerName;
-            public int TotalBountys;
-            public long TotalWantedSec;
-            public string TotalWantedClock;            
-            public Dictionary<ulong, BountyInfo> Bountys;
+            PrintWarning("Config update detected! Updating config values...");
 
-            public PlayerData() { }
-            public PlayerData(string name, ulong id)
-            {
-                PlayerID = id;
-                PlayerName = name;                                             
-                TotalBountys = 0;
-                TotalWantedSec = 0;
-                TotalWantedClock = "00:00:00";
-                Bountys = new Dictionary<ulong, BountyInfo>();
-            }
-        }
-        class BountyInfo
-        {
-            public string InitiatorName;
-            public List<ItemStorage> BountyItems = new List<ItemStorage>();
-            public long WantedTime;
-            public string WantedTimeClock;
+            ConfigData baseConfig = GetBaseConfig();
+            if (configData.Version < new Core.VersionNumber(0, 2, 0))
+                configData = baseConfig;
 
-            public BountyInfo() { }
-            public BountyInfo(ulong playerid, string playername, List<ItemStorage> items)
-            {
-                InitiatorName = playername;
-                BountyItems = items;
-                WantedTime = 0;
-                WantedTimeClock = "00:00:00";                
-            }
+            configData.Version = Version;
+            PrintWarning("Config update completed!");
         }
-        class RewardDataStorage
-        {
-            public Dictionary<ulong, RewardInfo> rewards = new Dictionary<ulong, RewardInfo>();
-            public RewardDataStorage() { }
-        }
-        class RewardInfo
-        {            
-            public ulong PlayerID;            
-            public string PlayerName;
-            public int TotalCount;
-            public Dictionary<int, UnclaimedData> Rewards;
 
-            public RewardInfo() { }
-            public RewardInfo(ulong aid, string attackname)
-            {
-                PlayerID = aid;
-                PlayerName = attackname;
-                TotalCount = 0;
-                Rewards = new Dictionary<int, UnclaimedData>();
-            }
-        }
-        class UnclaimedData
-        {
-            public ulong VictimID;
-            public string VictimName;
-            public List<ItemStorage> Rewards = new List<ItemStorage>();
-            public UnclaimedData() { }
-
-        }
-        class ItemStorage
-        {
-            public bool money;
-            public int amount;
-            public string itemname;
-        }
-        class OpenBox
-        {
-            public BasePlayer target;
-            public BaseEntity entity;
-        }       
-
-        class PlayerTimeStamp
-        {
-            public Dictionary<ulong, PlayerStateInfo> playerTime = new Dictionary<ulong, PlayerStateInfo>();
-            public PlayerTimeStamp() { }
-        }
-        class PlayerStateInfo
-        {
-            public long InitTimeStamp;
-
-            public PlayerStateInfo() { }
-
-            public PlayerStateInfo(BasePlayer player)
-            {
-                InitTimeStamp = 0;
-            }
-        }        
-       
         #endregion
 
-        #region messages
-        //////////////////////////////////////////////////////////////////////////////////////
-        // Messages //////////////////////////////////////////////////////////////////////////
-        //////////////////////////////////////////////////////////////////////////////////////
-
-        Dictionary<string, string> messages = new Dictionary<string, string>()
+        #region Data Management        
+        private void SaveData() => data.WriteObject(storedData);        
+        
+        private void LoadData()
         {
-            {"title", "Bounty : " },
-            {"noPerms", "You do not have permission to use this command" },
-            {"neRes", "You do not have enough resources to place this bounty" },
-            {"existBounty", "You already have a bounty placed on this player" },
-            {"existBox", "You already have reward box open!" },
-            {"setReward", "Place your reward items in the box infront of you!" },
-            {"addBounty", "A bounty has been placed on {0}" },
-            {"bountyAdded", "{0} has just placed a bounty on you!" },
-            {"numOutstand", "You currently have {0} outstanding bounty(s)" },
-            {"noOutstand", "You have no outstanding bounty's" },
-            {"noSelf", "You cannot place a bounty on yourself" },
-            {"noItems", "You didn't place any items in the box, no bounty has been placed" },
-            {"noPlayers", "Could not find a player with that name" },
-            {"multiplePlayers", "Multiple players found with that name" },
-            {"noItem", "Could not find a item with that name" },
-            {"noMoney", "You do not have enough money" },
-            {"multipleItems", "Multiple items found with that name, try typing more of the name" },
-            {"invAmount", "The amount needs to be a number" },
-            {"checkBounty", "{1} has {0} outstanding bounty(s)" },
-            {"pnoOutstand", "{0} has no outstanding bounty's" },
-            {"clearBounty", "You have removed {0} bounty(s) from {1}" },
-            {"clanMate", "You cannot claim a bounty on a clan mate" },
-            {"isFriend", "You cannot claim a bounty on a friend" },
-            {"numEarnt", "{0} had {1} bounty(s), you can claim these using /bounty claim" },
-            {"checkInfo", "<color=#8dc63f>Initiator:</color> {0} <color=#31698a>---</color> <color=#8dc63f>Rewards;</color>" },
-            {"noRewards", "You don't have any rewards" },
-            {"claimRewards", "You currently have {0} bounty reward(s) to claim, use /bounty claim #ID#" },
-            {"rewardInfo", "<color=#8dc63f>RewardID:</color> {0} <color=#31698a>---</color> <color=#8dc63f>Items;</color>" },
-            {"invRNum", "You must type a valid reward number" },
-            {"claimSuccess", "You have claimed reward ID {0}" },
-            {"claimFormat", "/bounty claim ID#" },
-            {"wipedData", "All data has been wiped!" },
-            {"mostWanted", "--- Top wanted active bounty's" },
-            {"mostCurrentTime", "--- Top current wanted time" },
-            {"mostKills", "--- Top bounty killers" },
-            {"mostOverallTime", "--- Top total wanted time" },
-            {"wantedList", "<color=#8dc63f>Name:</color> {0} <color=#31698a>---</color> <color=#8dc63f>Active Bountys:</color> {1}" },
-            {"wantedCurrentTime", "<color=#8dc63f>Name:</color> {0} <color=#31698a>---</color> <color=#8dc63f>Current wanted time:</color> {1}" },
-            {"topList", "<color=#8dc63f>Name:</color> {0} <color=#31698a>---</color> <color=#8dc63f>Bountys Collected:</color> {1}" },
-            {"wantedOverallTime", "<color=#8dc63f>Name:</color> {0} <color=#31698a>---</color> <color=#8dc63f>Total wanted time:</color> {1}" },
-            {"addFormat", "Format: /bounty add PlayerName" },
-            {"addFormatMoney", "Economics Format: /bounty add PlayerName money amount" },
-            {"checkFormat", "Format: /bounty check PlayerName"},
-            {"commands", "Commands" },
-            {"noTop", "There are currently no top hunters" },
-            {"playerBanned", "You are currently banned from adding/claiming a bounty" },
-            {"noWanted", "There are currently no wanted players" }
-        };
+            try
+            {
+                storedData = data.ReadObject<StoredData>();
+            }
+            catch
+            {
+                storedData = new StoredData();
+            }
+        }
+       
+        private class StoredData
+        {
+            public Dictionary<ulong, PlayerData> players = new Dictionary<ulong, PlayerData>();
+            public Dictionary<int, RewardInfo> rewards = new Dictionary<int, RewardInfo>();
+        }
+
+        private class PlayerData
+        {
+            public string displayName;
+            public int totalBounties;
+            public int bountiesClaimed;
+            public double totalWantedTime;
+            public List<BountyInfo> activeBounties = new List<BountyInfo>();
+            public List<int> unclaimedRewards = new List<int>();
+
+            public PlayerData() { }
+
+            public PlayerData(string displayName)
+            {
+                this.displayName = displayName;
+            }
+            
+            public void ClaimRewards(List<int> rewards)
+            {
+                foreach(int reward in rewards)
+                {
+                    unclaimedRewards.Add(reward);
+                    bountiesClaimed++;
+                }
+            }
+
+            public void UpdateWantedTime()
+            {                
+                totalWantedTime += GetCurrentWantedTime();
+            }
+
+            public double GetCurrentWantedTime()
+            {
+                double largestTime = 0;
+                foreach (BountyInfo bountyInfo in activeBounties)
+                {
+                    double time = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds - bountyInfo.initiatedTime;
+                    if (time > largestTime)
+                        largestTime = time;
+                }
+                return largestTime;
+            }
+
+            public class BountyInfo
+            {
+                public ulong initiatorId;
+                public string initiatorName;
+                public double initiatedTime;
+                public int rewardId;
+
+                public BountyInfo() { }
+                public BountyInfo(ulong initiatorId, string initiatorName, int rewardId)
+                {
+                    this.initiatorId = initiatorId;
+                    this.initiatorName = initiatorName;
+                    this.rewardId = rewardId;
+                    this.initiatedTime = DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1, 0, 0, 0)).TotalSeconds;
+                }                
+            }
+        }
+
+        private class RewardInfo
+        {
+            public int rpAmount;
+            public int econAmount;
+            public List<ItemData> rewardItems = new List<ItemData>();
+
+            public RewardInfo() { }
+            public RewardInfo(int rpAmount, int econAmount, ItemContainer container)
+            {
+                this.rpAmount = rpAmount;
+                this.econAmount = econAmount;
+                if (container != null)                
+                    rewardItems = GetItems(container).ToList();                
+            }
+
+            private IEnumerable<ItemData> GetItems(ItemContainer container)
+            {
+                return container.itemList.Select(item => new ItemData
+                {
+                    itemid = item.info.itemid,
+                    amount = item.amount,
+                    ammo = (item.GetHeldEntity() as BaseProjectile)?.primaryMagazine.contents ?? 0,
+                    ammotype = (item.GetHeldEntity() as BaseProjectile)?.primaryMagazine.ammoType.shortname ?? null,
+                    skin = item.skin,
+                    condition = item.condition,
+                    instanceData = new ItemData.InstanceData(item),
+                    contents = item.contents?.itemList.Select(item1 => new ItemData
+                    {
+                        itemid = item1.info.itemid,
+                        amount = item1.amount,
+                        condition = item1.condition
+                    }).ToArray()
+                });
+            }
+
+            public class ItemData
+            {
+                public int itemid;
+                public ulong skin;
+                public int amount;
+                public float condition;
+                public int ammo;
+                public string ammotype;
+                public InstanceData instanceData;
+                public ItemData[] contents;
+
+                public class InstanceData
+                {
+                    public int dataInt;
+                    public int blueprintTarget;
+                    public int blueprintAmount;
+
+                    public InstanceData() { }
+                    public InstanceData(Item item)
+                    {
+                        if (item.instanceData == null)
+                            return;
+
+                        dataInt = item.instanceData.dataInt;
+                        blueprintAmount = item.instanceData.blueprintAmount;
+                        blueprintTarget = item.instanceData.blueprintTarget;
+                    }
+
+                    public void Restore(Item item)
+                    {
+                        item.instanceData = new ProtoBuf.Item.InstanceData();
+                        item.instanceData.blueprintAmount = blueprintAmount;
+                        item.instanceData.blueprintTarget = blueprintTarget;
+                        item.instanceData.dataInt = dataInt;
+                    }
+                }
+            }
+        }         
+        #endregion
+
+        #region Localization
+        private string msg(string key, ulong playerId = 0U) => lang.GetMessage(key, this, playerId == 0U ? null : playerId.ToString());
+
+        Dictionary<string, string> messages = new Dictionary<string, string>
+        {
+            ["rewards_pending"] = "<color=#D3D3D3><color=#ce422b>{0}</color> had <color=#ce422b>{1}</color> outstanding bounties on them. You can claim your rewards by typing</color> <color=#ce422b>/bounty</color>",
+            ["is_friend"] = "<color=#D3D3D3>You cannot claim a bounty on a friend or clan mate</color>",
+            ["bounty_placed_target"] = "<color=#ce422b>{0} </color><color=#D3D3D3>has placed a bounty on you</color>",
+            ["bounty_placed_initiator"] = "<color=#D3D3D3>You have successfully placed a bounty on</color> <color=#ce422b>{0}</color>",
+            ["no_bounty_placed"] = "<color=#D3D3D3>You do not have a bounty placed on </color> <color=#ce422b>{0}</color>",
+            ["bounty_cancelled_target"] = "<color=#ce422b>{0} </color><color=#D3D3D3>has cancelled their bounty on you</color>",
+            ["bounty_cancelled_initiator"] = "<color=#D3D3D3>You have cancelled the bounty on</color> <color=#ce422b>{0}</color>",
+            ["no_permission"] = "<color=#D3D3D3>You do not have permission to use that command</color>",
+            ["no_items_deposited"] = "<color=#D3D3D3>You did not place any items in the box</color>",
+            ["invalid_syntax"] = "<color=#D3D3D3>Invalid command syntax! Type <color=#ce422b>/bounty</color> to see available commands</color>",
+            ["help1"] = "<color=#ce422b>/bounty add items <target name or ID></color><color=#D3D3D3> - Create a new bounty using items as the reward</color>",
+            ["help2"] = "<color=#ce422b>/bounty add rp <target name or ID> <amount></color><color=#D3D3D3> - Create a new bounty using RP as the reward</color>",
+            ["help3"] = "<color=#ce422b>/bounty add eco <target name or ID> <amount></color><color=#D3D3D3> - Create a new bounty using RP as the reward</color>",
+            ["help4"] = "<color=#ce422b>/bounty cancel <target name or ID></color><color=#D3D3D3> - Cancel a bounty you placed on a player</color>",
+            ["help5"] = "<color=#ce422b>/bounty claim</color><color=#D3D3D3> - Claim a outstanding reward</color>",
+            ["help6"] = "<color=#ce422b>/bounty view <target name or ID></color><color=#D3D3D3> - View active bounties on on the target player</color>",
+            ["help7"] = "<color=#ce422b>/bounty top</color><color=#D3D3D3> - List the top 10 bounty hunters</color>",
+            ["help8"] = "<color=#ce422b>/bounty wanted</color><color=#D3D3D3> - List the top 10 most wanted players</color>",
+            ["help9"] = "<color=#ce422b>/bounty clear <target name or ID></color><color=#D3D3D3> - Clear all bounties on the target player</color>",
+            ["no_player_found"] = "<color=#D3D3D3>Unable to find a player with that name or ID</color>",
+            ["multiple_players_found"] = "<color=#D3D3D3>Multiple players found with that name</color>",
+            ["has_active_bounty"] = "<color=#D3D3D3>You already have a active bounty on that player</color>",
+            ["no_value_entered"] = "<color=#D3D3D3>You must enter an amount</color>",
+            ["not_enough_rp"] = "<color=#D3D3D3>You do not have enough RP to place this bounty</color>",
+            ["not_enough_eco"] = "<color=#D3D3D3>You do not have enough money to place this bounty</color>",
+            ["no_active_bounties"] = "<color=#D3D3D3>That player does not have any active bounties</color>",
+            ["player_has_bounties"] = "<color=#D3D3D3><color=#ce422b>{0}</color> has <color=#ce422b>{1}</color> active bounties</color>",
+            ["bounty_info"] = "<color=#D3D3D3>Placed by <color=#ce422b>{0} {1}</color> ago. Reward: </color><color=#ce422b>{2}</color>",
+            ["reward_econ"] = "<color=#ce422b>{0}</color> <color=#D3D3D3>economics</color>",
+            ["reward_rp"] = "<color=#ce422b>{0}</color> <color=#D3D3D3>rp</color>",
+            ["reward_item"] = "<color=#D3D3D3>{0} x</color> <color=#ce422b>{1}</color>",
+            ["help10"] = "<color=#ce422b>/bounty claim <ID></color><color=#D3D3D3> - Claim the reward for the bounty with the specified ID number</color>",
+            ["no_rewards_pending"] = "<color=#D3D3D3>You do not have any outstanding rewards to be claimed</color>",
+            ["reward_info"] = "<color=#D3D3D3>ID: <color=#ce422b>{0}</color> - Reward: </color><color=#ce422b>{1}</color>",
+            ["top_hunters"] = "<color=#ce422b>Top 10 Hunters:</color>",
+            ["top_hunter_entry"] = "<color=#D3D3D3>\n<color=#ce422b>{0}</color> - <color=#ce422b>{1}</color> bounties collected</color>",
+            ["top_wanted"] = "<color=#ce422b>Top 10 Most Wanted:</color>",
+            ["top_wanted_entry"] = "<color=#D3D3D3>\n<color=#ce422b>{0}</color> has all together been on the run for <color=#ce422b>{1}</color> with a total of <color=#ce422b>{2}</color> bounties</color>",
+            ["cant_bounty_self"] = "<color=#D3D3D3>You can not place a bounty on yourself</color>",
+            ["title"] = "<color=#ce422b>{0}  <color=#D3D3D3>v</color>{1}</color>",
+            ["bounties_outstanding"] = "<color=#D3D3D3>You have <color=#ce422b>{0}</color> active bounties on you!</color>",
+            ["bounties_cleared"] = "<color=#D3D3D3>You have cleared all pending bounties from </color><color=#ce422b>{0}</color>",
+            ["reward_claimed"] = "<color=#D3D3D3>You have claimed your reward!</color>"
+        };        
         #endregion
 
     }

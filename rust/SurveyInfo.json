@@ -1,8 +1,8 @@
 {
     "name": "Survey Info",
-    "description": "Displays results from Survey Charges in chat with a % score.",
+    "description": "Displays results from Survey Charges.",
     "author": "Diesel 42o",
-    "version": "0.1.6",
+    "version": "0.1.7",
     "configuration": false,
     "suggest": {
         "GatherManager": "*"

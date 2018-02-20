@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -9,25 +9,34 @@ using Oxide.Plugins.BlueprintManagerExtensions;
 
 namespace Oxide.Plugins
 {
-    [Info("Blueprint Manager", "Jacob", "1.0.2")]
-    [Description("Blueprint managment.")]
-    class BlueprintManager : RustPlugin
+    [Info("Blueprint Manager", "Jacob", "1.0.3")]
+    internal class BlueprintManager : RustPlugin
     {
         /*
          * Full credit to k1lly0u for the code from "NoWorkbench."
          */
 
-        public static BlueprintManager Instance;
-        private Configuration _configuration;
+        #region Fields
 
-        private TriggerWorkbench workbenchTrigger;
-        private Workbench workbench;
+        public static BlueprintManager Instance;
+        private readonly Queue<Action> _unlockQueue = new Queue<Action>();
+        private Configuration _configuration;
+        private TriggerWorkbench _workbenchTrigger;
+        private Workbench _workbench;
+
+        #endregion
+
+        #region Properties
+
+        public List<string> GetDefaultBlueprints => _configuration.DefaultBlueprints.ConvertAll(x => x.ToString());
+
+        #endregion
 
         #region Configuration 
 
         private class Configuration
         {
-            public List<object> DefaultBlueprints = new List<object>();
+            public readonly List<object> DefaultBlueprints = new List<object>();
 
             public Configuration()
             {
@@ -160,8 +169,6 @@ namespace Oxide.Plugins
             return null;
         }
 
-        public List<object> GetDefaultBlueprints() => _configuration.DefaultBlueprints;
-
         public ItemDefinition GetItemDefinition(string shortName)
         {
             if (string.IsNullOrEmpty(shortName) || shortName == "")
@@ -174,23 +181,23 @@ namespace Oxide.Plugins
 
         private void SpawnWorkbench()
         {
-            workbench = GameManager.server.CreateEntity("assets/prefabs/deployable/tier 3 workbench/workbench3.deployed.prefab", new Vector3(0, -50, 0)) as Workbench;
-            workbench.enableSaving = false;
-            workbench.Spawn();
+            _workbench = GameManager.server.CreateEntity("assets/prefabs/deployable/tier 3 workbench/workbench3.deployed.prefab", new Vector3(0, -50, 0)) as Workbench;
+            _workbench.enableSaving = false;
+            _workbench.Spawn();
 
-            workbench.GetComponent<DestroyOnGroundMissing>().enabled = false;
-            workbench.GetComponent<GroundWatch>().enabled = false;
+            _workbench.GetComponent<DestroyOnGroundMissing>().enabled = false;
+            _workbench.GetComponent<GroundWatch>().enabled = false;
 
-            workbenchTrigger = workbench.GetComponentInChildren<TriggerWorkbench>();
+            _workbenchTrigger = _workbench.GetComponentInChildren<TriggerWorkbench>();
 
             foreach (var player in BasePlayer.activePlayerList)
                 OnPlayerInit(player);
 
-            workbenchTrigger.name = "workbench";
+            _workbenchTrigger.name = "workbench";
 
             timer.In(1, () =>
             {
-                if (workbench == null || workbench.IsDestroyed)
+                if (_workbench == null || _workbench.IsDestroyed)
                     SpawnWorkbench();
             });
         }
@@ -199,7 +206,7 @@ namespace Oxide.Plugins
 
         #region Oxide Hooks
 
-        private void Unload() => workbench.DieInstantly();
+        private void Unload() => _workbench.DieInstantly();
 
         private void OnServerInitialized()
         {
@@ -216,20 +223,26 @@ namespace Oxide.Plugins
 
             foreach (var player in BasePlayer.activePlayerList)
                 OnPlayerInit(player);
+
+            timer.Repeat(10, 0, () =>
+            {
+                if (_unlockQueue.Any())
+                    _unlockQueue.Dequeue()();
+            });
         }
 
         private void OnPlayerInit(BasePlayer player)
         {
             if (permission.UserHasPermission(player.UserIDString, "blueprintmanager.all"))
-                player.UnlockAll();
+                _unlockQueue.Enqueue(player.UnlockAll);
             else if (permission.UserHasPermission(player.UserIDString, "blueprintmanager.config"))
-                player.UnlockConfig();
+                _unlockQueue.Enqueue(player.UnlockConfig);
 
             if (!permission.UserHasPermission(player.UserIDString, "blueprintmanager.noworkbench"))
                 return;
 
-            if (workbenchTrigger != null)
-                player.EnterTrigger(workbenchTrigger);
+            if (_workbenchTrigger != null)
+                player.EnterTrigger(_workbenchTrigger);
         }
 
         private void OnEntityLeave(TriggerBase trigger, BaseEntity entity)
@@ -252,7 +265,9 @@ namespace Oxide.Plugins
             public static void UnlockAll(this BasePlayer player)
             {
                 var blueprintComponent = player.blueprints;
-                if (blueprintComponent == null) return;
+                if (blueprintComponent == null)
+                    return;
+
                 blueprintComponent.UnlockAll();
             }
 
@@ -262,16 +277,17 @@ namespace Oxide.Plugins
                 if (blueprintComponent == null) return;
 
                 var itemDefinition = BlueprintManager.Instance.GetItemDefinition(shortName);
-                if (itemDefinition == null) return;
+                if (itemDefinition == null)
+                    return;
 
                 blueprintComponent.Unlock(itemDefinition);
             }
 
             public static void UnlockConfig(this BasePlayer player)
             {
-                foreach (var shortName in BlueprintManager.Instance.GetDefaultBlueprints().Select(x => x.ToString()).ToList())
+                foreach (var shortName in BlueprintManager.Instance.GetDefaultBlueprints)
                 {
-                    if (string.IsNullOrEmpty(shortName) || shortName == "")
+                    if (string.IsNullOrEmpty(shortName))
                         continue;
 
                     player.UnlockItem(shortName);
@@ -281,7 +297,9 @@ namespace Oxide.Plugins
             public static void ResetAll(this BasePlayer player)
             {
                 var blueprintComponent = player.blueprints;
-                if (blueprintComponent == null) return;
+                if (blueprintComponent == null)
+                    return;
+
                 blueprintComponent.Reset();
             }
         }

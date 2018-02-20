@@ -1,75 +1,285 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Oxide.Game.Rust.Cui;
 using Oxide.Core.Plugins;
 using UnityEngine;
+using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Popup Notifications", "emu / k1lly0u", "0.1.3", ResourceId = 1252)]
+    [Info("Popup Notifications", "emu / k1lly0u", "0.2.0", ResourceId = 1252)]
     public class PopupNotifications : RustPlugin
     {
-        private static Vector2 position;
-        private static Vector2 dimensions;
-        private static ConfigData config;
-        
+        private static PopupNotifications ins;       
+        const string popupPanel = "PopupNotification";
+
+        private string panelColor;
+        private string buttonColor;
+        private string font;
+        private int fontSize;
+
         #region Oxide Hooks
-        void OnServerInitialized()
+        private void OnServerInitialized()
         {
             lang.RegisterMessages(Messages, this);
             permission.RegisterPermission("popupnotifications.send", this);
-            LoadVariables();
-            config = configData;
-            position = new Vector2(configData.PositionX, configData.PositionY);
-            dimensions = new Vector2(configData.Width, configData.Height);
-        }
-        #endregion       
 
-        #region Config        
-        private ConfigData configData;
-        class ConfigData
-        {
-            public float ShowDuration { get; set; }
-            public int MaxShownMessages { get; set; }
-            public bool ScrollDown { get; set; }
-            public float PositionX { get; set; }
-            public float PositionY { get; set; }
-            public float Width { get; set; }
-            public float Height { get; set; }
-            public float Spacing { get; set; }
-            public float Transparency { get; set; }
-            public float FadeTime { get; set; }
+            panelColor = UI.Color(configData.Options.Color, configData.Options.Alpha);
+            buttonColor = UI.Color(configData.Options.CloseColor, configData.Options.CloseAlpha);
+            font = configData.Options.Font;
+            fontSize = configData.Options.FontSize;
+
+            ins = this;            
         }
-        private void LoadVariables()
+
+        private void Unload()
         {
-            LoadConfigVariables();
-            SaveConfig();
-        }
-        protected override void LoadDefaultConfig()
-        {
-            var config = new ConfigData
+            foreach(BasePlayer player in BasePlayer.activePlayerList)
             {
-                ShowDuration = 8f,
-                FadeTime = 1f,
-                Height = 0.1f,
-                MaxShownMessages = 8,
-                PositionX = 0.8f,
-                PositionY = 0.78f,
-                ScrollDown = true,
-                Spacing = 0.01f,
-                Transparency = 0.7f,
-                Width = 0.19f
-            };
-            SaveConfig(config);
+                Notifier notifier = player.GetComponent<Notifier>();
+                if (notifier != null)
+                    UnityEngine.Object.Destroy(notifier);
+            }
+
+            ins = null;
         }
-        private void LoadConfigVariables() => configData = Config.ReadObject<ConfigData>();
-        void SaveConfig(ConfigData config) => Config.WriteObject(config, true);
+        #endregion
+
+        #region Functions
+        private Notifier GetPlayerNotifier(BasePlayer player) => player.GetComponent<Notifier>() ?? player.gameObject.AddComponent<Notifier>();
+
+        private void CreatePopupOnPlayer(string message, BasePlayer player, float duration = 0f) => GetPlayerNotifier(player).PopupMessage(message, duration);        
+
+        private void CreateGlobalPopup(string message, float duration = 0f)
+        {
+            foreach (BasePlayer activePlayer in BasePlayer.activePlayerList)
+            {
+                CreatePopupOnPlayer(message, activePlayer, duration);
+            }
+        }
+        #endregion     
+
+        #region API
+        [HookMethod("CreatePopupNotification")]
+        private void CreatePopupNotification(string message, BasePlayer player = null, float duration = 0f)
+		{
+			if(player != null)			
+				CreatePopupOnPlayer(message, player, (float)duration);			
+			else CreateGlobalPopup(message, (float)duration);			
+		}
+        #endregion
+
+        #region Component
+        private class Notifier : MonoBehaviour
+		{
+            private BasePlayer player;
+
+            private List<string> openPanels = new List<string>();
+            private List<MessageData> messageQueue = new List<MessageData>();
+
+            private Vector2 initialPos;
+            private Vector2 dimensions;
+
+            private int lastElementId;
+            private int activeElements;
+            private int maxElements;
+
+            private void Awake()
+			{
+				player = GetComponent<BasePlayer>();
+                enabled = false;
+
+                initialPos = new Vector2(ins.configData.Position.PositionX, ins.configData.Position.PositionY);
+                dimensions = new Vector2(ins.configData.Position.Width, ins.configData.Position.Height);
+                maxElements = ins.configData.MaximumMessages;
+            }		
+
+            private void OnDestroy()
+            {
+                messageQueue.Clear();
+
+                foreach (string panel in openPanels)
+                    CuiHelper.DestroyUi(player, panel);
+            }
+
+            public void PopupMessage(string message, float duration)
+            {
+                messageQueue.Add(new MessageData(message, popupPanel + lastElementId, duration == 0f ? duration = ins.configData.Duration : duration));
+                lastElementId++;
+                if (activeElements < maxElements)
+                    UpdateMessages();
+            }
+
+            private void UpdateMessages()
+            {
+                if (activeElements < maxElements)
+                {
+                    ClearAllElements();
+                    for (int i = 0; i < maxElements; i++)
+                    {
+                        if (messageQueue.Count - 1 < i)
+                            break;
+
+                        MessageData messageData = messageQueue.ElementAt(i);
+
+                        CuiElementContainer container = CreateNotification(messageData, i);
+
+                        AddUi(container, messageData.elementId);
+
+                        if (!messageData.started)
+                        {
+                            messageData.started = true;
+                            StartCoroutine(DestroyNotification(messageData));
+                        }
+                    }
+                }
+            }
+
+            private IEnumerator DestroyNotification(MessageData messageData)
+            {
+                yield return new WaitForSeconds(messageData.duration);
+
+                if (messageData == null)
+                    yield break;
+
+                messageQueue.Remove(messageData);
+                DestroyUi(messageData.elementId);
+
+                if (messageQueue.Count > 0)
+                    UpdateMessages();
+            }
+
+            public void DestroyNotification(string elementId)
+            {
+                MessageData messageData = messageQueue.Find(x => x.elementId == elementId) ?? null;
+                if (messageData == null)
+                    return;
+
+                messageQueue.Remove(messageData);
+                DestroyUi(messageData.elementId);
+
+                if (messageQueue.Count > 0)
+                    UpdateMessages();
+            }
+
+            private void AddUi(CuiElementContainer container, string elementId)
+            {
+                openPanels.Add(elementId);
+                CuiHelper.AddUi(player, container);
+                activeElements++;
+            }
+
+            private void DestroyUi(string elementId)
+            {
+                openPanels.Remove(elementId);
+                CuiHelper.DestroyUi(player, elementId);
+                activeElements--;
+            }
+
+            private void ClearAllElements()
+            {
+                foreach (string elementId in openPanels)
+                    CuiHelper.DestroyUi(player, elementId);
+                openPanels.Clear();
+                activeElements = 0;
+            }
+
+            private float[] GetFeedPosition(int number)
+            {               
+                float yPos = initialPos.y - ((dimensions.y + ins.configData.Position.Spacing) * number);
+                return new float[] { initialPos.x, yPos, initialPos.x + dimensions.x, yPos + dimensions.y };
+            }
+
+            private CuiElementContainer CreateNotification(MessageData messageData, int number)
+            {
+                float[] position = GetFeedPosition(number);
+
+                CuiElementContainer container = UI.Container(messageData.elementId, $"{position[0]} {position[1]}", $"{position[2]} {position[3]}");
+                UI.Label(ref container, messageData.elementId, messageData.message);
+
+                if (ins.configData.Options.Close)
+                    UI.Button(ref container, messageData.elementId, "X", $"popupmsg.close {messageData.elementId}");
+
+                return container;
+            }
+
+            public class MessageData
+            {
+                public string message { get; private set; }
+                public string elementId { get; private set; }
+                public float duration { get; private set; }
+                public bool started { get; set; }
+
+                public MessageData(string message, string elementId, float duration)
+                {
+                    this.message = message;
+                    this.elementId = elementId;
+                    this.duration = duration;
+                    started = false;                    
+                }
+            }
+        }
+        #endregion
+
+        #region UI
+        static public class UI
+        {
+            static public CuiElementContainer Container(string panel, string aMin, string aMax)
+            {
+                CuiElementContainer container = new CuiElementContainer()
+                {
+                    {
+                        new CuiPanel
+                        {
+                            Image = { Color = ins.panelColor },
+                            RectTransform = { AnchorMin = aMin, AnchorMax = aMax },
+                            CursorEnabled = false
+                        },
+                        new CuiElement().Parent = "Overlay",
+                        panel
+                    }
+                };
+                return container;
+            }
+            
+            static public void Label(ref CuiElementContainer container, string panel, string text)
+            {
+                container.Add(new CuiLabel
+                {
+                    Text = { FontSize = ins.fontSize, Align = TextAnchor.MiddleCenter, Text = text, Font = ins.font },
+                    RectTransform = { AnchorMin = "0 0", AnchorMax = "1 1" }
+                },
+                panel);
+            }
+
+            static public void Button(ref CuiElementContainer container, string panel, string text, string command)
+            {
+                container.Add(new CuiButton
+                {
+                    Button = { Color = ins.buttonColor, Command = command },
+                    RectTransform = { AnchorMin = "0.89 0.79", AnchorMax = "0.99 0.99" },
+                    Text = { Text = text, FontSize = 10, Align = TextAnchor.MiddleCenter, Font = ins.font }
+                },
+                panel);
+            }
+           
+            static public string Color(string hexColor, float alpha)
+            {
+                if (hexColor.StartsWith("#"))
+                    hexColor = hexColor.Substring(1);
+                int red = int.Parse(hexColor.Substring(0, 2), NumberStyles.AllowHexSpecifier);
+                int green = int.Parse(hexColor.Substring(2, 2), NumberStyles.AllowHexSpecifier);
+                int blue = int.Parse(hexColor.Substring(4, 2), NumberStyles.AllowHexSpecifier);
+                return $"{(double)red / 255} {(double)green / 255} {(double)blue / 255} {alpha}";
+            }
+        }
         #endregion
 
         #region Commands
         [ChatCommand("popupmsg")]
-        private void SendPopupMessage(BasePlayer player, string command, string[] args)
+        private void cmdSendPopupMessage(BasePlayer player, string command, string[] args)
         {
             if (player.IsAdmin || permission.UserHasPermission(player.UserIDString, "popupnotifications.send"))
             {
@@ -91,36 +301,44 @@ namespace Oxide.Plugins
                 else
                     SendReply(player, msg("Usage: /popupmsg \"Your message here.\" OR /popupmsg \"player name\" \"You message here.\"", player.UserIDString));
             }
-		}
-		
-        [ConsoleCommand("popupmsg.global")]
-        private void ConPopupMessageGlobal(ConsoleSystem.Arg arg)
-        {
-			if(!arg.IsAdmin)
-				return;
-		
-			if(arg.Args.Length == 1)
-			{
-				CreateGlobalPopup(arg.Args[0]);
-			}
-			else if(arg.Args.Length == 2)
-			{
-				float duration;
-				if(float.TryParse(arg.Args[1], out duration))
-					CreateGlobalPopup(arg.Args[0], duration);
-				else
-					Puts(msg("Invalid duration"));
-					
-			}
-			else
-				Puts(msg("Usage: popupmsg.global \"Your message here.\" duration"));
         }
 
-        [ConsoleCommand("popupmsg.toplayer")]
-        private void ConPopupMessageToPlayer(ConsoleSystem.Arg arg)
+        [ConsoleCommand("popupmsg.global")]
+        private void ccmdPopupMessageGlobal(ConsoleSystem.Arg arg)
         {
             if (!arg.IsAdmin)
                 return;
+
+            if (arg.Args == null || arg.Args.Length == 0)
+            {
+                Puts(msg("Usage: popupmsg.global \"Your message here.\" <duration>"));
+                return;
+            }
+
+            if (arg.Args.Length == 1)
+                CreateGlobalPopup(arg.Args[0]);
+            
+            else if (arg.Args.Length == 2)
+            {
+                float duration;
+                if (float.TryParse(arg.Args[1], out duration))
+                    CreateGlobalPopup(arg.Args[0], duration);
+                else
+                    Puts(msg("Invalid duration"));
+            }           
+        }
+
+        [ConsoleCommand("popupmsg.toplayer")]
+        private void ccmdPopupMessageToPlayer(ConsoleSystem.Arg arg)
+        {
+            if (!arg.IsAdmin || arg.Connection != null)
+                return;
+
+            if (arg.Args == null || arg.Args.Length == 0)
+            {
+                Puts(msg("Usage: popupmsg.toplayer \"Your message here.\" \"Player name\" <duration>"));
+                return;
+            }
 
             if (arg.Args.Length >= 1)
             {
@@ -130,12 +348,12 @@ namespace Oxide.Plugins
                     SendReply(arg, (string)player);
                     return;
                 }
+
                 if (arg.Args.Length == 2)
                 {
                     if (player as BasePlayer != null && (player as BasePlayer).IsConnected)
                         CreatePopupOnPlayer(arg.Args[0], player as BasePlayer);
-                    else
-                        Puts(msg("Couldn't send popup notification to player"));
+                    else Puts(msg("Couldn't send popup notification to player"));
                 }
                 else if (arg.Args.Length == 3)
                 {
@@ -145,20 +363,15 @@ namespace Oxide.Plugins
                         float duration;
                         if (float.TryParse(arg.Args[2], out duration))
                             CreatePopupOnPlayer(arg.Args[0], player as BasePlayer, duration);
-                        else
-                            Puts(msg("Invalid duration"));
+                        else Puts(msg("Invalid duration"));
                     }
-                    else
-                        Puts(msg("Couldn't send popup notification to player"));
-
-                }
-                else
-                    Puts(msg("Usage: popupmsg.toplayer \"Your message here.\" \"Player name\" <duration>"));
+                    else Puts(msg("Couldn't send popup notification to player"));
+                }                
             }
         }
-		
-		private object GetPlayerByName(string name)
-		{
+
+        private object GetPlayerByName(string name)
+        {
             var players = covalence.Players.FindPlayers(name);
             if (players != null)
             {
@@ -171,205 +384,133 @@ namespace Oxide.Plugins
                     if (!(players.ToArray()[0].Object as BasePlayer).IsConnected)
                         return string.Format(msg("{0} is not online"), players.ToArray()[0].Name);
                     return players.ToArray()[0].Object as BasePlayer;
-                }            
+                }
             }
             return msg("Unable to find a valid player");
         }
-		
+
         [ConsoleCommand("popupmsg.close")]
-        private void CloseCommand(ConsoleSystem.Arg arg)
+        private void ccmdCloseCommand(ConsoleSystem.Arg arg)
         {
-			if(arg.Player() == null)
-				return;
-		
-			if(arg.Args.Length == 1)
-			{
-				int slot;
-				bool valid = int.TryParse(arg.Args[0], out slot);
-				
-				if(valid && slot >= 0 && slot <= configData.MaxShownMessages)
-				{
-					Notifier.GetPlayerNotifier(arg.Player()).DestroyNotification(slot);
-				}
-			}
+            BasePlayer player = arg.Player();
+            if (player == null)
+                return;
+
+            if (arg.Args.Length == 1)
+            {
+                string elementId = arg.Args[0];
+
+                GetPlayerNotifier(player).DestroyNotification(elementId);
+            }
         }
         #endregion
 
-        #region API
-        [HookMethod("CreatePopupNotification")]
-		void CreatePopupNotification(string message, BasePlayer player = null, float duration = 0f)
-		{
-			if(player != null)
-			{
-				CreatePopupOnPlayer(message, player, (float)duration);
-			}
-			else
-			{
-				CreateGlobalPopup(message, (float)duration);
-			}
-		}
-        #endregion
-
-        private void CreatePopupOnPlayer(string message, BasePlayer player, float duration = 0f)
-		{
-			Notifier.GetPlayerNotifier(player).CreateNotification(message, duration);
-		}
-		
-		private void CreateGlobalPopup(string message, float duration = 0f)
-		{
-			foreach(BasePlayer activePlayer in BasePlayer.activePlayerList)
-			{
-				CreatePopupOnPlayer(message, activePlayer, duration);
-			}
-		}
-		
-		class Notifier : MonoBehaviour
-		{
-			private List<string> msgQueue = new List<string>();
-			private Dictionary<int, string> usedSlots = new Dictionary<int, string>();
-			
-			private BasePlayer player;
-			
-			void Awake()
-			{
-				player = GetComponent<BasePlayer>();
-			}
-		
-			public static Notifier GetPlayerNotifier(BasePlayer player)
-			{
-				Notifier component = player.GetComponent<Notifier>();
-				
-				if(component == null)
-					component = player.gameObject.AddComponent<Notifier>();
-					
-				return component;
-			}
-			
-			private int GetEmptySlot()
-			{
-				for(int i = 0; i < config.MaxShownMessages; i++)
-				{
-					if(!usedSlots.ContainsKey(i))
-						return i;
-				}
-				
-				return -1;
-			}
-		
-			public void CreateNotification(string message, float showDuration = 0f)
-			{				
-				Vector2 anchorMin;
-				Vector2 anchorMax;
-				Vector2 offset;
-				int slot = GetEmptySlot();
-				
-				if(slot == -1)
-				{
-					msgQueue.Add(message);
-					return;
-				}
-				
-				offset = (new Vector2(0, dimensions.y) + new Vector2(0, config.Spacing)) * slot;
-				
-				if(config.ScrollDown)
-					offset *= -1;
-				
-				anchorMin = position + offset;
-				anchorMax = anchorMin + dimensions;
-
-                string name = PUMSG + slot;
-                var element = CreatePopupMessage(name, $"0.5 0.5 0.5 {config.Transparency}", message, slot, $"{anchorMin.x} {anchorMin.y}", $"{anchorMax.x} {anchorMax.y}");
-
-                CuiHelper.AddUi(player, element);
-				if(showDuration < 1f)
-					showDuration = config.ShowDuration;
-				
-				usedSlots.Add(slot, name);
-				StartCoroutine(DestroyAfterDuration(slot, showDuration));
-			}
-			
-			public void DestroyNotification(int slot)
-			{
-                CuiHelper.DestroyUi(player, usedSlots[slot]);				
-				StartCoroutine(DelayedRemoveFromSlot(slot));
-			}
-			
-			private IEnumerator DelayedRemoveFromSlot(int slot)
-			{
-				yield return new WaitForSeconds(config.FadeTime + 0.5f);
-				
-				if(usedSlots.ContainsKey(slot))
-					usedSlots.Remove(slot);
-					
-				if(msgQueue.Count > 0)
-				{
-					CreateNotification(msgQueue[0]);
-					msgQueue.RemoveAt(0);
-				}
-			}
-			
-			private IEnumerator DestroyAfterDuration(int slot, float duration)
-			{
-				yield return new WaitForSeconds(duration);
-				
-				DestroyNotification(slot);
-			}
-        }
-        #region UI
-        static string PUMSG = "PopupNotification";
-        static CuiElementContainer CreatePopupMessage(string panelName, string color, string text, int slot, string aMin, string aMax)
+        #region Config        
+        private ConfigData configData;
+        private class ConfigData
         {
-            var NewElement = new CuiElementContainer();
-            NewElement.Add(new CuiElement
+            [JsonProperty(PropertyName = "Notification duration (in seconds)")]
+            public int Duration { get; set; }
+            [JsonProperty(PropertyName = "Maximum notifications shown at any time")]
+            public int MaximumMessages { get; set; }            
+            [JsonProperty(PropertyName = "UI Positioning")]
+            public UIPosition Position { get; set; }
+            [JsonProperty(PropertyName = "UI Options")]
+            public UIOptions Options { get; set; }
+
+            public class UIPosition
             {
-                Name = panelName,
-                Components =
-                        {
-                            new CuiImageComponent { Color = color, FadeIn = 0.3f },
-                            new CuiRectTransformComponent { AnchorMin = aMin, AnchorMax = aMax }
-                        },
-                FadeOut = config.FadeTime
-            });
-            NewElement.Add(new CuiElement
+                [JsonProperty(PropertyName = "Position of the left side of notification (0.0 - 1.0)")]
+                public float PositionX { get; set; }
+                [JsonProperty(PropertyName = "Position of the bottom of noticiation (0.0 - 1.0)")]
+                public float PositionY { get; set; }
+                [JsonProperty(PropertyName = "Width (0.0 - 1.0)")]
+                public float Width { get; set; }
+                [JsonProperty(PropertyName = "Height (0.0 - 1.0)")]
+                public float Height { get; set; }
+                [JsonProperty(PropertyName = "Space between notification (0.0 - 1.0)")]
+                public float Spacing { get; set; }
+            }
+            public class UIOptions
             {
-                Name = CuiHelper.GetGuid(),
-                Parent = panelName,
-                Components =
-                    {
-                        new CuiTextComponent {Text = text, Align = TextAnchor.MiddleCenter, FontSize = 14 },
-                        new CuiRectTransformComponent { AnchorMin = "0 0", AnchorMax = "1 1" }
-                    },
-                FadeOut = config.FadeTime
-            });
-            var buttonName = CuiHelper.GetGuid();
-            NewElement.Add(new CuiElement
-            {
-                Name = buttonName,
-                Parent = panelName,
-                Components =
-                    {
-                        new CuiButtonComponent {Command = $"popupmsg.close {slot}", Color = "1.0 0.3 0.0 0.5", FadeIn = 0.3f, ImageType = UnityEngine.UI.Image.Type.Tiled },
-                        new CuiRectTransformComponent {AnchorMin = "0.89 0.79", AnchorMax = "0.99 0.99" }
-                    },
-                FadeOut = config.FadeTime
-            });
-            NewElement.Add(new CuiElement
-            {
-                Name = CuiHelper.GetGuid(),
-                Parent = buttonName,
-                Components =
-                    {
-                        new CuiTextComponent {Text = "X", FadeIn = 0.3f, Align = TextAnchor.MiddleCenter, FontSize = 12  },
-                        new CuiRectTransformComponent {AnchorMin = "0 0", AnchorMax = "1 1" }
-                    },
-                FadeOut = config.FadeTime
-            });
-            return NewElement;
+                [JsonProperty(PropertyName = "Show close button")]
+                public bool Close { get; set; }
+                [JsonProperty(PropertyName = "Panel color (hex)")]
+                public string Color { get; set; }
+                [JsonProperty(PropertyName = "Panel transparency (0.0 - 1.0)")]
+                public float Alpha { get; set; }
+                [JsonProperty(PropertyName = "Close button color (hex)")]
+                public string CloseColor { get; set; }
+                [JsonProperty(PropertyName = "Close button transparency (0.0 - 1.0)")]
+                public float CloseAlpha { get; set; }                
+                [JsonProperty(PropertyName = "Font")]
+                public string Font { get; set; }
+                [JsonProperty(PropertyName = "Font size")]
+                public int FontSize { get; set; }
+            }
+            public Oxide.Core.VersionNumber Version { get; set; }
         }
-        #endregion
+
+        protected override void LoadConfig()
+        {
+            base.LoadConfig();
+            configData = Config.ReadObject<ConfigData>();
+
+            if (configData.Version < Version)
+                UpdateConfigValues();
+
+            Config.WriteObject(configData, true);
+        }
+
+        protected override void LoadDefaultConfig() => configData = GetBaseConfig();
+
+        private ConfigData GetBaseConfig()
+        {
+            return new ConfigData
+            {                
+                Duration = 8,               
+                MaximumMessages = 6,               
+                Options = new ConfigData.UIOptions
+                {
+                    Alpha = 0.5f,
+                    CloseAlpha = 0.5f,
+                    Close = true,
+                    CloseColor = "#d85540",
+                    Color = "#2b2b2b",
+                    Font = "droidsansmono.ttf",
+                    FontSize = 12
+                },
+                Position = new ConfigData.UIPosition
+                {
+                    Height = 0.1f,
+                    PositionX = 0.8f,
+                    PositionY = 0.78f,
+                    Spacing = 0.01f,
+                    Width = 0.19f
+                },
+                Version = Version
+            };
+        }
+
+        protected override void SaveConfig() => Config.WriteObject(configData, true);
+
+        private void UpdateConfigValues()
+        {
+            PrintWarning("Config update detected! Updating config values...");
+
+            ConfigData baseConfig = GetBaseConfig();
+            if (configData.Version < new Core.VersionNumber(0, 2, 0))
+                configData = baseConfig;
+
+            configData.Version = Version;
+            PrintWarning("Config update completed!");
+        }
+
+        #endregion        
 
         #region Localization
-        string msg(string key, string id = null) => lang.GetMessage(key, this, id);
+        private string msg(string key, string id = null) => lang.GetMessage(key, this, id);
+
         Dictionary<string, string> Messages = new Dictionary<string, string>
             {
             {"Usage: /popupmsg \"Your message here.\" OR /popupmsg \"player name\" \"You message here.\"","Usage: /popupmsg \"Your message here.\" OR /popupmsg \"player name\" \"You message here.\"" },
