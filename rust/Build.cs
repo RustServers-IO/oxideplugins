@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Build", "Reneb & NoGrod", "1.2.3", ResourceId = 715)]
+    [Info("Build", "Reneb & NoGrod", "1.2.4", ResourceId = 715)]
 	
     class Build : RustPlugin
     {
@@ -66,13 +66,14 @@ namespace Oxide.Plugins
 
             public void LoadMsgGui(string Msg)
             {				
-                CuiHelper.DestroyUi(player, "BuildMsg");
-                CuiHelper.AddUi(player, json.Replace("{msg}", Msg));
+				DestroyGui();
+                CuiHelper.AddUi(player, UI_BUILD.Replace("{HEADER}", Msg));
             }
 
             public void DestroyGui()
             {
-                CuiHelper.DestroyUi(player, "BuildMsg");
+                CuiHelper.DestroyUi(player, "UI_BUILD_HEADER");
+				CuiHelper.DestroyUi(player, "UI_BUILD_MARKER");
             }
 			
 			public void OnDestroy () 
@@ -1382,60 +1383,62 @@ namespace Oxide.Plugins
                 }
             }
         }
-		
-		//Console commands
-		
-		[ConsoleCommand("build")]
-		private void cmdConsoleBuild(ConsoleSystem.Arg arg)
-		{
-			BasePlayer player = arg.Player();
 
-			if(player == null)
-				return;
-			
-			BuildPlayer buildplayer = GetBuildPlayer(player);
-			
-			DoAction(buildplayer);
-		}
-		
 		//UI
 		
-        public static string json = @"
-		[
-            {
-                ""name"": ""BuildMsg"",
-                ""parent"": ""Overlay"",
-                ""components"":
-                [
-                    {
-                         ""type"":""UnityEngine.UI.Image"",
-                         ""color"":""0.1 0.1 0.1 0.7"",
-                    },
-                    {
-                        ""type"":""RectTransform"",
-                        ""anchormin"": ""0.020 0.95"",
-                        ""anchormax"": ""0.980 0.99""
-                    }
-                ]
-            },
-            {
-                ""parent"": ""BuildMsg"",
-                ""components"":
-                [
-                    {
-                        ""type"":""UnityEngine.UI.Text"",
-                        ""text"":""{msg}"",
-                        ""fontSize"":15,
-                        ""align"": ""MiddleCenter"",
-                    },
-                    {
-                        ""type"":""RectTransform"",
-                        ""anchormin"": ""0 0.1"",
-                        ""anchormax"": ""1 0.8""
-                    }
-                ]
-            }
-        ]";	 	
+        public static string UI_BUILD = @"
+		[{
+			""name"": ""UI_BUILD_HEADER"",
+			""parent"": ""Hud"",
+			""components"":
+			[
+				{
+					 ""type"":""UnityEngine.UI.Image"",
+					 ""color"":""0.15 0.15 0.15 0.7"",
+				},
+				{
+					""type"":""RectTransform"",
+					""anchormin"": ""0.25 0.945"",
+					""anchormax"": ""0.75 0.987""
+				}
+			]
+		},
+		{
+			""parent"": ""UI_BUILD_HEADER"",
+			""components"":
+			[
+				{
+					""type"":""UnityEngine.UI.Text"",
+					""text"":""{HEADER}"",
+					""fontSize"":15,
+					""align"": ""MiddleCenter"",
+				},
+				{
+					""type"":""RectTransform"",
+					""anchormin"": ""0 0.1"",
+					""anchormax"": ""1 0.8""
+				}
+			]
+		},
+		{
+			""name"": ""UI_BUILD_MARKER"",
+			""parent"": ""Hud"",
+			""fadeOut"": ""0.4"",
+			""components"":
+			[
+				{
+					""type"": ""UnityEngine.UI.Text"",
+					""text"": ""•"",
+					""fontSize"": 20,
+					""align"": ""MiddleCenter"",
+				},
+				{
+					""type"": ""RectTransform"",
+					""anchormin"": ""0.48 0.48"", 
+					""anchormax"": ""0.52 0.52""
+				}
+			]
+		}]";
 		
 		//Languages phrases
 
