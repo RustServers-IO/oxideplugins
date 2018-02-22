@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "Place bounty's on other players using ingame items",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/bounty.1649",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}
