@@ -1,0 +1,16 @@
+{
+    "name": "Oxide",
+    "description": "AOE repair.",
+    "author": "",
+    "version": null,
+    "configuration": false,
+    "language": "cs",
+    "url": "https:\/\/oxidemod.org\/plugins\/handyman.1737",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "universal"
+    ]
+}
