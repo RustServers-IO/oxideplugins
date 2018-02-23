@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Build", "Reneb & NoGrod", "1.2.4", ResourceId = 715)]
+    [Info("Build", "Reneb & NoGrod", "1.2.5", ResourceId = 715)]
 	
     class Build : RustPlugin
     {
@@ -31,7 +31,6 @@ namespace Oxide.Plugins
             public float currentHealth;
             public Quaternion currentRotate;
             public BuildingGrade.Enum currentGrade;
-            public bool ispressed;
             public float lastTickPress;
             public float currentHeightAdjustment;
             public string selection;
@@ -40,27 +39,18 @@ namespace Oxide.Plugins
             {
                 player = GetComponent<BasePlayer>();
                 enabled = true;
-                ispressed = false;
             }
 
             void FixedUpdate() 
             {
-                if(player.serverInput.WasJustPressed(BUTTON.FIRE_SECONDARY) && !ispressed)
+                if(player.serverInput.IsDown(BUTTON.FIRE_SECONDARY))
                 {
-                    lastTickPress = Time.realtimeSinceStartup;
-                    ispressed = true;
-                    DoAction(this);
-                }
-                else if(player.serverInput.IsDown(BUTTON.FIRE_SECONDARY))
-                {
-                    if((Time.realtimeSinceStartup - lastTickPress) > 1f)
+                    if((Time.realtimeSinceStartup - lastTickPress) > 0.25f)
                     {
                         DoAction(this);
+						
+						lastTickPress = Time.realtimeSinceStartup;
                     }
-                }
-                else
-                {
-                    ispressed = false;
                 }
             }
 
@@ -239,7 +229,6 @@ namespace Oxide.Plugins
 
             // Get all possible sockets from the SocketType
             TypeToType = new Dictionary<SocketType, object>();
-
 
             // Sockets that can connect on a Floor / Foundation type
             var FloorType = new Dictionary<SocketType, object>();
@@ -507,19 +496,18 @@ namespace Oxide.Plugins
             entity?.Spawn();
         }
 
-        private static bool isColliding(string name, Vector3 position, float radius)
+        private static bool IsColliding(string prefabname, Vector3 position, float radius)
         {
-            var colliders = Physics.OverlapSphere(position, radius);
-            
-			foreach (var collider in colliders)
-            {
-                var block = collider.GetComponentInParent<BuildingBlock>();
-                
-				if(block != null && block.blockDefinition.fullName == name && Vector3.Distance(collider.transform.position, position) < 0.6f)
-                    return true;
-            }
+			List<BaseEntity> ents = new List<BaseEntity>();
+			Vis.Entities<BaseEntity>(position, radius, ents);
+
+			foreach(BaseEntity ent in ents)
+			{
+				if(ent.PrefabName == prefabname && ent.transform.position == position)
+					return true;
+			}
 			
-            return false;
+			return false;
         }
 
         private static void SetGrade(BuildingBlock block, BuildingGrade.Enum level)
@@ -784,7 +772,7 @@ namespace Oxide.Plugins
             newPos = fbuildingblock.transform.position + (Vector3.up * buildplayer.currentHeightAdjustment);
             newRot = fbuildingblock.transform.rotation;
            
-			if(isColliding(buildplayer.currentPrefab, newPos, 1f))
+			if(IsColliding(buildplayer.currentPrefab, newPos, 1f))
                 return;
 			
             SpawnStructure(buildplayer.currentPrefab, newPos, newRot, buildplayer.currentGrade, buildplayer.currentHealth);
@@ -837,7 +825,7 @@ namespace Oxide.Plugins
                 return;
 			
             // Checks if the element has already been built to prevent multiple structure elements on one spot
-            if(isColliding(buildplayer.currentPrefab, newPos, 1f))
+            if(IsColliding(buildplayer.currentPrefab, newPos, 1f))
                 return;
 
             SpawnStructure(buildplayer.currentPrefab, newPos, newRot, buildplayer.currentGrade, buildplayer.currentHealth);
@@ -1232,7 +1220,7 @@ namespace Oxide.Plugins
 			int.TryParse(args[0], out defaultGrade);
 			
             if(args.Length > 1 && args[1] == "all")
-                    buildplayer.selection = "all";
+				buildplayer.selection = "all";
 				
             buildplayer.currentGrade = (BuildingGrade.Enum)defaultGrade;
 
