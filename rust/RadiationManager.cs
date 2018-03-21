@@ -3,9 +3,8 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("RadiationManager", "redBDGR", "1.0.0")]
-    [Description("Allows for slight managment of radiated zones")]
-
+    [Info("Radiation Manager", "redBDGR", "1.0.0")]
+    [Description("Allows for slight management of radiated zones around the map")]
     class RadiationManager : RustPlugin
     {
         private bool Changed;

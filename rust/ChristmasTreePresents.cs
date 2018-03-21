@@ -4,9 +4,8 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("ChristmasTreePresents", "redBDGR", "1.0.1", ResourceId = 2734)]
-    [Description("Spawn christmas presents under christmas trees when the christmas event happens")]
-
+    [Info("Christmas Tree Presents", "redBDGR", "1.0.1")]
+    [Description("Spawns Christmas presents under Christmas trees")]
     class ChristmasTreePresents : RustPlugin
     {
         private int minNumOfPresents = 3;

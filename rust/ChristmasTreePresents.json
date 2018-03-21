@@ -1,16 +1,1 @@
-{
-    "name": "ChristmasTreePresents",
-    "description": "Spawn christmas presents under christmas trees when the christmas event happens",
-    "author": "redBDGR",
-    "version": "1.0.1",
-    "configuration": false,
-    "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/christmastreepresents.2734",
-    "games": [
-        "rust"
-    ],
-    "keywords": [
-        "oxide",
-        "rust"
-    ]
-}
+{"name":"ChristmasTreePresents","description":"Spawns Christmas presents under Christmas trees","author":"redBDGR","version":"1.0.1","configuration":true,"require":[],"language":"cs","url":"https:\/\/umod.org\/plugins\/christmastreepresents","games":["rust"],"keywords":["oxide","rust","loot"]}

@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("NoWeaponDrop", "Fujikura", "1.0.1", ResourceId = 1960)]
+    [Info("NoWeaponDrop", "Fujikura", "1.0.1")]
 	[Description("Prevents dropping of active weapon when players start to die")]
     class NoWeaponDrop : RustPlugin
     {

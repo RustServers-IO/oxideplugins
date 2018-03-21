@@ -4,9 +4,8 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("AutoFuel", "redBDGR", "1.0.7", ResourceId = 2717)]
-    [Description("Automatically fuel lights if there is fuel in the toolcupboards inventory")]
-
+    [Info("Auto Fuel", "redBDGR", "1.0.7")]
+    [Description("Automatically fuels lights using fuel from the tool cupboard's inventory")]
     class AutoFuel : RustPlugin
     {
         private bool Changed;
@@ -72,8 +71,6 @@ namespace Oxide.Plugins
 
         private Item OnFindBurnable(BaseOven oven)
         {
-            if (oven == null)
-                return null;
             if (oven.fuelType == null)
                 return null;
             if (!activeShortNames.Contains(oven.ShortPrefabName))

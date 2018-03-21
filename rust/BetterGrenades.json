@@ -1,16 +1,1 @@
-{
-    "name": "BetterGrenades",
-    "description": "Enhanced grenade features",
-    "author": "redBDGR",
-    "version": "1.0.2",
-    "configuration": false,
-    "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/bettergrenades.2712",
-    "games": [
-        "rust"
-    ],
-    "keywords": [
-        "oxide",
-        "rust"
-    ]
-}
+{"name":"BetterGrenades","description":"Adds enhanced grenades features","author":"redBDGR","version":"1.0.2","configuration":true,"require":[],"language":"cs","url":"https:\/\/umod.org\/plugins\/bettergrenades","games":["rust"],"keywords":["oxide","rust","items","mechanics"]}

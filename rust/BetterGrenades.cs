@@ -5,9 +5,8 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("BetterGrenades", "redBDGR", "1.0.2", ResourceId = 2712)]
-    [Description("Enhanced grenades features")]
-
+    [Info("Better Grenades", "redBDGR", "1.0.2")]
+    [Description("Adds enhanced grenades features")]
     class BetterGrenades : RustPlugin
     {
         private bool Changed;
@@ -118,7 +117,21 @@ namespace Oxide.Plugins
             private void Update()
             {
                 if (!player)
+                {
+                    DestroyThis();
                     return;
+                }
+                Item latestItem = player.GetActiveItem();
+                if (latestItem == null)
+                {
+                    DestroyThis();
+                    return;
+                }
+                if (latestItem.info.shortname != "grenade.f1" || latestItem.info.shortname != "grenade.beancan")
+                {
+                    DestroyThis();
+                    return;
+                }
                 if (player.serverInput.IsDown(BUTTON.FIRE_PRIMARY))
                 {
                     if (!cookingGrenade)
@@ -174,9 +187,11 @@ namespace Oxide.Plugins
                 cookingGrenade = false;
                 if (!player.IsDead())
                     RemoveActiveItem(player);
+                DestroyThis();
             }
 
-            private static void RemoveActiveItem(BasePlayer player) // Shoutout to fujikura https://www.chaoscode.io/resources/authors/fujikura.2/
+            // Active item removal code courtesy of Fujikura
+            private static void RemoveActiveItem(BasePlayer player)
             {
                 foreach (var item in player.inventory.containerBelt.itemList.Where(x => x.IsValid() && x.GetHeldEntity()).ToList())
                 {
