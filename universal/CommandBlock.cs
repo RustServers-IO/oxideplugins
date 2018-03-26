@@ -1,4 +1,4 @@
-﻿/*
+/*
  * TODO: Add support for Covalence console command intercepting when possible
  * TODO: Add optional, standalone logging of blocked command attempts
  * TODO: Remove game-specific hooks when possible
@@ -12,7 +12,7 @@ using Oxide.Core.Libraries.Covalence;
 
 namespace Oxide.Plugins
 {
-    [Info("CommandBlock", "Wulf/lukespragg", "0.3.1", ResourceId = 647)]
+    [Info("Command Block", "Wulf/lukespragg", "0.3.1")]
     [Description("Blocks configured commands from being executed on the server")]
     public class CommandBlock : CovalencePlugin
     {

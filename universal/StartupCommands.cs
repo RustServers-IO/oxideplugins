@@ -1,11 +1,13 @@
-﻿﻿using System.Collections.Generic;
-using System.Linq;
 using Newtonsoft.Json;
+using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("StartupCommands", "Wulf/lukespragg", "1.0.7", ResourceId = 774)]
+    [Info("Startup Commands", "Wulf/lukespragg", "1.0.8")]
     [Description("Automatically runs configured commands on server startup")]
     public class StartupCommands : CovalencePlugin
     {
@@ -16,15 +18,7 @@ namespace Oxide.Plugins
         public class Configuration
         {
             [JsonProperty(PropertyName = "Commands")]
-            public List<string> Commands;
-
-            public static Configuration DefaultConfig()
-            {
-                return new Configuration
-                {
-                    Commands = new List<string> { "version", "oxide.version" }
-                };
-            }
+            public List<string> Commands { get; set; } = new List<string>();
         }
 
         protected override void LoadConfig()
@@ -33,21 +27,30 @@ namespace Oxide.Plugins
             try
             {
                 config = Config.ReadObject<Configuration>();
-                if (config?.Commands == null) LoadDefaultConfig();
+                if (config == null)
+                {
+                    LogWarning("We got here");
+                    LoadDefaultConfig();
+                }
             }
             catch
             {
-                LogWarning($"Could not read oxide/config/{Name}.json, creating new config file");
+                LogWarning("We got here");
                 LoadDefaultConfig();
             }
             SaveConfig();
         }
 
-        protected override void LoadDefaultConfig() => config = Configuration.DefaultConfig();
+        protected override void LoadDefaultConfig()
+        {
+            string configPath = $"{Interface.Oxide.ConfigDirectory}{Path.DirectorySeparatorChar}{Name}.json";
+            LogWarning($"Could not load a valid configuration file, creating a new configuration file at {configPath}");
+            config = new Configuration();
+        }
 
         protected override void SaveConfig() => Config.WriteObject(config);
 
-        #endregion
+        #endregion Configuration
 
         #region Localization
 
@@ -119,24 +122,29 @@ namespace Oxide.Plugins
             }, this, "es");
         }
 
-        #endregion
+        #endregion Localization
 
         #region Initialization
 
         private const string permAdmin = "startupcommands.admin";
+        private const string defaultCommand1 = "startcmd";
+        private const string defaultCommand2 = "startupcmd";
 
         private void OnServerInitialized()
         {
             permission.RegisterPermission(permAdmin, this);
 
-            AddCommandAliases("CommandAlias", "StartupCommand");
-            AddCovalenceCommand("startcmd", "StartupCommand");
-            AddCovalenceCommand("startupcmd", "StartupCommand");
+            AddLocalizedCommand("CommandAlias", "StartupCommand");
+            AddCovalenceCommand(defaultCommand1, "StartupCommand");
+            AddCovalenceCommand(defaultCommand2, "StartupCommand");
 
-            foreach (var command in config.Commands) server.Command(command);
+            foreach (string command in config.Commands)
+            {
+                server.Command(command);
+            }
         }
 
-        #endregion
+        #endregion Initialization
 
         #region Commands
 
@@ -154,7 +162,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            var argCommand = string.Join(" ", args.Skip(1).Select(v => v).ToArray());
+            string argCommand = string.Join(" ", args.Skip(1).Select(v => v).ToArray());
             switch (args[0].ToLower())
             {
                 case "+":
@@ -196,23 +204,35 @@ namespace Oxide.Plugins
             }
         }
 
-        #endregion
+        #endregion Commands
 
         #region Helpers
 
-        private void AddCommandAliases(string key, string command)
+        private string Lang(string key, string id = null, params object[] args)
         {
-            foreach (var language in lang.GetLanguages(this))
+            return string.Format(lang.GetMessage(key, this, id), args);
+        }
+
+        private void AddLocalizedCommand(string key, string command)
+        {
+            foreach (string language in lang.GetLanguages(this))
             {
-                var messages = lang.GetMessages(language, this);
-                foreach (var message in messages.Where(m => m.Key.StartsWith(key))) AddCovalenceCommand(message.Value, command);
+                Dictionary<string, string> messages = lang.GetMessages(language, this);
+                foreach (KeyValuePair<string, string> message in messages.Where(m => m.Key.Equals(key)))
+                {
+                    if (!string.IsNullOrEmpty(message.Value))
+                    {
+                        AddCovalenceCommand(message.Value, command);
+                    }
+                }
             }
         }
 
-        private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+        private void Message(IPlayer player, string key, params object[] args)
+        {
+            player.Reply(Lang(key, player.Id, args));
+        }
 
-        private void Message(IPlayer player, string key, params object[] args) => player.Message(Lang(key, player.Id, args));
-
-        #endregion
+        #endregion Helpers
     }
 }

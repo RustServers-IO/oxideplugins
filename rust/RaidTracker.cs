@@ -13,7 +13,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Raid Tracker", "nivex", "1.0.0", ResourceId = 2458), Description("Add tracking devices to explosives for detailed raid logging.")]
+    [Info("Raid Tracker", "nivex", "1.0.0"), Description("Add tracking devices to explosives for detailed raid logging.")]
     public class RaidTracker : RustPlugin
     {
         [PluginReference] private Plugin Discord, Slack, DiscordMessages, PopupNotifications;
@@ -890,7 +890,7 @@ namespace Oxide.Plugins
                 ["Embed_MessageTitle"] = "Player Message",
                 ["Embed_MessagePlayer"] = "Player",
                 ["Embed_MessageMessage"] = "Message",
-                ["ExplosionMessage"] = "[Explosion] {AttackerName} ({AttackerId}) @ {EndPos} ({Distance}m) {Weapon}: {EntityHit} - Victim: {VictimName} ({OwnerID})",
+                ["ExplosionMessage"] = "[Explosion] {AttackerName} ({AttackerId}) @ {EndPos} ({Distance}m) {Weapon}: {EntityHit} - Victim: {VictimName} ({OwnerID})"
             }, this);
         }
 

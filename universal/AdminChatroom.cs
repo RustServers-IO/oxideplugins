@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Oxide.Core.Libraries.Covalence;
 using System.Linq;
@@ -6,9 +6,8 @@ using Oxide.Core.Plugins;
 
 namespace Oxide.Plugins
 {
-    [Info("Administration ChatRoom", "austinv900", "1.0.2", ResourceId = 2185)]
-    [Description("Allow admins to send messages back and forth between other admins")]
-
+    [Info("Admin Chatroom", "austinv900", "1.0.2")]
+    [Description("Allows admins to send messages back and forth between other admins")]
     class AdminChatroom : CovalencePlugin
     {
         HashSet<IPlayer> AdminChat = new HashSet<IPlayer>();

@@ -3,44 +3,42 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("NoBackpacks","hoppel","1.0.3")]
-
+    [Info("No Backpacks", "hoppel", "1.0.4")]
+    [Description("Removes backpacks after the configured amount of time")]
     public class NoBackpacks : RustPlugin
     {
-        void OnEntitySpawned(BaseNetworkable entity)
+        private void OnEntitySpawned(BaseNetworkable entity)
         {
-            if (entity != null)
+            if (entity != null && entity.name.Contains("item_drop_backpack"))
             {
-                if (entity.name.Contains("item_drop_backpack"))
                 {
-                    timer.Once(_timer, () =>
+                    timer.Once(despawnTimer, () =>
                     {
-                        if (entity != null)
-                        {
-                            entity.Kill();
-                        }
+                        entity?.Kill();
                     });
                 }
             }
         }
-        #region config
-        float _timer = 0;
 
-        new void LoadConfig()
+        #region config
+
+        private int despawnTimer;
+
+        private new void LoadConfig()
         {
-            GetConfig(ref _timer, "Settings", "Despawn timer (seconds)");
+            GetConfig(ref despawnTimer, "Settings", "Despawn timer (seconds)");
             SaveConfig();
         }
 
-         void Init()
-         {
+        private void Init()
+        {
             Unsubscribe(nameof(OnEntitySpawned));
             LoadConfig();
-         }
+        }
 
-        void OnServerInitialized() => Subscribe(nameof(OnEntitySpawned));
+        private void OnServerInitialized() => Subscribe(nameof(OnEntitySpawned));
 
-        void GetConfig<T>(ref T variable, params string[] path)
+        private void GetConfig<T>(ref T variable, params string[] path)
         {
             if (path.Length == 0)
                 return;
@@ -54,7 +52,7 @@ namespace Oxide.Plugins
         }
 
         protected override void LoadDefaultConfig() => PrintWarning("Generating new configuration file...");
-        #endregion
 
+        #endregion config
     }
 }

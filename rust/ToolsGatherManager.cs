@@ -1,49 +1,48 @@
-﻿using System.Collections.Generic;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
+using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("ToolsGatherManager", "hoppel", "1.0.5", ResourceId = 2553)]
-    [Description("adjust the gather rate from certain tools")]
-    class ToolsGatherManager : RustPlugin
+    [Info("Tools Gather Manager", "hoppel", "1.0.5")]
+    [Description("Adjusts the gather rate from certain tools")]
+    public class ToolsGatherManager : RustPlugin
     {
-
-        void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
+        private void OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
         {
             var player = entity as BasePlayer;
             if (!player || !HasPerm(player))
-            return;
-            {
-                if (entity.ToPlayer()?.GetActiveItem() != null)
-                {
-                    var toolName = entity.ToPlayer().GetActiveItem().info.shortname;
-                    if (config.tools.ContainsKey(toolName))
-                    {
-                        item.amount = (int)(item.amount * config.tools[toolName]);
+                return;
 
-                        if (TOD_Sky.Instance.IsNight)
-                        {
-                            item.amount = (int)(item.amount * config.nightrate);
-                        }
-                        if (TOD_Sky.Instance.IsDay)
-                        {
-                            item.amount = (int)(item.amount * config.dayrate); 
-                        }
+            var activeItem = player.GetActiveItem();
+            if (activeItem != null)
+            {
+                var toolName = activeItem.info.shortname;
+                if (config.tools.ContainsKey(toolName))
+                {
+                    item.amount = (int)(item.amount * config.tools[toolName]);
+
+                    if (TOD_Sky.Instance.IsNight)
+                    {
+                        item.amount = (int)(item.amount * config.nightrate);
+                    }
+                    else if (TOD_Sky.Instance.IsDay)
+                    {
+                        item.amount = (int)(item.amount * config.dayrate);
                     }
                 }
             }
-
         }
 
-        void OnDispenserBonus(ResourceDispenser dispenser, BasePlayer player, Item item)
+        private void OnDispenserBonus(ResourceDispenser dispenser, BasePlayer player, Item item)
         {
             OnDispenserGather(dispenser, player, item);
         }
 
         #region config
-        const string permname = "toolsgathermanager.allow";
 
-        void RegisterToolPermissions()
+        private const string permName = "toolsgathermanager.allow";
+
+        private void RegisterToolPermissions()
         {
             foreach (var def in ItemManager.GetItemDefinitions())
             {
@@ -54,39 +53,42 @@ namespace Oxide.Plugins
             }
         }
 
-        bool HasPerm(BasePlayer player)
+        private bool HasPerm(BasePlayer player)
         {
             if (config.usetoolpermissions)
                 return HasToolPermission(player);
 
-            return permission.UserHasPermission(player.UserIDString, permname);
+            return permission.UserHasPermission(player.UserIDString, permName);
         }
 
-        bool HasToolPermission(BasePlayer player)
+        private bool HasToolPermission(BasePlayer player)
         {
-            if (player.GetActiveItem()?.info == null)
+            var activeItem = player.GetActiveItem();
+            if (activeItem?.info == null)
                 return false;
 
-            return permission.UserHasPermission(player.UserIDString, this.Name.ToLower() + "." + player.GetActiveItem().info.shortname);
+            return permission.UserHasPermission(player.UserIDString, this.Name.ToLower() + "." + activeItem.info.shortname);
         }
 
-        void Init()
+        private void Init()
         {
-            permission.RegisterPermission(permname, this);
+            permission.RegisterPermission(permName, this);
             RegisterToolPermissions();
-
         }
 
-        static Configuration config;
+        private static Configuration config;
 
         public class Configuration
         {
             [JsonProperty(PropertyName = "Permissions for every Tool")]
             public bool usetoolpermissions = false;
+
             [JsonProperty(PropertyName = "Night Gatherrate")]
             public float nightrate = 1;
+
             [JsonProperty(PropertyName = "Day Gatherrate")]
             public float dayrate = 1;
+
             [JsonProperty(PropertyName = "Tools")]
             public Dictionary<string, float> tools;
 
@@ -113,9 +115,9 @@ namespace Oxide.Plugins
                         ["stone.pickaxe"] = 1,
                     }
                 };
-
             }
         }
+
         protected override void LoadConfig()
         {
             base.LoadConfig();
@@ -125,17 +127,20 @@ namespace Oxide.Plugins
                 if (config == null)
                 {
                     LoadDefaultConfig();
-                    SaveConfig();
                 }
             }
             catch
             {
-                PrintWarning($"Creating new config file.");
+                PrintWarning("Creating new config file.");
                 LoadDefaultConfig();
             }
+            SaveConfig();
         }
+
         protected override void LoadDefaultConfig() => config = Configuration.DefaultConfig();
+
         protected override void SaveConfig() => Config.WriteObject(config);
-        #endregion
+
+        #endregion config
     }
 }

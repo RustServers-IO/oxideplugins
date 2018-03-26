@@ -1,16 +1,1 @@
-{
-    "name": "Bloodtrail",
-    "description": "Leaves a Bloodtrail behind you while bleeding",
-    "author": "hoppel",
-    "version": "1.0.3",
-    "configuration": false,
-    "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/bloodtrail.2558",
-    "games": [
-        "rust"
-    ],
-    "keywords": [
-        "oxide",
-        "rust"
-    ]
-}
+{"name":"Bloodtrail","description":"Leaves a Bloodtrail behind players while bleeding","author":"hoppel","version":"1.0.3","configuration":true,"require":[],"language":"cs","url":"https:\/\/umod.org\/plugins\/bloodtrail","games":["rust"],"keywords":["oxide","rust","mechanics"]}

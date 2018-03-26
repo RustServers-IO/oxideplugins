@@ -10,19 +10,22 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerReport", "hoppel", "1.0.8", ResourceId = 2635)]
-    class PlayerReport : RustPlugin
+    [Info("Player Report", "hoppel", "1.0.8")]
+    [Description("GUI reporting for players after being killed")]
+    public class PlayerReport : RustPlugin
     {
         #region Fields
 
         [PluginReference]
         private Plugin DiscordMessages;
+
         private List<string> openUI = new List<string>();
         private HashSet<ulong> cooldowns = new HashSet<ulong>();
+
         private const string Permname = "playerreport.use";
         private const string Permnameblock = "playerreport.block";
 
-        #endregion
+        #endregion Fields
 
         #region Hooks/Functions
 
@@ -30,6 +33,7 @@ namespace Oxide.Plugins
         {
             if (cooldowns.Contains(player.userID))
                 return;
+
             cooldowns.Add(player.userID);
             timer.Once(Cooldown, () => cooldowns.Remove(player.userID));
         }
@@ -38,12 +42,12 @@ namespace Oxide.Plugins
         {
             var victim = entity?.ToPlayer();
             var killer = info?.Initiator?.ToPlayer();
-            if (victim == null || killer == null)
+            if (victim == null || killer == null || killer == victim)
                 return;
-            if (killer == victim)
-                return;
+
             if (!permission.UserHasPermission(victim.UserIDString, Permname) || permission.UserHasPermission(victim.UserIDString, Permnameblock))
                 return;
+
             var killername = killer.displayName.Replace(" ", "_");
             var weaponName = "Unknown";
             if (info.Weapon != null)
@@ -55,6 +59,7 @@ namespace Oxide.Plugins
             var distance = Mathf.Round(info.ProjectileDistance).ToString();
             if (string.IsNullOrEmpty(distance) || cooldowns.Contains(victim.userID))
                 return;
+
             DeathReportUI(victim, killer.UserIDString, distance, killername, weaponName);
             openUI.Add(victim.UserIDString);
         }
@@ -63,6 +68,7 @@ namespace Oxide.Plugins
         {
             if (player == null)
                 return;
+
             if (openUI.Contains(player.UserIDString))
                 DestroyUI(player);
         }
@@ -77,11 +83,12 @@ namespace Oxide.Plugins
                 var player = BasePlayer.Find(entry);
                 if (player == null)
                     continue;
+
                 DestroyUI(player);
             }
         }
 
-        #endregion
+        #endregion Hooks/Functions
 
         #region Commands
 
@@ -95,10 +102,11 @@ namespace Oxide.Plugins
             var player = arg.Player();
             if (player == null)
                 return;
+
             if (!storedData.PlayerInformation.ContainsKey(player.UserIDString))
-                storedData.PlayerInformation.Add(player.UserIDString, new ReportInfo() { Reported = 0, Reports = 0 });
+                storedData.PlayerInformation.Add(player.UserIDString, new ReportInfo { Reported = 0, Reports = 0 });
             if (!storedData.PlayerInformation.ContainsKey(killer))
-                storedData.PlayerInformation.Add(killer, new ReportInfo() { Reported = 0, Reports = 0 });
+                storedData.PlayerInformation.Add(killer, new ReportInfo { Reported = 0, Reports = 0 });
             storedData.PlayerInformation[killer].Reported++;
             storedData.PlayerInformation[player.UserIDString].Reports++;
             storedData.Save();
@@ -107,6 +115,7 @@ namespace Oxide.Plugins
                 DestroyUI(player);
                 return;
             }
+
             Cooldownhandling(player);
             if (enableTickets)
                 player.SendConsoleCommand("ticket create " + msg("Button1Re", null, killer, distance, killername));
@@ -126,10 +135,11 @@ namespace Oxide.Plugins
             var player = arg.Player();
             if (player == null)
                 return;
+
             if (!storedData.PlayerInformation.ContainsKey(player.UserIDString))
-                storedData.PlayerInformation.Add(player.UserIDString, new ReportInfo() { Reported = 0, Reports = 0 });
+                storedData.PlayerInformation.Add(player.UserIDString, new ReportInfo { Reported = 0, Reports = 0 });
             if (!storedData.PlayerInformation.ContainsKey(killer))
-                storedData.PlayerInformation.Add(killer, new ReportInfo() { Reported = 0, Reports = 0 });
+                storedData.PlayerInformation.Add(killer, new ReportInfo { Reported = 0, Reports = 0 });
             storedData.PlayerInformation[killer].Reported++;
             storedData.PlayerInformation[player.UserIDString].Reports++;
             storedData.Save();
@@ -138,6 +148,7 @@ namespace Oxide.Plugins
                 DestroyUI(player);
                 return;
             }
+
             Cooldownhandling(player);
             if (enableTickets)
                 player.SendConsoleCommand("ticket create " + msg("Button2Re", null, killer, distance, killername));
@@ -157,10 +168,11 @@ namespace Oxide.Plugins
             var player = arg.Player();
             if (player == null)
                 return;
+
             if (!storedData.PlayerInformation.ContainsKey(player.UserIDString))
-                storedData.PlayerInformation.Add(player.UserIDString, new ReportInfo() { Reported = 0, Reports = 0 });
+                storedData.PlayerInformation.Add(player.UserIDString, new ReportInfo { Reported = 0, Reports = 0 });
             if (!storedData.PlayerInformation.ContainsKey(killer))
-                storedData.PlayerInformation.Add(killer, new ReportInfo() { Reported = 0, Reports = 0 });
+                storedData.PlayerInformation.Add(killer, new ReportInfo { Reported = 0, Reports = 0 });
             storedData.PlayerInformation[killer].Reported++;
             storedData.PlayerInformation[player.UserIDString].Reports++;
             storedData.Save();
@@ -169,6 +181,7 @@ namespace Oxide.Plugins
                 DestroyUI(player);
                 return;
             }
+
             Cooldownhandling(player);
             if (enableTickets)
                 player.SendConsoleCommand("ticket create " + msg("Button3Re", null, killer, distance, killername));
@@ -207,11 +220,11 @@ namespace Oxide.Plugins
             }
         }
 
-        #endregion
+        #endregion Commands
 
         #region UI
 
-        void DeathReportUI(BasePlayer player, string killer, string distance, string killername, string weaponName)
+        private void DeathReportUI(BasePlayer player, string killer, string distance, string killername, string weaponName)
         {
             var container = new CuiElementContainer();
             var ReportUI = container.Add(new CuiPanel
@@ -227,9 +240,10 @@ namespace Oxide.Plugins
                 },
                 CursorEnabled = false
             }, "Overlay", "ReportUI");
+
             if (Button1Enabled)
             {
-                var Button1 = container.Add(new CuiButton
+                container.Add(new CuiButton
                 {
                     Button =
                 {
@@ -243,15 +257,16 @@ namespace Oxide.Plugins
                 },
                     Text =
                 {
-                Text = msg("Button1", null),
+                Text = msg("Button1"),
                     FontSize = 15,
                     Align = TextAnchor.MiddleCenter
                 }
                 }, ReportUI);
             }
+
             if (Button2Enabled)
             {
-                var Button2 = container.Add(new CuiButton
+                container.Add(new CuiButton
                 {
                     Button =
                 {
@@ -265,15 +280,16 @@ namespace Oxide.Plugins
                 },
                     Text =
                 {
-                Text = msg("Button2", null),
+                Text = msg("Button2"),
                     FontSize = 15,
                     Align = TextAnchor.MiddleCenter
                 }
                 }, ReportUI);
             }
+
             if (Button3Enabled)
             {
-                var Button3 = container.Add(new CuiButton
+                container.Add(new CuiButton
                 {
                     Button =
                 {
@@ -287,13 +303,14 @@ namespace Oxide.Plugins
                 },
                     Text =
                 {
-                Text = msg("Button3", null),
+                Text = msg("Button3"),
                     FontSize = 15,
                     Align = TextAnchor.MiddleCenter
                 }
                 }, ReportUI);
             }
-           var Text = container.Add(new CuiPanel
+
+            var Text = container.Add(new CuiPanel
             {
                 Image =
                 {
@@ -306,11 +323,12 @@ namespace Oxide.Plugins
                 },
                 CursorEnabled = false
             }, ReportUI);
+
             container.Add(new CuiLabel
             {
                 Text =
                 {
-                    Text = msg("InfoMessage", null),
+                    Text = msg("InfoMessage"),
                     FontSize = 14,
                     Align = TextAnchor.MiddleCenter,
                     Color = "1 1 1 1"
@@ -321,43 +339,45 @@ namespace Oxide.Plugins
                     AnchorMax = "1 1"
                 }
             }, Text);
+
             CuiHelper.AddUi(player, container);
         }
 
-        void DestroyUI(BasePlayer player)
+        private void DestroyUI(BasePlayer player)
         {
             if (player == null)
                 return;
+
             CuiHelper.DestroyUi(player, "ReportUI");
             CuiHelper.DestroyUi(player, "Report_Info");
             openUI.Remove(player.UserIDString);
         }
 
-        #endregion
+        #endregion UI
 
         #region Config
-        string _color = "255 255 255 1";
-        int requiredReports = 1;
-        string Servername = "Servername";
-        float Cooldown = 50;
-        string webhookURL = "DISCORD WEBHOOK URL";
-        bool Alert = true;
-        bool enableTickets = true;
-        bool enableDiscordMessages = true;
-        bool Button1Enabled = true;
-        string Button1Color = "0.41 0.5 0.25 1";
-        string Button1AnchMin = "0 0.283";
-        string Button1AnchMax = "0.25 0.75";
-        bool Button2Enabled = true;
-        string Button2Color = "0.12 0.38 0.57 1";
-        string Button2AnchMin = "0.375 0.283";
-        string Button2AnchMax = "0.625 0.75";
-        bool Button3Enabled = true;
-        string Button3Color = "0.57 0.21 0.11 1";
-        string Button3AnchMin = "0.75 0.283";
-        string Button3AnchMax = "1 0.75";
 
-        new void LoadConfig()
+        private int requiredReports = 1;
+        private string Servername = "Servername";
+        private float Cooldown = 50;
+        private string webhookURL = "DISCORD WEBHOOK URL";
+        private bool Alert = true;
+        private bool enableTickets = true;
+        private bool enableDiscordMessages = true;
+        private bool Button1Enabled = true;
+        private string Button1Color = "0.41 0.5 0.25 1";
+        private string Button1AnchMin = "0 0.283";
+        private string Button1AnchMax = "0.25 0.75";
+        private bool Button2Enabled = true;
+        private string Button2Color = "0.12 0.38 0.57 1";
+        private string Button2AnchMin = "0.375 0.283";
+        private string Button2AnchMax = "0.625 0.75";
+        private bool Button3Enabled = true;
+        private string Button3Color = "0.57 0.21 0.11 1";
+        private string Button3AnchMin = "0.75 0.283";
+        private string Button3AnchMax = "1 0.75";
+
+        private new void LoadConfig()
         {
             GetConfig(ref requiredReports, "Settings", "Reports needed to send a Report");
             GetConfig(ref Alert, "Settings", "Enable @here Message in Discord");
@@ -381,14 +401,14 @@ namespace Oxide.Plugins
             SaveConfig();
         }
 
-        void Init()
+        private void Init()
         {
             LoadConfig();
             permission.RegisterPermission(Permname, this);
             permission.RegisterPermission(Permnameblock, this);
         }
 
-        void GetConfig<T>(ref T variable, params string[] path)
+        private void GetConfig<T>(ref T variable, params string[] path)
         {
             if (path.Length == 0)
                 return;
@@ -402,7 +422,8 @@ namespace Oxide.Plugins
         }
 
         protected override void LoadDefaultConfig() => PrintWarning("Generating new configuration file...");
-        #endregion
+
+        #endregion Config
 
         #region Lang
 
@@ -456,7 +477,7 @@ namespace Oxide.Plugins
             }, this);
         }
 
-        #endregion
+        #endregion Lang
 
         #region Data
 
@@ -480,12 +501,8 @@ namespace Oxide.Plugins
         {
             public int Reports;
             public int Reported;
-        
-            public ReportInfo()
-            {
-            }
         }
 
-        #endregion
+        #endregion Data
     }
 }

@@ -4,16 +4,18 @@ using UnityEngine;
 namespace Oxide.Plugins
 {
     [Info("Bloodtrail", "hoppel", "1.0.3")]
+    [Description("Leaves a Bloodtrail behind players while bleeding")]
     public class Bloodtrail : RustPlugin
     {
-        private const string PermAllow = "bloodtrail.allow";
-        private const string PermBypass = "bloodtrail.bypass";
-        static Bloodtrail ins;
+        private const string permAllow = "bloodtrail.allow";
+        private const string permBypass = "bloodtrail.bypass";
+
+        private static Bloodtrail ins;
 
         private void Init()
         {
-            permission.RegisterPermission(PermAllow, this);
-            permission.RegisterPermission(PermBypass, this);
+            permission.RegisterPermission(permAllow, this);
+            permission.RegisterPermission(permBypass, this);
         }
 
         private void OnServerInitialized()
@@ -31,7 +33,7 @@ namespace Oxide.Plugins
 
         private void OnPlayerDisconnected(BasePlayer player, string reason)
         {
-            if (player.gameObject.GetComponent<Blood>())    
+            if (player.gameObject.GetComponent<Blood>())
                 UnityEngine.Object.Destroy(player.gameObject.GetComponent<Blood>());
         }
 
@@ -44,7 +46,7 @@ namespace Oxide.Plugins
                     UnityEngine.Object.Destroy(gameObj);
         }
 
-        bool HasPerm(BasePlayer player)
+        private bool HasPerm(BasePlayer player)
         {
             return permission.UserHasPermission(player.UserIDString, "bloodtrail.allow") && !permission.UserHasPermission(player.UserIDString, "bloodtrail.bypass");
         }
@@ -56,9 +58,9 @@ namespace Oxide.Plugins
 
             private void Awake()
             {
-                    _player = GetComponent<BasePlayer>();
-                    _position = _player.transform.position;
-                    InvokeRepeating("Track", 0.2f, config.refreshtime);
+                _player = GetComponent<BasePlayer>();
+                _position = _player.transform.position;
+                InvokeRepeating("Track", 0.2f, config.refreshtime);
             }
 
             private void Track()
@@ -88,7 +90,8 @@ namespace Oxide.Plugins
                 Destroy(this);
             }
         }
-        static Configuration config;
+
+        private static Configuration config;
 
         public class Configuration
         {
@@ -97,11 +100,10 @@ namespace Oxide.Plugins
 
             public static Configuration DefaultConfig()
             {
-                return new Configuration
-                {
-                };
+                return new Configuration();
             }
         }
+
         protected override void LoadConfig()
         {
             base.LoadConfig();
@@ -111,16 +113,18 @@ namespace Oxide.Plugins
                 if (config == null)
                 {
                     LoadDefaultConfig();
-                    SaveConfig();
                 }
             }
             catch
             {
-                PrintWarning($"Creating new config file.");
+                PrintWarning("Creating new config file.");
                 LoadDefaultConfig();
             }
+            SaveConfig();
         }
+
         protected override void LoadDefaultConfig() => config = Configuration.DefaultConfig();
+
         protected override void SaveConfig() => Config.WriteObject(config);
     }
 }

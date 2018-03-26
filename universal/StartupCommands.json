@@ -1,16 +1,1 @@
-{
-    "name": "Oxide",
-    "description": "Automatically runs configured commands on server startup",
-    "author": "",
-    "version": null,
-    "configuration": false,
-    "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/startupcommands.774",
-    "games": [
-        "universal"
-    ],
-    "keywords": [
-        "oxide",
-        "universal"
-    ]
-}
+{"name":"StartupCommands","description":"Automatically runs configured commands on server startup","author":"Wulf\/lukespragg","version":"1.0.8","configuration":true,"require":[],"language":"cs","url":"https:\/\/umod.org\/plugins\/startupcommands","games":["universal"],"keywords":["oxide","universal","administration"]}
