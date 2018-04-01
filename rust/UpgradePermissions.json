@@ -1,0 +1,1 @@
+{"name":"UpgradePermissions","description":"Allows players to upgrade structures based on permissions","author":"Sonny-Boi","version":"1.0.0","configuration":true,"require":[],"language":"cs","url":"https:\/\/umod.org\/plugins\/upgradepermissions","games":["rust"],"keywords":["oxide","rust","building","restrictions"]}
