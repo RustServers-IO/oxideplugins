@@ -1,1 +1,19 @@
-{"name":"InvLock","description":"Locks the inventory or hotbar of players","author":"Sonny-Boi","version":"1.0","configuration":false,"require":[],"language":"cs","url":"https:\/\/umod.org\/plugins\/invlock","games":["rust"],"keywords":["oxide","rust","restrictions","inventory"]}
+{
+    "name": "InvLock",
+    "description": "Locks the inventory or hotbar of players",
+    "author": "Sonny-Boi",
+    "version": "1.0",
+    "configuration": false,
+    "require": [],
+    "language": "cs",
+    "url": "https:\/\/umod.org\/plugins\/invlock",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "oxide",
+        "rust",
+        "restrictions",
+        "inventory"
+    ]
+}

@@ -1,19 +1,18 @@
 {
-    "name": "UpgradePermissions",
-    "description": "Allows players to upgrade structures based on permissions",
+    "name": "MySQLWhitelist",
+    "description": "Restricts server access to only those whitelisted in a database",
     "author": "Sonny-Boi",
     "version": "1.0.0",
     "configuration": true,
     "require": [],
     "language": "cs",
-    "url": "https:\/\/umod.org\/plugins\/upgradepermissions",
+    "url": "https:\/\/umod.org\/plugins\/mysqlwhitelist",
     "games": [
         "rust"
     ],
     "keywords": [
         "oxide",
         "rust",
-        "building",
         "restrictions"
     ]
 }
