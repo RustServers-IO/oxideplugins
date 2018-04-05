@@ -1,25 +1,26 @@
 {
     "name": "Rewards",
-    "description": "Reward players for activities using Economic and\/or ServerRewards",
-    "author": "",
-    "version": "1.3.13",
-    "configuration": false,
-    "suggest": {
+    "description": "Rewards players for activities using Economic and\/or ServerRewards",
+    "author": "Tarek",
+    "version": "1.3.14",
+    "configuration": true,
+    "require": {
+        "Economics": "*",
+        "ServerRewards": "*",
         "Friends": "*",
         "Clans": "*",
         "HumanNPC": "*"
     },
-    "require": {
-        "Economics": "*",
-        "ServerRewards": "*"
-    },
     "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/rewards.1961",
+    "url": "https:\/\/umod.org\/plugins\/rewards",
     "games": [
         "rust"
     ],
     "keywords": [
+        "rewards",
         "oxide",
+        "fun",
+        "economy",
         "rust"
     ]
 }

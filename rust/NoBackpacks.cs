@@ -7,21 +7,21 @@ namespace Oxide.Plugins
     [Description("Removes backpacks after the configured amount of time")]
     public class NoBackpacks : RustPlugin
     {
+        #region Hooks
         private void OnEntitySpawned(BaseNetworkable entity)
         {
             if (entity != null && entity.name.Contains("item_drop_backpack"))
             {
+                timer.Once(despawnTimer, () =>
                 {
-                    timer.Once(despawnTimer, () =>
-                    {
+                    if(!entity.IsDestroyed)
                         entity?.Kill();
-                    });
-                }
+                });
             }
         }
+        #endregion
 
-        #region config
-
+        #region Config
         private int despawnTimer;
 
         private new void LoadConfig()
@@ -30,13 +30,7 @@ namespace Oxide.Plugins
             SaveConfig();
         }
 
-        private void Init()
-        {
-            Unsubscribe(nameof(OnEntitySpawned));
-            LoadConfig();
-        }
-
-        private void OnServerInitialized() => Subscribe(nameof(OnEntitySpawned));
+        private void Init() => LoadConfig();
 
         private void GetConfig<T>(ref T variable, params string[] path)
         {
@@ -52,7 +46,6 @@ namespace Oxide.Plugins
         }
 
         protected override void LoadDefaultConfig() => PrintWarning("Generating new configuration file...");
-
-        #endregion config
+        #endregion
     }
 }

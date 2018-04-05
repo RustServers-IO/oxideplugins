@@ -1,0 +1,21 @@
+{
+    "name": "DevTest",
+    "description": "Tests all of the available Oxide hooks and provides useful helpers",
+    "author": "Oxide Community",
+    "version": "0.1.0",
+    "configuration": true,
+    "require": [],
+    "language": "cs",
+    "url": "https:\/\/umod.org\/plugins\/devtest",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "unity",
+        "unity3d",
+        "testing",
+        "oxide",
+        "universal",
+        "plugin"
+    ]
+}

@@ -1,1 +1,18 @@
-{"name":"NoBackpacks","description":"Removes backpacks after the configured amount of time","author":"hoppel","version":"1.0.4","configuration":true,"require":[],"language":"cs","url":"https:\/\/umod.org\/plugins\/nobackpacks","games":["rust"],"keywords":["rust","oxide","mechanics"]}
+{
+    "name": "NoBackpacks",
+    "description": "Removes backpacks after the configured amount of time",
+    "author": "hoppel",
+    "version": "1.0.4",
+    "configuration": true,
+    "require": [],
+    "language": "cs",
+    "url": "https:\/\/umod.org\/plugins\/nobackpacks",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "rust",
+        "oxide",
+        "mechanics"
+    ]
+}

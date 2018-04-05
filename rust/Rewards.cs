@@ -11,9 +11,9 @@ using UnityEngine.UI;
 
 namespace Oxide.Plugins
 {
-    [Info("Rewards", "Tarek", "1.3.13", ResourceId = 1961)]
-    [Description("Reward players for activities using Economic and/or ServerRewards")]
-    class Rewards : RustPlugin
+    [Info("Rewards", "Tarek", "1.3.14")]
+    [Description("Rewards players for activities using Economic and/or ServerRewards")]
+    public class Rewards : RustPlugin
     {
         [PluginReference]
         Plugin Economics, ServerRewards, Friends, Clans, HumanNPC;
@@ -65,6 +65,7 @@ namespace Oxide.Plugins
             else if (options.NPCReward_Enabled && HumanNPC == null)
                 PrintWarning("HumanNPC plugin was not found! Can't reward players on NPC kill.");
         }
+
         protected override void LoadDefaultConfig()
         {
             PrintWarning("Creating a new configuration file");
@@ -75,6 +76,7 @@ namespace Oxide.Plugins
             SaveConfig();
             LoadConfig();
         }
+
         protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
@@ -98,11 +100,13 @@ namespace Oxide.Plugins
                 ["HappyHourEnd"] = "Happy hour ended"
             }, this);
         }
+
         private void SaveData()
         {
             Interface.Oxide.DataFileSystem.WriteObject<StoredData>("Rewards", storedData);
             Puts("Data saved");
         }
+
         private void SetDefaultConfigValues()
         {
             //str = new Strings
@@ -190,6 +194,7 @@ namespace Oxide.Plugins
                 NPCReward_Enabled = false
             };
         }
+
         private void FixConfig()
         {
             try
@@ -232,7 +237,8 @@ namespace Oxide.Plugins
             catch (Exception ex)
             { Puts(ex.Message); Puts("Couldn't fix. Creating new config file"); Config.Clear(); LoadDefaultConfig(); Loadcfg(); }
         }
-        void Loadcfg()
+
+        private void Loadcfg()
         {
             SetDefaultConfigValues();
             try
@@ -329,15 +335,19 @@ namespace Oxide.Plugins
             }
             catch
             {
-                FixConfig(); Loadcfg();
+                FixConfig();
+                Loadcfg();
             }
         }
-        void Init()
+
+        private void Init()
         {
             permission.RegisterPermission("rewards.admin", this);
             permission.RegisterPermission("rewards.vip", this);
             permission.RegisterPermission("rewards.showrewards", this);
-            storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Title);
+
+            storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
+
             Loadcfg();
 
             if (options.HappyHour_Enabled)
@@ -397,11 +407,13 @@ namespace Oxide.Plugins
             }
             #endregion
         }
+
         bool checktime(float gtime, double cfgtime)
         {
             return false;
         }
-        void OnPlayerInit(BasePlayer player)
+
+        private void OnPlayerInit(BasePlayer player)
         {
             if (options.WelcomeMoney_Enabled)
             {
@@ -413,11 +425,16 @@ namespace Oxide.Plugins
                 }
             }
         }
+
         string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+
         bool HasPerm(BasePlayer p, string pe) => permission.UserHasPermission(p.userID.ToString(), pe);
-        void SendChatMessage(BasePlayer player, string msg, string prefix = null, object uid = null) => rust.SendChatMessage(player, prefix == null ? msg : "<color=#C4FF00>" + prefix + "</color>: ", msg, uid?.ToString() ?? "0");
-        void BroadcastMessage(string msg, string prefix = null, object uid = null) => rust.BroadcastChat(prefix == null ? msg : "<color=#C4FF00>" + prefix + "</color>: ", msg);
-        void OnKillNPC(BasePlayer victim, HitInfo info)
+
+        private void SendChatMessage(BasePlayer player, string msg, string prefix = null, object uid = null) => rust.SendChatMessage(player, prefix == null ? msg : "<color=#C4FF00>" + prefix + "</color>: ", msg, uid?.ToString() ?? "0");
+
+        private void BroadcastMessage(string msg, string prefix = null, object uid = null) => rust.BroadcastChat(prefix == null ? msg : "<color=#C4FF00>" + prefix + "</color>: ", msg);
+
+        private void OnKillNPC(BasePlayer victim, HitInfo info)
         {
             if (options.NPCReward_Enabled)
             {
@@ -431,7 +448,8 @@ namespace Oxide.Plugins
                 RewardPlayer(info?.Initiator?.ToPlayer(), rewardrates.NPCKill_Reward, totalmultiplier, victim.displayName);
             }
         }
-        void OnEntityDeath(BaseCombatEntity victim, HitInfo info)
+
+        private void OnEntityDeath(BaseCombatEntity victim, HitInfo info)
         {
             if (victim == null)
                 return;
@@ -483,6 +501,7 @@ namespace Oxide.Plugins
                 RewardPlayer(info?.Initiator?.ToPlayer(), rewardrates.autoturret, totalmultiplier, Lang("autoturret", info?.Initiator?.ToPlayer().UserIDString));
             }
         }
+
         private void RewardPlayer(BasePlayer player, double amount, double multiplier = 1, string reason = null, bool isWelcomeReward = false)
         {
             if (amount > 0)
@@ -491,27 +510,29 @@ namespace Oxide.Plugins
                 if (options.UseEconomicsPlugin)
                     Economics?.Call("Deposit", player.UserIDString, amount);
                 if (options.UseServerRewardsPlugin)
-                    ServerRewards?.Call("AddPoints", new object[] { player.userID, amount });
+                    ServerRewards?.Call("AddPoints", player.userID, (int)amount);
                 if (!isWelcomeReward)
                 {
                     SendChatMessage(player, reason == null ? Lang("ActivityReward", player.UserIDString, amount) : Lang("KillReward", player.UserIDString, amount, reason), Lang("Prefix"));
-                    LogToFile(Title, $"[{DateTime.Now}] " + player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "killing " + reason), this);
+                    LogToFile(Name, $"[{DateTime.Now}] " + player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "killing " + reason), this);
                     if (options.PrintToConsole)
                         Puts(player.displayName + " got " + amount + " for " + (reason == null ? "activity" : "killing " + reason));
                 }
                 else
                 {
                     SendChatMessage(player, Lang("WelcomeReward", player.UserIDString, amount), Lang("Prefix"));
-                    LogToFile(Title, $"[{DateTime.Now}] " + player.displayName + " got " + amount + " as a welcome reward", this);
+                    LogToFile(Name, $"[{DateTime.Now}] " + player.displayName + " got " + amount + " as a welcome reward", this);
                     if (options.PrintToConsole)
                         Puts(player.displayName + " got " + amount + " as a welcome reward");
                 }
             }
         }
+
         private static float GameTime()
         {
             return TOD_Sky.Instance.Cycle.Hour;
         }
+
         private void RewardForPlayerKill(BasePlayer player, BasePlayer victim, double multiplier = 1)
         {
             if (rewardrates.human > 0)
@@ -545,19 +566,20 @@ namespace Oxide.Plugins
                     {
                         if (options.ServerRewards_TakeMoneyFromVictim)
                             ServerRewards?.Call("TakePoints", new object[] { victim.userID, rewardrates.human * multiplier });
-                        ServerRewards?.Call("AddPoints", new object[] { player.userID, rewardrates.human * multiplier });
+                        ServerRewards?.Call("AddPoints", player.userID, (int)(rewardrates.human * multiplier));
                         success = true;
                     }
                     if (success) //Send message if transaction was successful
                     {
                         SendChatMessage(player, Lang("KillReward", player.UserIDString, rewardrates.human * multiplier, victim.displayName), Lang("Prefix"));
-                        LogToFile(Title, $"[{DateTime.Now}] " + player.displayName + " got " + rewardrates.human * multiplier + " for killing " + victim.displayName, this);
+                        LogToFile(Name, $"[{DateTime.Now}] " + player.displayName + " got " + rewardrates.human * multiplier + " for killing " + victim.displayName, this);
                         if (options.PrintToConsole)
                             Puts(player.displayName + " got " + rewardrates.human * multiplier + " for killing " + victim.displayName);
                     }
                 }
             }
         }
+
         [ConsoleCommand("setreward")]
         private void setreward(ConsoleSystem.Arg arg)
         {
@@ -581,12 +603,14 @@ namespace Oxide.Plugins
                 catch { arg.ReplyWith("Varaibles you can set: 'human', 'horse', 'wolf', 'chicken', 'bear', 'boar', 'stag', 'helicopter', 'autoturret', 'ActivityReward' 'ActivityRewardRate_minutes', 'WelcomeMoney'"); }
             }
         }
+
         [ConsoleCommand("showrewards")]
         private void showrewards(ConsoleSystem.Arg arg)
         {
             if (arg.IsAdmin)
                 arg.ReplyWith(String.Format("human = {0}, horse = {1}, wolf = {2}, chicken = {3}, bear = {4}, boar = {5}, stag = {6}, helicopter = {7}, autoturret = {8} Activity Reward Rate (minutes) = {9}, Activity Reward = {10}, WelcomeMoney = {11}", rewardrates.human, rewardrates.horse, rewardrates.wolf, rewardrates.chicken, rewardrates.bear, rewardrates.boar, rewardrates.stag, rewardrates.helicopter, rewardrates.autoturret, rewardrates.ActivityRewardRate_minutes, rewardrates.ActivityReward, rewardrates.WelcomeMoney));
         }
+
         [ChatCommand("setreward")]
         private void setrewardCommand(BasePlayer player, string command, string[] args)
         {
@@ -609,12 +633,14 @@ namespace Oxide.Plugins
                 catch { SendChatMessage(player, Lang("SetRewards", player.UserIDString) + " 'human', 'horse', 'wolf', 'chicken', 'bear', 'boar', 'stag', 'helicopter', 'autoturret', 'ActivityReward', 'ActivityRewardRate_minutes', 'WelcomeMoney'", Lang("Prefix")); }
             }
         }
+
         [ChatCommand("showrewards")]
         private void showrewardsCommand(BasePlayer player, string command, string[] args)
         {
             if (HasPerm(player, "rewards.showrewards"))
                 SendChatMessage(player, String.Format("human = {0}, horse = {1}, wolf = {2}, chicken = {3}, bear = {4}, boar = {5}, stag = {6}, helicopter = {7}, autoturret = {8} Activity Reward Rate (minutes) = {9}, Activity Reward = {10}, WelcomeMoney = {11}", rewardrates.human, rewardrates.horse, rewardrates.wolf, rewardrates.chicken, rewardrates.bear, rewardrates.boar, rewardrates.stag, rewardrates.helicopter, rewardrates.autoturret, rewardrates.ActivityRewardRate_minutes, rewardrates.ActivityReward, rewardrates.WelcomeMoney), Lang("Prefix"));
         }
+
         class StoredData
         {
             public HashSet<string> Players = new HashSet<string>();
@@ -622,6 +648,7 @@ namespace Oxide.Plugins
             {
             }
         }
+
         class RewardRates
         {
             public double human { get; set; }
@@ -678,6 +705,7 @@ namespace Oxide.Plugins
                     return 0;
             }
         }
+
         class Multipliers
         {
             public double HuntingBow { get; set; }
@@ -785,9 +813,9 @@ namespace Oxide.Plugins
                 else
                     return 1;
             }
+
             public double GetDistanceM(float distance)
             {
-
                 if (distance >= 400)
                     return this.distance_400;
                 else if (distance >= 300)
@@ -879,11 +907,11 @@ namespace Oxide.Plugins
                     return this.StoneSpear;
                 else if (itemName == "Wooden Spear")
                     return this.WoodenSpear;
-                //
                 else
                     return 0;
             }
         }
+
         class Options
         {
             public bool ActivityReward_Enabled { get; set; }
@@ -935,10 +963,12 @@ namespace Oxide.Plugins
                     return false;
             }
         }
+
         class Rewards_Version
         {
             public string Version { get; set; }
         }
+
         //class Strings
         //{
         //    public string CustomPermissionName { get; set; }
