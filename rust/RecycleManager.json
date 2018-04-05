@@ -2,15 +2,17 @@
     "name": "RecycleManager",
     "description": "Easily change features about the recycler",
     "author": "redBDGR",
-    "version": "1.0.9",
-    "configuration": false,
+    "version": "1.0.10",
+    "configuration": true,
+    "require": [],
     "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/recyclemanager.2391",
+    "url": "https:\/\/umod.org\/plugins\/recyclemanager",
     "games": [
         "rust"
     ],
     "keywords": [
         "oxide",
-        "rust"
+        "rust",
+        "mechanics"
     ]
 }

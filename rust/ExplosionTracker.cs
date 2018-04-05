@@ -5,8 +5,8 @@ using System.Collections.Generic;
 
 namespace Oxide.Plugins
 {
-    [Info("Explosion Tracker", "Ryan", "1.0.1", ResourceId = 1282)]
-    [Description("This plugin tracks every explosion that happens in the server.")]
+    [Info("Explosion Tracker", "Ryan", "1.0.2")]
+    [Description("Tracks and logs every explosion that happens on the server")]
     internal class ExplosionTracker : RustPlugin
     {
         [PluginReference] private Plugin Slack, Discord;
@@ -95,7 +95,7 @@ namespace Oxide.Plugins
 
         #region Lang
 
-        private void LoadDefaultMessages()
+        private new void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -118,19 +118,19 @@ namespace Oxide.Plugins
         private string ThrowMsg(BasePlayer player, BaseEntity entity)
         {
             return string.Format(lang.GetMessage("Thrown Message", this, player.UserIDString), player.displayName, player.UserIDString, entity.ShortPrefabName,
-                Math.Round(entity.GetEstimatedWorldPosition().x, 2), Math.Round(entity.GetEstimatedWorldPosition().y, 2), Math.Round(entity.GetEstimatedWorldPosition().z, 2));
+                Math.Round(entity.transform.position.x, 2), Math.Round(entity.transform.position.y, 2), Math.Round(entity.transform.position.z, 2));
         }
 
         private string LaunchMsg(BasePlayer player, BaseEntity entity)
         {
             return string.Format(lang.GetMessage("Launched Message", this, player.UserIDString), player.displayName, player.UserIDString, entity.ShortPrefabName,
-                Math.Round(entity.GetEstimatedWorldPosition().x, 2), Math.Round(entity.GetEstimatedWorldPosition().y, 2), Math.Round(entity.GetEstimatedWorldPosition().z, 2));
+                Math.Round(entity.transform.position.x, 2), Math.Round(entity.transform.position.y, 2), Math.Round(entity.transform.position.z, 2));
         }
 
         private string DropMsg(BasePlayer player, BaseEntity entity)
         {
             return string.Format(lang.GetMessage("Dropped Message", this, player.UserIDString), player.displayName, player.UserIDString, entity.ShortPrefabName,
-                Math.Round(entity.GetEstimatedWorldPosition().x, 2), Math.Round(entity.GetEstimatedWorldPosition().y, 2), Math.Round(entity.GetEstimatedWorldPosition().z, 2));
+                Math.Round(entity.transform.position.x, 2), Math.Round(entity.transform.position.y, 2), Math.Round(entity.transform.position.z, 2));
         }
 
         private void SendMessages(string message, Actions action, BasePlayer player)
@@ -160,7 +160,7 @@ namespace Oxide.Plugins
 
         #region Hooks
 
-        private void Loaded() => SaveConfig();
+        private void Init() => SaveConfig();
 
         private void OnServerInitialized()
         {

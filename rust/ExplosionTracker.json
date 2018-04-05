@@ -1,20 +1,21 @@
 {
-    "name": "Explosion Tracker",
-    "description": "This plugin tracks every explosion that happens on the server.",
+    "name": "ExplosionTracker",
+    "description": "Tracks and logs every explosion that happens on the server",
     "author": "Ryan",
-    "version": "1.0.1",
-    "configuration": false,
-    "suggest": {
-        "Discord": "*",
-        "Slack": "*"
+    "version": "1.0.2",
+    "configuration": true,
+    "require": {
+        "Slack": "*",
+        "Discord": "*"
     },
     "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/explosion-tracker.1282",
+    "url": "https:\/\/umod.org\/plugins\/explosiontracker",
     "games": [
         "rust"
     ],
     "keywords": [
         "oxide",
-        "rust"
+        "rust",
+        "logging"
     ]
 }

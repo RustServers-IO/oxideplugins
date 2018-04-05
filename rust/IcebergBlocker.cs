@@ -4,14 +4,16 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Iceberg Blocker", "Slut", "1.1.2")]
+    [Info("Iceberg Blocker", "Slut", "1.1.3")]
+    [Description("Blocks building on icebergs")]
     class IcebergBlocker : RustPlugin
     {
-        private void Loaded()
+        private void Init()
         {
             LoadConfiguration();
             permission.RegisterPermission(adminPermission, this);
         }
+
         private void LoadConfiguration()
         {
             CheckCfg<bool>("Block Building onto Icesheet", ref blockIceSheet);
@@ -19,6 +21,7 @@ namespace Oxide.Plugins
             CheckCfg<bool>("Treat list of prefabs as blacklist", ref asBlacklist);
             SaveConfig();
         }
+
         private void CheckCfg<T>(string Key, ref T var)
         {
             if (Config[Key] is T)
@@ -26,22 +29,27 @@ namespace Oxide.Plugins
             else
                 Config[Key] = var;
         }
+
         private void LoadDefaultConfig()
         {
             Puts("Generating new configuration.");
         }
+
         private bool asBlacklist = false;
+
         private bool blockIceSheet = true;
+
         private List<object> listOfPrefabs = new List<object>()
         {
             "prefab.fullname",
         };
+
         private string adminPermission = "icebergblocker.admin";
 
         private object CanBuild(Planner plan, Construction prefab)
         {
             var player = plan.GetOwnerPlayer();
-            Vector3 pos = plan.GetEstimatedWorldPosition();
+            Vector3 pos = plan.transform.position;
             if (player != null && !permission.UserHasPermission(player.UserIDString, adminPermission))
             {
                 List<Collider> list = new List<Collider>();

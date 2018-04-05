@@ -1,1 +1,25 @@
-{"name":"RaidTracker","description":"","author":"nivex","version":"1.0.0)","configuration":true,"require":{"Discord":"*","Slack":"*","DiscordMessages":"*","PopupNotifications":"*"},"language":"cs","url":"https:\/\/umod.org\/plugins\/raidtracker","games":["rust"],"keywords":["logging","rust","oxide","anticheat","administration"]}
+{
+    "name": "RaidTracker",
+    "description": "",
+    "author": "nivex",
+    "version": "1.0.1)",
+    "configuration": true,
+    "require": {
+        "Discord": "*",
+        "Slack": "*",
+        "DiscordMessages": "*",
+        "PopupNotifications": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/umod.org\/plugins\/raidtracker",
+    "games": [
+        "rust"
+    ],
+    "keywords": [
+        "logging",
+        "rust",
+        "oxide",
+        "anticheat",
+        "administration"
+    ]
+}

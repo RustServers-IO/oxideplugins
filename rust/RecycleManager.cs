@@ -8,10 +8,9 @@ using Oxide.Core;
 
 namespace Oxide.Plugins
 {
-    [Info("RecycleManager", "redBDGR", "1.0.9", ResourceId = 2391)]
+    [Info("Recycle Manager", "redBDGR", "1.0.10")]
     [Description("Easily change features about the recycler")]
-
-    class RecycleManager : RustPlugin
+    public class RecycleManager : RustPlugin
     {
         private bool changed;
 
@@ -59,7 +58,7 @@ namespace Oxide.Plugins
         }
 
         public float recycleTime = 5.0f;
-        private const string permissionNameADMIN = "recyclemanager.admin";
+        private const string permissionAdmin = "recyclemanager.admin";
         private int maxItemsPerRecycle = 100;
 
         private static Dictionary<string, object> Multipliers()
@@ -107,8 +106,8 @@ namespace Oxide.Plugins
         private void Init()
         {
             LoadVariables();
-            permission.RegisterPermission(permissionNameADMIN, this);
-            OutputData = Interface.Oxide.DataFileSystem.GetFile("RecycleManager");
+            permission.RegisterPermission(permissionAdmin, this);
+            OutputData = Interface.Oxide.DataFileSystem.GetFile(Name);
             LoadData();
             if (ingredientList.Count == 0)
                 RefreshIngredientList();
@@ -123,6 +122,8 @@ namespace Oxide.Plugins
                 ["addrecycler CONSOLE invalid syntax"] = "Invalid syntax! addrecycler <playername/id>",
                 ["No Player Found"] = "No player was found or they are offline",
                 ["AddRecycler CONSOLE success"] = "A recycler was successfully placed at the players location!",
+                ["RemoveRecycler CHAT NoEntityFound"] = "There were no valid entities found",
+                ["RemoveRecycler CHAT EntityWasRemoved"] = "The targeted entity was removed",
 
             }, this);
         }
@@ -130,13 +131,13 @@ namespace Oxide.Plugins
         [ChatCommand("addrecycler")]
         private void AddRecyclerCMD(BasePlayer player, string command, String[] args)
         {
-            if (!permission.UserHasPermission(player.UserIDString, permissionNameADMIN))
+            if (!permission.UserHasPermission(player.UserIDString, permissionAdmin))
             {
                 player.ChatMessage(msg("No Permissions", player.UserIDString));
                 return;
             }
 
-            BaseEntity ent = GameManager.server.CreateEntity("assets/bundled/prefabs/static/recycler_static.prefab", player.transform.position, player.GetEstimatedWorldRotation(), true);
+            BaseEntity ent = GameManager.server.CreateEntity("assets/bundled/prefabs/static/recycler_static.prefab", player.transform.position, player.transform.rotation, true);
             ent.Spawn();
             return;
         }
@@ -161,9 +162,34 @@ namespace Oxide.Plugins
                 arg.ReplyWith(msg("No Player Found"));
                 return;
             }
-            BaseEntity ent = GameManager.server.CreateEntity("assets/bundled/prefabs/static/recycler_static.prefab", target.transform.position, target.GetEstimatedWorldRotation(), true);
+            BaseEntity ent = GameManager.server.CreateEntity("assets/bundled/prefabs/static/recycler_static.prefab", target.transform.position, target.transform.rotation, true);
             ent.Spawn();
             arg.ReplyWith(msg("AddRecycler CONSOLE success"));
+        }
+
+        [ChatCommand("removerecycler")]
+        private void RemoveRecyclerCMD(BasePlayer player, string command, string[] args)
+        {
+            if (!permission.UserHasPermission(player.UserIDString, permissionAdmin))
+            {
+                player.ChatMessage(msg("No Permissions", player.UserIDString));
+                return;
+            }
+            RaycastHit hit;
+            Physics.Raycast(player.eyes.HeadRay(), out hit);
+            if (hit.GetEntity() == null)
+            {
+                player.ChatMessage(msg("RemoveRecycler CHAT NoEntityFound", player.UserIDString));
+                return;
+            }
+            BaseEntity ent = hit.GetEntity();
+            if (!ent.name.Contains("recycler"))
+            {
+                player.ChatMessage(msg("RemoveRecycler CHAT NoEntityFound", player.UserIDString));
+                return;
+            }
+            ent.Kill();
+            player.ChatMessage(msg("RemoveRecycler CHAT EntityWasRemoved", player.UserIDString));
         }
 
         [ConsoleCommand("reloadrecyclerdata")]
@@ -277,6 +303,6 @@ namespace Oxide.Plugins
             return null;
         }
 
-        string msg(string key, string id = null) => lang.GetMessage(key, this, id);
+        private string msg(string key, string id = null) => lang.GetMessage(key, this, id);
     }
 }

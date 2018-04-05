@@ -13,7 +13,7 @@ using Newtonsoft.Json;
 
 namespace Oxide.Plugins
 {
-    [Info("Raid Tracker", "nivex", "1.0.0"), Description("Add tracking devices to explosives for detailed raid logging.")]
+    [Info("Raid Tracker", "nivex", "1.0.1"), Description("Add tracking devices to explosives for detailed raid logging.")]
     public class RaidTracker : RustPlugin
     {
         [PluginReference] private Plugin Discord, Slack, DiscordMessages, PopupNotifications;
@@ -75,12 +75,12 @@ namespace Oxide.Plugins
                 prefabs = new Dictionary<Vector3, EntityInfo>();
                 entity = GetComponent<BaseEntity>();
                 weapon = entity.ShortPrefabName;
-                position = entity.GetEstimatedWorldPosition();
+                position = entity.transform.position;
             }
 
             private void Update()
             {
-                var newPosition = entity.GetEstimatedWorldPosition();
+                var newPosition = entity.transform.position;
 
                 if (newPosition == position)
                     return;
