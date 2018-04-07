@@ -464,8 +464,7 @@ namespace Oxide.Plugins
             var fields = new List<Fields>();
             fields.Add(new Fields(msg("Embed_MessagePlayer"), $"[{name}](https://steamcommunity.com/profiles/{playerId})", true));
             fields.Add(new Fields(msg("Embed_MessageMessage"), text, false));
-            string content = JsonConvert.SerializeObject(fields);
-            DiscordMessages?.Call("API_SendFancyMessage", _webhookUrl, msg("Embed_MessageTitle"), _messageColor, content);
+            DiscordMessages?.Call("API_SendFancyMessage", _webhookUrl, msg("Embed_MessageTitle"), JsonConvert.SerializeObject(fields), null, _messageColor);
         }
 
         private void cmdPX(BasePlayer player, string command, string[] args)
