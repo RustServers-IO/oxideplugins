@@ -1,16 +1,22 @@
 {
-    "name": "Oxide",
-    "description": "Automatic update checking and notifications for plugins",
-    "author": "",
-    "version": null,
-    "configuration": false,
+    "name": "UpdateChecker",
+    "description": "Checks for and notifies of any outdated plugins",
+    "author": "LaserHydra",
+    "version": "2.2.1",
+    "configuration": true,
+    "require": {
+        "EmailAPI": "*",
+        "PushAPI": "*"
+    },
     "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/updatechecker.681",
+    "url": "https:\/\/umod.org\/plugins\/updatechecker",
     "games": [
         "universal"
     ],
     "keywords": [
         "oxide",
-        "universal"
+        "universal",
+        "administration",
+        "maintenance"
     ]
 }

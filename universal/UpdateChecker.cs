@@ -9,7 +9,7 @@ using Version = Oxide.Core.VersionNumber;
 
 namespace Oxide.Plugins
 {
-    [Info("UpdateChecker", "LaserHydra", "2.2.1", ResourceId = 681)]
+    [Info("Update Checker", "LaserHydra", "2.2.1")]
     [Description("Checks for and notifies of any outdated plugins")]
     public sealed class UpdateChecker : CovalencePlugin
     {
@@ -24,7 +24,7 @@ namespace Oxide.Plugins
 
         #region Hooks
 
-        private void Loaded()
+        private void OnServerInitialized()
         {
             LoadConfig();
 
@@ -53,8 +53,8 @@ namespace Oxide.Plugins
                 {"Outdated Plugin List", "Following plugins are outdated:\n{plugins}"},
                 {"Outdated Plugin Info", "# {title} | Installed: {installed} - Latest: {latest} | {url}"},
                 {"Missing ResourceId", "Following plugins are missing their resourceId, and therefor cannot be checked for updates: {plugins}"},
-                {"Resource Unavailable", "Following plugins are not accessable online at the moment, and therefor cannot be checked for updates: {plugins}"},
-                {"Resource Details Unavailable", "Following plugins seem to be using an inproper version name, and therefor cannot be checked for updates: {plugins}"},
+                {"Resource Unavailable", "Following plugins are not accessible online at the moment, and therefore cannot be checked for updates: {plugins}"},
+                {"Resource Details Unavailable", "Following plugins have an improper version number else may not have a release version available, and therefore cannot be checked for updates: {plugins}"},
             }, this);
         }
 
@@ -82,7 +82,7 @@ namespace Oxide.Plugins
 
             if (player == null && GetConfig(false, "Settings", "Use EmailAPI"))
                 EmailAPI?.Call("EmailMessage", "Plugin Update Notification", message);
-            
+
             SendMessage(player, message);
         }
 
@@ -131,12 +131,12 @@ namespace Oxide.Plugins
                     {
                         if (code != 200)
                         {
-                            PrintWarning($"Failed to access plugin information api at {PluginInformationUrl.Replace("{resourceId}", plugin.ResourceId.ToString())}\nIf this keeps happening, please content the developer.");
+                            PrintWarning($"Failed to access plugin information API at {PluginInformationUrl.Replace("{resourceId}", plugin.ResourceId.ToString())}\nIf this keeps happening, please content the developer.");
                         }
                         else
                         {
                             var apiResponse = JsonConvert.DeserializeObject<ApiResponse>(response);
-                            
+
                             if (!apiResponse.HasSucceeded && apiResponse.Error == "RESOURCE_NOT_AVAILABLE")
                             {
                                 failures["Resource Unavailable"].Add(plugin);
@@ -161,7 +161,7 @@ namespace Oxide.Plugins
                                     continue;
 
                                 SendMessage(
-                                    requestor, 
+                                    requestor,
                                     GetMsg(failure.Key, requestor?.Id)
                                         .Replace("{plugins}", failure.Value.Select(p => p.Name).ToSentence())
                                 );
@@ -169,7 +169,7 @@ namespace Oxide.Plugins
 
                             var outdatedPluginText = GetMsg("Outdated Plugin Info");
 
-                            var outdatedPluginLines = outdatedPlugins.Select(kvp => 
+                            var outdatedPluginLines = outdatedPlugins.Select(kvp =>
                                 outdatedPluginText
                                     .Replace("{title}", kvp.Key.Title)
                                     .Replace("{installed}", kvp.Key.Version.ToString())
@@ -177,7 +177,7 @@ namespace Oxide.Plugins
                             );
 
                             SendMessage(
-                                requestor, 
+                                requestor,
                                 GetMsg("Outdated Plugin List")
                                     .Replace("{plugins}", string.Join(Environment.NewLine, outdatedPluginLines.ToArray()))
                             );
@@ -197,7 +197,7 @@ namespace Oxide.Plugins
             {
                 return false;
             }
-            
+
             var latestPartials = latest.Split('.').Select(int.Parse).ToArray();
 
             return installed < GetVersion(latestPartials);
@@ -214,7 +214,7 @@ namespace Oxide.Plugins
         #endregion
 
         #region Helper
-        
+
         private void SetConfig(params object[] args)
         {
             List<string> stringArgs = (from arg in args select arg.ToString()).ToList();
@@ -236,7 +236,7 @@ namespace Oxide.Plugins
         }
 
         private string GetMsg(string key, object userID = null) => lang.GetMessage(key, this, userID?.ToString());
-        
+
         private static bool IsNumeric(string text) => !text.Any(c => c < 48 || c > 57);
 
         #endregion
