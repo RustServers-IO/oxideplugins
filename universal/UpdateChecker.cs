@@ -131,7 +131,7 @@ namespace Oxide.Plugins
                     {
                         if (code != 200)
                         {
-                            PrintWarning($"Failed to access plugin information API at {PluginInformationUrl.Replace("{resourceId}", plugin.ResourceId.ToString())}\nIf this keeps happening, please content the developer.");
+                            PrintWarning($"Failed to access plugin information API at {PluginInformationUrl.Replace("{resourceId}", plugin.ResourceId.ToString())}\nIf this keeps happening, please contact the developer.");
                         }
                         else
                         {
