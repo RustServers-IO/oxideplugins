@@ -1,15 +1,17 @@
 {
-    "name": "Oxide",
+    "name": "Economics",
     "description": "Basic economics system and economy API",
-    "author": "",
-    "version": null,
-    "configuration": false,
+    "author": "Wulf\/lukespragg",
+    "version": "3.3.1",
+    "configuration": true,
+    "require": [],
     "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/economics.717",
+    "url": "https:\/\/umod.org\/plugins\/economics",
     "games": [
         "universal"
     ],
     "keywords": [
+        "economy",
         "oxide",
         "universal"
     ]

@@ -2,16 +2,16 @@
 using Oxide.Core;
 using Oxide.Core.Configuration;
 using Oxide.Core.Libraries.Covalence;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 // TODO: Add SQLite and MySQL database support?
-// TODO: Add individual permissions for each self command?
-// TODO: Add config setting to set maximum balance for players, and reduce balances above max
 
 namespace Oxide.Plugins
 {
-    [Info("Economics", "Wulf/lukespragg", "3.1.6", ResourceId = 717)]
+    [Info("Economics", "Wulf/lukespragg", "3.3.1")]
     [Description("Basic economics system and economy API")]
     public class Economics : CovalencePlugin
     {
@@ -21,24 +21,14 @@ namespace Oxide.Plugins
 
         public class Configuration
         {
+            [JsonProperty(PropertyName = "Maximum balance for accounts (0 to disable)")]
+            public int MaximumBalance { get; set; } = 0;
+
             [JsonProperty(PropertyName = "Remove unused accounts (true/false)")]
-            public bool RemoveUnused;
+            public bool RemoveUnused { get; set; } = true;
 
-            [JsonProperty(PropertyName = "Start money amount (any number 1 or above)")]
-            public int StartAmount;
-
-            [JsonProperty(PropertyName = "Money transfer fee (any number 0.00 or above)")]
-            public float TransferFee;
-
-            public static Configuration DefaultConfig()
-            {
-                return new Configuration
-                {
-                    RemoveUnused = true,
-                    StartAmount = 1000,
-                    TransferFee = 0.01f
-                };
-            }
+            [JsonProperty(PropertyName = "Starting money amount (0 or higher)")]
+            public int StartAmount { get; set; } = 1000;
         }
 
         protected override void LoadConfig()
@@ -47,17 +37,24 @@ namespace Oxide.Plugins
             try
             {
                 config = Config.ReadObject<Configuration>();
-                if (config?.StartAmount == null) LoadDefaultConfig();
+                if (config == null)
+                {
+                    LoadDefaultConfig();
+                }
             }
             catch
             {
-                LogWarning($"Could not read oxide/config/{Name}.json, creating new config file");
                 LoadDefaultConfig();
             }
             SaveConfig();
         }
 
-        protected override void LoadDefaultConfig() => config = Configuration.DefaultConfig();
+        protected override void LoadDefaultConfig()
+        {
+            string configPath = $"{Interface.Oxide.ConfigDirectory}{Path.DirectorySeparatorChar}{Name}.json";
+            LogWarning($"Could not load a valid configuration file, creating a new configuration file at {configPath}");
+            config = new Configuration();
+        }
 
         protected override void SaveConfig() => Config.WriteObject(config);
 
@@ -71,8 +68,21 @@ namespace Oxide.Plugins
 
         private class StoredData
         {
-            public Dictionary<string, double> Balances = new Dictionary<string, double>();
+            public readonly Dictionary<string, double> Balances = new Dictionary<string, double>();
         }
+
+        private void SaveData()
+        {
+            if (changed)
+            {
+                Puts("Saving balances for players...");
+                Interface.Oxide.DataFileSystem.WriteObject(Name, storedData);
+            }
+        }
+
+        private void OnServerSave() => SaveData();
+
+        private void Unload() => SaveData();
 
         #endregion Stored Data
 
@@ -98,19 +108,20 @@ namespace Oxide.Plugins
                 ["PlayerLacksMoney"] = "'{0}' does not have enough money!",
                 ["PlayersFound"] = "Multiple players were found, please specify: {0}",
                 ["ReceivedFrom"] = "You have received {0} from {1}",
+                ["TransactionFailed"] = "Transaction failed! Make sure amount is above 0",
                 ["TransferredTo"] = "{0} transferred to {1}",
                 ["TransferToSelf"] = "You can not transfer money yourself!",
                 ["UsageBalance"] = "{0} - check your balance",
                 ["UsageBalanceOthers"] = "{0} <name or id> - check balance of a player",
-                ["UsageDeposit"] = "{0} <name or id> <amount> - deposits amount to player",
-                ["UsageSetMoney"] = "Usage: {0} <name or id> <amount>",
-                ["UsageTransfer"] = "Usage: {0} <name or id> <amount> - transfers amount to player (fee may apply)",
-                ["UsageWithdraw"] = "Usage: {0} <name or id> <amount>",
-                ["UsageWipe"] = "Usage: {0} - wipes all economics data",
+                ["UsageDeposit"] = "{0} <name or id> <amount> - deposit amount to player",
+                ["UsageSetMoney"] = "Usage: {0} <name or id> <amount> - set money for player",
+                ["UsageTransfer"] = "Usage: {0} <name or id> <amount> - transfer money to player",
+                ["UsageWithdraw"] = "Usage: {0} <name or id> <amount> - withdraw money from player",
+                ["UsageWipe"] = "Usage: {0} - wipe all economics data",
                 ["YouLackMoney"] = "You do not have enough money!",
                 ["YouLostMoney"] = "You lost: {0:C}",
                 ["YouReceivedMoney"] = "You received: {0:C}",
-                ["YourBalance"] = "Your balance is: {0:C}",
+                ["YourBalance"] = "Your balance is: {0:C}"
             }, this);
         }
 
@@ -118,11 +129,29 @@ namespace Oxide.Plugins
 
         #region Initialization
 
+        // New permissions
+        private const string permBalance = "economics.balance";
+        private const string permDeposit = "economics.deposit";
+        private const string permSetMoney = "economics.setmoney";
+        private const string permTransfer = "economics.transfer";
+        private const string permWithdraw = "economics.withdraw";
+        private const string permWipe = "economics.wipe";
+
+        // Deprecated permissions
         private const string permAdmin = "economics.admin";
         private const string permUse = "economics.use";
 
         private void Init()
         {
+            // New permissions
+            permission.RegisterPermission(permBalance, this);
+            permission.RegisterPermission(permDeposit, this);
+            permission.RegisterPermission(permSetMoney, this);
+            permission.RegisterPermission(permTransfer, this);
+            permission.RegisterPermission(permWithdraw, this);
+            permission.RegisterPermission(permWipe, this);
+
+            // Deprecated permissions
             permission.RegisterPermission(permAdmin, this);
             permission.RegisterPermission(permUse, this);
 
@@ -136,18 +165,23 @@ namespace Oxide.Plugins
             data = Interface.Oxide.DataFileSystem.GetFile(Name);
             try
             {
-                var temp = data.ReadObject<Dictionary<ulong, double>>();
+                Dictionary<ulong, double> temp = data.ReadObject<Dictionary<ulong, double>>();
                 try
                 {
                     storedData = new StoredData();
-                    foreach (var old in temp.ToArray())
+                    foreach (KeyValuePair<ulong, double> old in temp.ToArray())
                     {
                         if (!storedData.Balances.ContainsKey(old.Key.ToString()))
+                        {
                             storedData.Balances.Add(old.Key.ToString(), old.Value);
+                        }
                     }
                     changed = true;
                 }
-                catch { }
+                catch
+                {
+                    // Ignored
+                }
             }
             catch
             {
@@ -155,11 +189,24 @@ namespace Oxide.Plugins
                 changed = true;
             }
 
+            string[] playerData = storedData.Balances.Keys.ToArray();
+
+            if (config.MaximumBalance > 0)
+            {
+                foreach (string p in playerData.Where(p => storedData.Balances[p] > config.MaximumBalance))
+                {
+                    storedData.Balances[p] = config.MaximumBalance;
+                    changed = true;
+                }
+            }
+
             if (config.RemoveUnused)
             {
-                var playerData = storedData.Balances.Keys.ToArray();
-                foreach (var p in playerData.Where(p => storedData.Balances[p].Equals(config.StartAmount))) storedData.Balances.Remove(p);
-                if (playerData.Length != storedData.Balances.Count) changed = true;
+                foreach (string p in playerData.Where(p => storedData.Balances[p].Equals(config.StartAmount)))
+                {
+                    storedData.Balances.Remove(p);
+                    changed = true;
+                }
             }
 
             SaveData();
@@ -167,76 +214,56 @@ namespace Oxide.Plugins
 
         #endregion Initialization
 
-        #region Data Handling
-
-        private void SaveData()
-        {
-            if (changed)
-            {
-                Puts("Saving balances for players...");
-                Interface.Oxide.DataFileSystem.WriteObject(Name, storedData);
-            }
-        }
-
-        private void OnServerSave() => SaveData();
-
-        private void Unload() => SaveData();
-
-        #endregion Data Handling
-
         #region API Methods
 
         private double Balance(string playerId)
         {
             double playerData;
-            return !storedData.Balances.TryGetValue(playerId, out playerData) ? config.StartAmount : playerData;
+            return storedData.Balances.TryGetValue(playerId, out playerData) ? playerData : config.StartAmount;
         }
 
         private double Balance(ulong playerId) => Balance(playerId.ToString());
 
-        private void Deposit(string playerId, double amount)
+        private bool Deposit(string playerId, double amount)
         {
-            if (amount < 0) return;
-
-            amount += Balance(playerId);
-            SetMoney(playerId, amount >= 0 ? amount : double.MaxValue);
+            return amount > 0 && SetMoney(playerId, amount + Balance(playerId));
         }
 
-        private void Deposit(ulong playerId, double amount) => Deposit(playerId.ToString(), amount);
+        private bool Deposit(ulong playerId, double amount) => Deposit(playerId.ToString(), amount);
 
-        private void SetMoney(string playerId, double amount)
+        private bool SetMoney(string playerId, double amount)
         {
-            storedData.Balances[playerId] = amount >= 0 ? amount : 0;
+            if (amount < 0)
+            {
+                return false;
+            }
+
+            storedData.Balances[playerId] = Math.Round(amount, 2);
             changed = true;
+            return true;
         }
 
-        private void SetMoney(ulong playerId, double amount) => SetMoney(playerId.ToString(), amount);
+        private bool SetMoney(ulong playerId, double amount) => SetMoney(playerId.ToString(), amount);
 
         private bool Transfer(string playerId, string targetId, double amount)
         {
-            if (Withdraw(playerId, amount))
-            {
-                Deposit(targetId, amount);
-                return true;
-            }
-
-            return false;
+            return Withdraw(playerId, amount) && Deposit(targetId, amount);
         }
 
-        private bool Transfer(ulong playerId, ulong targetId, double amount) => Transfer(playerId.ToString(), targetId.ToString(), amount);
+        private bool Transfer(ulong playerId, ulong targetId, double amount)
+        {
+            return Transfer(playerId.ToString(), targetId.ToString(), amount);
+        }
 
         private bool Withdraw(string playerId, double amount)
         {
-            if (amount < 0) return false;
-
-            var balance = Balance(playerId);
-            if (balance >= amount)
+            if (amount <= 0)
             {
-                SetMoney(playerId, balance - amount);
-                return true;
+                return false;
             }
 
-            return false;
+            double balance = Balance(playerId);
+            return balance >= amount && SetMoney(playerId, balance - amount);
         }
 
         private bool Withdraw(ulong playerId, double amount) => Withdraw(playerId.ToString(), amount);
@@ -251,23 +278,30 @@ namespace Oxide.Plugins
         {
             if (args != null && args.Length > 0)
             {
-                if (!player.HasPermission(permAdmin))
+                if (!player.HasPermission(permAdmin) || !player.HasPermission(permBalance))
                 {
                     Message(player, "NotAllowed", command);
                     return;
                 }
 
-                var target = FindPlayer(args[0], player);
-                if (target == null) return;
+                IPlayer target = FindPlayer(args[0], player);
+                if (target == null)
+                {
+                    return;
+                }
 
                 Message(player, "PlayerBalance", target.Name, Balance(target.Id));
                 return;
             }
 
             if (player.IsServer)
+            {
                 Message(player, "UsageBalanceOthers", command);
+            }
             else
+            {
                 Message(player, "YourBalance", Balance(player.Id));
+            }
         }
 
         #endregion Balance Command
@@ -276,7 +310,7 @@ namespace Oxide.Plugins
 
         private void DepositCommand(IPlayer player, string command, string[] args)
         {
-            if (!player.HasPermission(permAdmin))
+            if (!player.HasPermission(permAdmin) && !player.HasPermission(permDeposit))
             {
                 Message(player, "NotAllowed", command);
                 return;
@@ -288,8 +322,11 @@ namespace Oxide.Plugins
                 return;
             }
 
-            var target = FindPlayer(args[0], player);
-            if (target == null) return;
+            IPlayer target = FindPlayer(args[0], player);
+            if (target == null)
+            {
+                return;
+            }
 
             double amount;
             double.TryParse(args[1], out amount);
@@ -299,8 +336,14 @@ namespace Oxide.Plugins
                 return;
             }
 
-            Deposit(target.Id, amount);
-            Message(player, "PlayerBalance", target.Name, Balance(target.Id));
+            if (Deposit(target.Id, amount))
+            {
+                Message(player, "PlayerBalance", target.Name, Balance(target.Id));
+            }
+            else
+            {
+                Message(player, "TransactionFailed", target.Name);
+            }
         }
 
         #endregion Deposit Command
@@ -309,7 +352,7 @@ namespace Oxide.Plugins
 
         private void SetMoneyCommand(IPlayer player, string command, string[] args)
         {
-            if (!player.HasPermission(permAdmin))
+            if (!player.HasPermission(permAdmin) || !player.HasPermission(permSetMoney))
             {
                 Message(player, "NotAllowed", command);
                 return;
@@ -321,8 +364,11 @@ namespace Oxide.Plugins
                 return;
             }
 
-            var target = FindPlayer(args[0], player);
-            if (target == null) return;
+            IPlayer target = FindPlayer(args[0], player);
+            if (target == null)
+            {
+                return;
+            }
 
             double amount;
             double.TryParse(args[1], out amount);
@@ -332,8 +378,14 @@ namespace Oxide.Plugins
                 return;
             }
 
-            SetMoney(target.Id, amount);
-            Message(player, "PlayerBalance", target.Name, Balance(target.Id));
+            if (SetMoney(target.Id, amount))
+            {
+                Message(player, "PlayerBalance", target.Name, Balance(target.Id));
+            }
+            else
+            {
+                Message(player, "TransactionFailed", target.Name);
+            }
         }
 
         #endregion Set Money Command
@@ -348,8 +400,11 @@ namespace Oxide.Plugins
                 return;
             }
 
-            var target = FindPlayer(args[0], player);
-            if (target == null) return;
+            IPlayer target = FindPlayer(args[0], player);
+            if (target == null)
+            {
+                return;
+            }
 
             double amount;
             double.TryParse(args[1], out amount);
@@ -371,9 +426,15 @@ namespace Oxide.Plugins
                 return;
             }
 
-            Deposit(target.Id, amount * (1 - config.TransferFee));
-            Message(player, "TransferredTo", amount, target.Name);
-            Message(target, "ReceivedFrom", amount, player.Name);
+            if (Deposit(target.Id, amount))
+            {
+                Message(player, "TransferredTo", amount, target.Name);
+                Message(target, "ReceivedFrom", amount, player.Name);
+            }
+            else
+            {
+                Message(player, "TransactionFailed", target.Name);
+            }
         }
 
         #endregion Transfer Command
@@ -382,7 +443,7 @@ namespace Oxide.Plugins
 
         private void WithdrawCommand(IPlayer player, string command, string[] args)
         {
-            if (!player.HasPermission(permAdmin))
+            if (!player.HasPermission(permAdmin) || !player.HasPermission(permWithdraw))
             {
                 Message(player, "NotAllowed", command);
                 return;
@@ -394,8 +455,11 @@ namespace Oxide.Plugins
                 return;
             }
 
-            var target = FindPlayer(args[0], player);
-            if (target == null) return;
+            IPlayer target = FindPlayer(args[0], player);
+            if (target == null)
+            {
+                return;
+            }
 
             double amount;
             double.TryParse(args[1], out amount);
@@ -406,9 +470,13 @@ namespace Oxide.Plugins
             }
 
             if (Withdraw(target.Id, amount))
+            {
                 Message(player, "PlayerBalance", target.Name, Balance(target.Id));
+            }
             else
+            {
                 Message(player, "YouLackMoney", target.Name);
+            }
         }
 
         #endregion Withdraw Command
@@ -417,7 +485,7 @@ namespace Oxide.Plugins
 
         private void WipeCommand(IPlayer player, string command, string[] args)
         {
-            if (!player.HasPermission(permAdmin))
+            if (!player.HasPermission(permAdmin) || !player.HasPermission(permWipe))
             {
                 Message(player, "NotAllowed", command);
                 return;
@@ -426,6 +494,7 @@ namespace Oxide.Plugins
             storedData = new StoredData();
             changed = true;
             SaveData();
+
             Message(player, "DataWiped");
         }
 
@@ -435,27 +504,17 @@ namespace Oxide.Plugins
 
         #region Helpers
 
-        private void AddLocalizedCommand(string key, string command)
-        {
-            foreach (var language in lang.GetLanguages(this))
-            {
-                var messages = lang.GetMessages(language, this);
-                foreach (var message in messages.Where(m => m.Key.Equals(key)))
-                    if (!string.IsNullOrEmpty(message.Value)) AddCovalenceCommand(message.Value, command);
-            }
-        }
-
         private IPlayer FindPlayer(string nameOrId, IPlayer player)
         {
-            var foundPlayers = players.FindPlayers(nameOrId).ToArray();
+            IPlayer[] foundPlayers = players.FindPlayers(nameOrId).ToArray();
             if (foundPlayers.Length > 1)
             {
                 Message(player, "PlayersFound", string.Join(", ", foundPlayers.Select(p => p.Name).ToArray()));
                 return null;
             }
 
-            var target = foundPlayers.Length == 1 ? foundPlayers[0] : null;
-            if (target == null || !target.IsConnected)
+            IPlayer target = foundPlayers.Length == 1 ? foundPlayers[0] : null;
+            if (target == null)
             {
                 Message(player, "NoPlayersFound", nameOrId);
                 return null;
@@ -464,9 +523,30 @@ namespace Oxide.Plugins
             return target;
         }
 
-        private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+        private string Lang(string key, string id = null, params object[] args)
+        {
+            return string.Format(lang.GetMessage(key, this, id), args);
+        }
 
-        private void Message(IPlayer player, string key, params object[] args) => player.Message(Lang(key, player.Id, args));
+        private void AddLocalizedCommand(string key, string command)
+        {
+            foreach (string language in lang.GetLanguages(this))
+            {
+                Dictionary<string, string> messages = lang.GetMessages(language, this);
+                foreach (KeyValuePair<string, string> message in messages.Where(m => m.Key.Equals(key)))
+                {
+                    if (!string.IsNullOrEmpty(message.Value))
+                    {
+                        AddCovalenceCommand(message.Value, command);
+                    }
+                }
+            }
+        }
+
+        private void Message(IPlayer player, string key, params object[] args)
+        {
+            player.Reply(Lang(key, player.Id, args));
+        }
 
         #endregion Helpers
     }
