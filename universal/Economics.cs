@@ -11,7 +11,7 @@ using System.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info("Economics", "Wulf/lukespragg", "3.3.1")]
+    [Info("Economics", "Wulf/lukespragg", "3.4.0")]
     [Description("Basic economics system and economy API")]
     public class Economics : CovalencePlugin
     {
@@ -112,11 +112,11 @@ namespace Oxide.Plugins
                 ["TransferredTo"] = "{0} transferred to {1}",
                 ["TransferToSelf"] = "You can not transfer money yourself!",
                 ["UsageBalance"] = "{0} - check your balance",
-                ["UsageBalanceOthers"] = "{0} <name or id> - check balance of a player",
-                ["UsageDeposit"] = "{0} <name or id> <amount> - deposit amount to player",
-                ["UsageSetMoney"] = "Usage: {0} <name or id> <amount> - set money for player",
-                ["UsageTransfer"] = "Usage: {0} <name or id> <amount> - transfer money to player",
-                ["UsageWithdraw"] = "Usage: {0} <name or id> <amount> - withdraw money from player",
+                ["UsageBalanceOthers"] = "{0} <player name or id> - check balance of a player",
+                ["UsageDeposit"] = "{0} <player name or id> <amount> - deposit amount to player",
+                ["UsageSetMoney"] = "Usage: {0} <player name or id> <amount> - set money for player",
+                ["UsageTransfer"] = "Usage: {0} <player name or id> <amount> - transfer money to player",
+                ["UsageWithdraw"] = "Usage: {0} <player name or id> <amount> - withdraw money from player",
                 ["UsageWipe"] = "Usage: {0} - wipe all economics data",
                 ["YouLackMoney"] = "You do not have enough money!",
                 ["YouLostMoney"] = "You lost: {0:C}",
@@ -226,22 +226,33 @@ namespace Oxide.Plugins
 
         private bool Deposit(string playerId, double amount)
         {
-            return amount > 0 && SetMoney(playerId, amount + Balance(playerId));
+            return amount > 0 && SetBalance(playerId, amount + Balance(playerId));
         }
 
         private bool Deposit(ulong playerId, double amount) => Deposit(playerId.ToString(), amount);
 
-        private bool SetMoney(string playerId, double amount)
+        private bool SetBalance(string playerId, double amount)
         {
-            if (amount < 0)
+            if (amount >= 0)
             {
-                return false;
+                amount = Math.Round(amount, 2);
+
+                storedData.Balances[playerId] = amount;
+                changed = true;
+
+                Interface.Call("OnBalanceChanged", playerId, amount);
+                Interface.Call("OnBalanceChanged", Convert.ToUInt64(playerId), amount);
+
+                return true;
             }
 
-            storedData.Balances[playerId] = Math.Round(amount, 2);
-            changed = true;
-            return true;
+            return false;
         }
+
+        private bool SetBalance(ulong playerId, double amount) => SetBalance(playerId.ToString(), amount);
+
+        [Obsolete("SetMoney is deprecated, use SetBalance instead")]
+        private bool SetMoney(string playerId, double amount) => SetBalance(playerId, amount);
 
         private bool SetMoney(ulong playerId, double amount) => SetMoney(playerId.ToString(), amount);
 
@@ -257,13 +268,13 @@ namespace Oxide.Plugins
 
         private bool Withdraw(string playerId, double amount)
         {
-            if (amount <= 0)
+            if (amount >= 0)
             {
-                return false;
+                double balance = Balance(playerId);
+                return balance >= amount && SetBalance(playerId, balance - amount);
             }
 
-            double balance = Balance(playerId);
-            return balance >= amount && SetMoney(playerId, balance - amount);
+            return false;
         }
 
         private bool Withdraw(ulong playerId, double amount) => Withdraw(playerId.ToString(), amount);
@@ -523,9 +534,9 @@ namespace Oxide.Plugins
             return target;
         }
 
-        private string Lang(string key, string id = null, params object[] args)
+        private string Lang(string key, string playerId = null, params object[] args)
         {
-            return string.Format(lang.GetMessage(key, this, id), args);
+            return string.Format(lang.GetMessage(key, this, playerId), args);
         }
 
         private void AddLocalizedCommand(string key, string command)
