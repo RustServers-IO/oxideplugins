@@ -1,13 +1,13 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using ProtoBuf;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json;
-using ProtoBuf;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("BuildingRestriction", "Wulf/lukespragg", "1.5.1", ResourceId = 2124)]
+    [Info("Building Restriction", "Wulf/lukespragg", "1.5.2")]
     [Description("Restricts building height, building in water, number of foundations, and more")]
     public class BuildingRestriction : RustPlugin
     {
@@ -91,6 +91,7 @@ namespace Oxide.Plugins
 
         private new void LoadDefaultMessages()
         {
+            // English
             lang.RegisterMessages(new Dictionary<string, string>()
             {
                 ["MaxBuildHeight"] = "You have reached the max building height! ({0} building blocks)",
@@ -130,12 +131,10 @@ namespace Oxide.Plugins
         private void FindStructures()
         {
             Puts("Searching for structures, this may take awhile...");
-            var foundationBlocks = Resources.FindObjectsOfTypeAll<BuildingBlock>()
-                                            .Where(b => b.PrefabName == foundation || b.PrefabName == triFoundation).ToList();
+            var foundationBlocks = Resources.FindObjectsOfTypeAll<BuildingBlock>().Where(b => b.PrefabName == foundation || b.PrefabName == triFoundation).ToList();
             foreach (var block in foundationBlocks.Where(b => !buildingIds.ContainsKey(b.buildingID)))
             {
-                var structure = UnityEngine.Object.FindObjectsOfType<BuildingBlock>()
-                                           .Where(b => b.buildingID == block.buildingID && b.PrefabName == foundation || b.PrefabName == triFoundation);
+                var structure = UnityEngine.Object.FindObjectsOfType<BuildingBlock>().Where(b => b.buildingID == block.buildingID && b.PrefabName == foundation || b.PrefabName == triFoundation);
                 buildingIds[block.buildingID] = structure.ToList();
             }
             Puts($"Search complete! Found {buildingIds.Count} structures");
@@ -180,7 +179,7 @@ namespace Oxide.Plugins
             var buildingBlock = entity?.GetComponent<BuildingBlock>();
             if (buildingBlock == null) return;
 
-            if (buildingBlock.WaterFactor() >= config.MaxWaterDepth && config.RestrictWaterDepth)
+            if (config.RestrictWaterDepth && buildingBlock.WaterFactor() >= config.MaxWaterDepth)
             {
                 if (config.RefundResources) RefundResources(player, buildingBlock);
                 buildingBlock.Kill(BaseNetworkable.DestroyMode.Gib);
@@ -193,7 +192,7 @@ namespace Oxide.Plugins
             if (buildingIds.ContainsKey(buildingId))
             {
                 var connectingStructure = buildingIds[buildingBlock.buildingID];
-                if (blockName == foundation || blockName == triFoundation && config.RestrictFoundations)
+                if (config.RestrictFoundations && blockName == foundation || blockName == triFoundation)
                 {
                     var foundationCount = GetCountOf(connectingStructure, foundation);
                     var triFoundationCount = GetCountOf(connectingStructure, triFoundation);
@@ -227,11 +226,12 @@ namespace Oxide.Plugins
                         if (firstFoundation != null)
                         {
                             var height = (float)Math.Round(buildingBlock.transform.position.y - firstFoundation.transform.position.y, 0, MidpointRounding.AwayFromZero);
-                            if (config.MaxBuildHeight <= height && config.RestrictBuildHeight)
+                            var maxHeight = config.MaxBuildHeight * 3;
+                            if (maxHeight <= height && config.RestrictBuildHeight)
                             {
                                 if (config.RefundResources) RefundResources(player, buildingBlock);
                                 buildingBlock.Kill(BaseNetworkable.DestroyMode.Gib);
-                                Message(player, "MaxBuildHeight", config.MaxBuildHeight / 3);
+                                Message(player, "MaxBuildHeight", maxHeight);
                             }
                         }
                     }
@@ -255,8 +255,7 @@ namespace Oxide.Plugins
             if (buildingIds.ContainsKey(buildingBlock.buildingID))
             {
                 var blockList = buildingIds[buildingBlock.buildingID].Where(b => b == buildingBlock).ToList();
-                foreach (var block in blockList)
-                    buildingIds[buildingBlock.buildingID].Remove(buildingBlock);
+                foreach (var block in blockList) buildingIds[buildingBlock.buildingID].Remove(buildingBlock);
             }
         }
 

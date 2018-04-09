@@ -1,16 +1,19 @@
 {
     "name": "BuildingRestriction",
-    "description": "Restricts building height, building in water, and number of foundations",
-    "author": "Wulf",
-    "version": "1.5.1",
-    "configuration": false,
+    "description": "Restricts building height, building in water, number of foundations, and more",
+    "author": "Wulf\/lukespragg",
+    "version": "1.5.2",
+    "configuration": true,
+    "require": [],
     "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/buildingrestriction.2124",
+    "url": "https:\/\/umod.org\/plugins\/buildingrestriction",
     "games": [
         "rust"
     ],
     "keywords": [
+        "rust",
         "oxide",
-        "rust"
+        "restrictions",
+        "building"
     ]
 }
