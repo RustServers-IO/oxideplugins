@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using ProtoBuf;
 using System;
 using System.Collections.Generic;
@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Building Restriction", "Wulf/lukespragg", "1.5.2")]
+    [Info("Building Restriction", "Wulf/lukespragg", "1.5.3")]
     [Description("Restricts building height, building in water, number of foundations, and more")]
     public class BuildingRestriction : RustPlugin
     {

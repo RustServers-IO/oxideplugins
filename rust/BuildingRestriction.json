@@ -2,7 +2,7 @@
     "name": "BuildingRestriction",
     "description": "Restricts building height, building in water, number of foundations, and more",
     "author": "Wulf\/lukespragg",
-    "version": "1.5.2",
+    "version": "1.5.3",
     "configuration": true,
     "require": [],
     "language": "cs",
