@@ -20,7 +20,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Vanish", "Wulf/lukespragg (maintained by Jake_Rich)", "0.5.5")]
+    [Info("Vanish", "Wulf/lukespragg", "0.5.6")]
     [Description("Allows players with permission to become truly invisible")]
     public class Vanish : RustPlugin
     {
@@ -97,11 +97,11 @@ namespace Oxide.Plugins
                 ["CantUseTeleport"] = "You can't teleport while vanished",
                 ["CommandVanish"] = "vanish",
                 ["NotAllowed"] = "Sorry, you can't use '{0}' right now",
+                ["NotAllowedPerm"] = "You are missing permissions! ({0})",
                 ["PlayersOnly"] = "Command '{0}' can only be used by a player",
                 ["VanishDisabled"] = "You are no longer invisible!",
                 ["VanishEnabled"] = "You have vanished from sight...",
-                ["VanishTimedOut"] = "Vanish time limit reached!",
-                ["NotAllowedPerm"] = "You are missing permissions! ({0})",
+                ["VanishTimedOut"] = "Vanish time limit reached!"
             }, this);
         }
 
@@ -441,7 +441,7 @@ namespace Oxide.Plugins
 
         #region GUI Indicator
 
-        private Dictionary<ulong, string> guiInfo = new Dictionary<ulong, string>();
+        private readonly Dictionary<ulong, string> guiInfo = new Dictionary<ulong, string>();
 
         private void VanishGui(BasePlayer basePlayer)
         {
@@ -481,8 +481,15 @@ namespace Oxide.Plugins
 
         private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
+            // Check if victim or attacker is a player
             BasePlayer basePlayer = info?.Initiator as BasePlayer ?? entity as BasePlayer;
-            if (basePlayer == null || !basePlayer.IsConnected || !onlinePlayers[basePlayer].IsInvisible)
+            if (basePlayer == null || !basePlayer.IsConnected)
+            {
+                return null;
+            }
+
+            // Check if player is invisible
+            if (!onlinePlayers.ContainsKey(basePlayer) || !onlinePlayers[basePlayer].IsInvisible)
             {
                 return null;
             }
