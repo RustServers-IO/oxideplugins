@@ -1,16 +1,19 @@
 {
     "name": "Vanish",
     "description": "Allows players with permission to become truly invisible",
-    "author": "Jake Rich",
-    "version": "0.5.1",
-    "configuration": false,
+    "author": "Wulf\/lukespragg (maintained by Jake_Rich)",
+    "version": "0.5.5",
+    "configuration": true,
+    "require": [],
     "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/vanish.1420",
+    "url": "https:\/\/umod.org\/plugins\/vanish",
     "games": [
         "rust"
     ],
     "keywords": [
         "oxide",
+        "moderation",
+        "anticheat",
         "rust"
     ]
 }
