@@ -1,16 +1,19 @@
 {
-    "name": "Oxide",
+    "name": "Logger",
     "description": "Configurable logging of chat, commands, connections, and more",
-    "author": "",
-    "version": null,
-    "configuration": false,
+    "author": "Wulf\/lukespragg",
+    "version": "2.1.3",
+    "configuration": true,
+    "require": [],
     "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/logger.670",
+    "url": "https:\/\/umod.org\/plugins\/logger",
     "games": [
-        "rust"
+        "universal"
     ],
     "keywords": [
+        "logging",
         "oxide",
-        "rust"
+        "universal",
+        "anticheat"
     ]
 }
