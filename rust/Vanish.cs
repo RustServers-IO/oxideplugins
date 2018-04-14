@@ -20,7 +20,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Vanish", "Wulf/lukespragg", "0.5.6")]
+    [Info("Vanish", "Wulf/lukespragg", "0.5.7")]
     [Description("Allows players with permission to become truly invisible")]
     public class Vanish : RustPlugin
     {
@@ -269,12 +269,15 @@ namespace Oxide.Plugins
                 VanishGui(basePlayer);
             }
 
-            onlinePlayers[basePlayer].IsInvisible = true;
+            if (onlinePlayers[basePlayer] != null)
+            {
+                onlinePlayers[basePlayer].IsInvisible = true;
+            }
             Message(basePlayer.IPlayer, "VanishEnabled");
 
             if (config.VanishTimeout > 0f) timer.Once(config.VanishTimeout, () =>
             {
-                if (onlinePlayers[basePlayer].IsInvisible)
+                if (onlinePlayers[basePlayer] != null && onlinePlayers[basePlayer].IsInvisible)
                 {
                     Reappear(basePlayer);
                     Message(basePlayer.IPlayer, "VanishTimedOut");
@@ -342,7 +345,7 @@ namespace Oxide.Plugins
             BasePlayer basePlayer = entity as BasePlayer;
             if (basePlayer != null && IsInvisible(basePlayer))
             {
-                return false;
+                return true; // Cancel, not a bool hook
             }
 
             return null;
@@ -354,7 +357,7 @@ namespace Oxide.Plugins
             BasePlayer basePlayer = entity as BasePlayer;
             if (basePlayer != null && IsInvisible(basePlayer))
             {
-                return false;
+                return true; // Cancel, not a bool hook
             }
 
             return null;
@@ -375,7 +378,7 @@ namespace Oxide.Plugins
         {
             if (IsInvisible(player))
             {
-                return false;
+                return true; // Cancel, not a bool hook
             }
 
             return null;
@@ -411,7 +414,10 @@ namespace Oxide.Plugins
 
         private void Reappear(BasePlayer basePlayer)
         {
-            onlinePlayers[basePlayer].IsInvisible = false;
+            if (onlinePlayers[basePlayer] != null)
+            {
+                onlinePlayers[basePlayer].IsInvisible = false;
+            }
             basePlayer.SendNetworkUpdate();
             basePlayer.limitNetworking = false;
 
@@ -489,7 +495,7 @@ namespace Oxide.Plugins
             }
 
             // Check if player is invisible
-            if (!onlinePlayers.ContainsKey(basePlayer) || !onlinePlayers[basePlayer].IsInvisible)
+            if (onlinePlayers[basePlayer] == null || !onlinePlayers[basePlayer].IsInvisible)
             {
                 return null;
             }
@@ -553,7 +559,7 @@ namespace Oxide.Plugins
 
         private void OnPlayerTick(BasePlayer basePlayer)
         {
-            if (onlinePlayers[basePlayer].IsInvisible)
+            if (onlinePlayers[basePlayer] != null && onlinePlayers[basePlayer].IsInvisible)
             {
                 HeldEntity heldEntity = basePlayer.GetHeldEntity();
                 if (heldEntity != null && basePlayer.IPlayer.HasPermission(permAbilitiesWeapons))
