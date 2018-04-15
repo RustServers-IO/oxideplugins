@@ -11,7 +11,7 @@ using System.Net;
 
 namespace Oxide.Plugins
 {
-    [Info("Logger", "Wulf/lukespragg", "2.2.0")]
+    [Info("Logger", "Wulf/lukespragg", "2.2.1")]
     [Description("Configurable logging of chat, commands, connections, and more")]
     public class Logger : CovalencePlugin
     {
@@ -316,9 +316,9 @@ namespace Oxide.Plugins
         {
             if (config.LogToConsole)
             {
-                Puts($"[{System.DateTime.Now}] {Lang(key, null, args)}");
+                Puts(Lang(key, null, args));
             }
-            LogToFile(filename, Lang(key, null, args), this);
+            LogToFile(filename, $"[{System.DateTime.Now}] {Lang(key, null, args)}", this);
         }
 
         private void Message(IPlayer player, string key, params object[] args)
