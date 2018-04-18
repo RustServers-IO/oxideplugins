@@ -13,6 +13,9 @@
     "keywords": [
         "rust",
         "admin-panel",
-        "tool"
+        "tool",
+        "administration",
+        "gui",
+        "player-administration"
     ]
 }
