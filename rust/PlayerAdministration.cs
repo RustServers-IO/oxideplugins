@@ -2,12 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using UnityEngine.UI;
 using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerAdministration", "ThibmoRozier", "1.0.0", ResourceId = 0)]
+    [Info("PlayerAdministration", "ThibmoRozier", "1.0.1", ResourceId = 0)]
     [Description("Allows server admins to moderate users using a GUI from within the game.")]
     public class PlayerAdministration : RustPlugin
     {
@@ -209,24 +208,14 @@ namespace Oxide.Plugins
             /// <param name="cursorEnabled">The panel requires the cursor</param>
             /// <param name="color">Image color</param>
             /// <param name="name">The object's name</param>
-            /// <param name="imageType">Image type</param>
-            /// <param name="sprite">Image sprite</param>
-            /// <param name="material">Image material</param>
             /// <param name="png">Image PNG file path</param>
-            /// <param name="fadeOut">Fade-out time</param>
-            /// <param name="fadeIn">Image fade-in time</param>
             /// <returns>New object name</returns>
             public string AddPanel(string parent,
                                    CuiRect anchor,
                                    bool cursorEnabled,
                                    CuiColor color = null,
                                    string name = "",
-                                   Image.Type imageType = Image.Type.Simple,
-                                   string sprite = "Assets/Content/UI/UI.Background.Tile.psd",
-                                   string material = "Assets/Icons/IconMaterial.mat",
-                                   string png = "",
-                                   float fadeOut = 0f,
-                                   float fadeIn = 0f) => AddPanel(parent, anchor, new CuiRect(), cursorEnabled, color, name, imageType, sprite, material, png, fadeOut, fadeIn);
+                                   string png = null) => AddPanel(parent, anchor, new CuiRect(), cursorEnabled, color, name, png);
 
             /// <summary>
             /// Add a new panel
@@ -237,12 +226,7 @@ namespace Oxide.Plugins
             /// <param name="cursorEnabled">The panel requires the cursor</param>
             /// <param name="color">Image color</param>
             /// <param name="name">The object's name</param>
-            /// <param name="imageType">Image type</param>
-            /// <param name="sprite">Image sprite</param>
-            /// <param name="material">Image material</param>
             /// <param name="png">Image PNG file path</param>
-            /// <param name="fadeOut">Fade-out time</param>
-            /// <param name="fadeIn">Image fade-in time</param>
             /// <returns>New object name</returns>
             public string AddPanel(string parent,
                                    CuiRect anchor,
@@ -250,34 +234,23 @@ namespace Oxide.Plugins
                                    bool cursorEnabled,
                                    CuiColor color = null,
                                    string name = "",
-                                   Image.Type imageType = Image.Type.Simple,
-                                   string sprite = "Assets/Content/UI/UI.Background.Tile.psd",
-                                   string material = "Assets/Icons/IconMaterial.mat",
-                                   string png = "",
-                                   float fadeOut = 0f,
-                                   float fadeIn = 0f)
+                                   string png = null)
             {
                 CuiPanel panel = new CuiPanel() {
-                    Image = null,
                     RectTransform = {
                         AnchorMin = anchor.GetPosMin(),
                         AnchorMax = anchor.GetPosMax(),
                         OffsetMin = offset.GetPosMin(),
                         OffsetMax = offset.GetPosMax()
                     },
-                    CursorEnabled = cursorEnabled,
-                    FadeOut = fadeOut
+                    CursorEnabled = cursorEnabled
                 };
 
                 if (!string.IsNullOrEmpty(png) ||
                     (color != null)) {
                     panel.Image = new CuiImageComponent() {
-                        Sprite = sprite ?? "Assets/Content/UI/UI.Background.Tile.psd",
-                        Material = material ?? "Assets/Icons/IconMaterial.mat",
                         Color = color.ToString(),
-                        ImageType = imageType,
-                        Png = png ?? "",
-                        FadeIn = fadeIn
+                        Png = png
                     };
                 }
 
@@ -294,9 +267,6 @@ namespace Oxide.Plugins
             /// <param name="name">The object's name</param>
             /// <param name="fontSize">Font size</param>
             /// <param name="align">Text alignment</param>
-            /// <param name="font">Text font</param>
-            /// <param name="fadeOut">Fade-out time</param>
-            /// <param name="fadeIn">Fade-in time</param>
             /// <returns>New object name</returns>
             public string AddLabel(string parent,
                                    CuiRect anchor,
@@ -304,10 +274,7 @@ namespace Oxide.Plugins
                                    string text,
                                    string name = "",
                                    int fontSize = 14,
-                                   TextAnchor align = TextAnchor.UpperLeft,
-                                   string font = "RobotoCondensed-Bold.ttf",
-                                   float fadeOut = 0f,
-                                   float fadeIn = 0f) => AddLabel(parent, anchor, new CuiRect(), color, text, name, fontSize, align, font, fadeOut, fadeIn);
+                                   TextAnchor align = TextAnchor.UpperLeft) => AddLabel(parent, anchor, new CuiRect(), color, text, name, fontSize, align);
 
             /// <summary>
             /// Add a new label
@@ -320,9 +287,6 @@ namespace Oxide.Plugins
             /// <param name="name">The object's name</param>
             /// <param name="fontSize">Font size</param>
             /// <param name="align">Text alignment</param>
-            /// <param name="font">Text font</param>
-            /// <param name="fadeOut">Fade-out time</param>
-            /// <param name="fadeIn">Fade-in time</param>
             /// <returns>New object name</returns>
             public string AddLabel(string parent,
                                    CuiRect anchor,
@@ -331,27 +295,21 @@ namespace Oxide.Plugins
                                    string text,
                                    string name = "",
                                    int fontSize = 14,
-                                   TextAnchor align = TextAnchor.UpperLeft,
-                                   string font = "RobotoCondensed-Bold.ttf",
-                                   float fadeOut = 0f,
-                                   float fadeIn = 0f)
+                                   TextAnchor align = TextAnchor.UpperLeft)
             {
                 return container.Add(new CuiLabel() {
                     Text = {
                         Text = text ?? "",
                         FontSize = fontSize,
-                        Font = font ?? "RobotoCondensed-Bold.ttf",
                         Align = align,
-                        Color = color.ToString(),
-                        FadeIn = fadeIn
+                        Color = color.ToString()
                     },
                     RectTransform = {
                         AnchorMin = anchor.GetPosMin(),
                         AnchorMax = anchor.GetPosMax(),
                         OffsetMin = offset.GetPosMin(),
                         OffsetMax = offset.GetPosMax()
-                    },
-                    FadeOut = fadeOut
+                    }
                 }, parent, name ?? "");
             }
 
@@ -368,12 +326,6 @@ namespace Oxide.Plugins
             /// <param name="name">The object's name</param>
             /// <param name="fontSize">Font size</param>
             /// <param name="align">Text alignment</param>
-            /// <param name="font">Text font</param>
-            /// <param name="imageType">Image type</param>
-            /// <param name="sprite">Image sprite</param>
-            /// <param name="material">Image material</param>
-            /// <param name="fadeOut">Fade-out time</param>
-            /// <param name="fadeIn">Fade-in time</param>
             /// <returns>New object name</returns>
             public string AddButton(string parent,
                                     CuiRect anchor,
@@ -384,13 +336,7 @@ namespace Oxide.Plugins
                                     string close = "",
                                     string name = "",
                                     int fontSize = 14,
-                                    TextAnchor align = TextAnchor.MiddleCenter,
-                                    string font = "RobotoCondensed-Bold.ttf",
-                                    Image.Type imageType = Image.Type.Simple,
-                                    string sprite = "Assets/Content/UI/UI.Background.Tile.psd",
-                                    string material = "Assets/Icons/IconMaterial.mat",
-                                    float fadeOut = 0f,
-                                    float fadeIn = 0f) => AddButton(parent, anchor, new CuiRect(), buttonColor, textColor, text, command, close, name, fontSize, align, font, imageType, sprite, material, fadeOut, fadeIn);
+                                    TextAnchor align = TextAnchor.MiddleCenter) => AddButton(parent, anchor, new CuiRect(), buttonColor, textColor, text, command, close, name, fontSize, align);
 
             /// <summary>
             /// Add a new button
@@ -406,12 +352,6 @@ namespace Oxide.Plugins
             /// <param name="name">The object's name</param>
             /// <param name="fontSize">Font size</param>
             /// <param name="align">Text alignment</param>
-            /// <param name="font">Text font</param>
-            /// <param name="imageType">Image type</param>
-            /// <param name="sprite">Image sprite</param>
-            /// <param name="material">Image material</param>
-            /// <param name="fadeOut">Fade-out time</param>
-            /// <param name="fadeIn">Fade-in time</param>
             /// <returns>New object name</returns>
             public string AddButton(string parent,
                                     CuiRect anchor,
@@ -423,23 +363,13 @@ namespace Oxide.Plugins
                                     string close = "",
                                     string name = "",
                                     int fontSize = 14,
-                                    TextAnchor align = TextAnchor.MiddleCenter,
-                                    string font = "RobotoCondensed-Bold.ttf",
-                                    Image.Type imageType = Image.Type.Simple,
-                                    string sprite = "Assets/Content/UI/UI.Background.Tile.psd",
-                                    string material = "Assets/Icons/IconMaterial.mat",
-                                    float fadeOut = 0f,
-                                    float fadeIn = 0f)
+                                    TextAnchor align = TextAnchor.MiddleCenter)
             {
                 return container.Add(new CuiButton() {
                     Button = {
                         Command = command ?? "",
                         Close = close ?? "",
-                        Sprite = sprite ?? "Assets/Content/UI/UI.Background.Tile.psd",
-                        Material = material ?? "Assets/Icons/IconMaterial.mat",
-                        Color = buttonColor.ToString(),
-                        ImageType = imageType,
-                        FadeIn = fadeIn
+                        Color = buttonColor.ToString()
                     },
                     RectTransform = {
                         AnchorMin = anchor.GetPosMin(),
@@ -450,12 +380,9 @@ namespace Oxide.Plugins
                     Text = {
                         Text = text ?? "",
                         FontSize = fontSize,
-                        Font = font ?? "RobotoCondensed-Bold.ttf",
                         Align = align,
-                        Color = textColor.ToString(),
-                        FadeIn = fadeIn
-                    },
-                    FadeOut = fadeOut
+                        Color = textColor.ToString()
+                    }
                 }, parent, name ?? "");
             }
 
@@ -472,8 +399,6 @@ namespace Oxide.Plugins
             /// <param name="name">The object's name</param>
             /// <param name="fontSize">Font size</param>
             /// <param name="align">Text alignment</param>
-            /// <param name="font">Text font</param>
-            /// <param name="fadeOut">Fade-out time</param>
             /// <returns>New object name</returns>
             public string AddInputField(string parent,
                                         CuiRect anchor,
@@ -484,9 +409,7 @@ namespace Oxide.Plugins
                                         bool isPassword = false,
                                         string name = "",
                                         int fontSize = 14,
-                                        TextAnchor align = TextAnchor.MiddleLeft,
-                                        string font = "RobotoCondensed-Bold.ttf",
-                                        float fadeOut = 0f) => AddInputField(parent, anchor, new CuiRect(), color, text, charsLimit, command, isPassword, name, fontSize, align, font, fadeOut);
+                                        TextAnchor align = TextAnchor.MiddleLeft) => AddInputField(parent, anchor, new CuiRect(), color, text, charsLimit, command, isPassword, name, fontSize, align);
 
             /// <summary>
             /// Add a new input field
@@ -502,8 +425,6 @@ namespace Oxide.Plugins
             /// <param name="isPassword">Indicates that this input should show password chars</param>
             /// <param name="name">The object's name</param>
             /// <param name="fontSize">Font size</param>
-            /// <param name="align">Text alignment</param>
-            /// <param name="font">Text font</param>
             /// <returns>New object name</returns>
             public string AddInputField(string parent,
                                         CuiRect anchor,
@@ -515,15 +436,12 @@ namespace Oxide.Plugins
                                         bool isPassword = false,
                                         string name = "",
                                         int fontSize = 14,
-                                        TextAnchor align = TextAnchor.MiddleLeft,
-                                        string font = "RobotoCondensed-Bold.ttf",
-                                        float fadeOut = 0f)
+                                        TextAnchor align = TextAnchor.MiddleLeft)
             {
                 return container.Add(new CuiInputField() {
                     InputField = {
                         Text = text ?? "",
                         FontSize = fontSize,
-                        Font = font ?? "RobotoCondensed-Bold.ttf",
                         Align = align,
                         Color = color.ToString(),
                         CharsLimit = charsLimit,
@@ -535,8 +453,7 @@ namespace Oxide.Plugins
                         AnchorMax = anchor.GetPosMax(),
                         OffsetMin = offset.GetPosMin(),
                         OffsetMax = offset.GetPosMax()
-                    },
-                    FadeOut = fadeOut
+                    }
                 }, parent, name ?? "");
             }
 
