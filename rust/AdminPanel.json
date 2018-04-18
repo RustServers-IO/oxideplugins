@@ -1,23 +1,26 @@
 {
     "name": "AdminPanel",
-    "description": "A small panel for clickable commands for admins",
-    "author": "Wulf",
+    "description": "GUI admin panel with command buttons",
+    "author": "austinv900",
     "version": "1.2.8",
-    "configuration": false,
-    "suggest": {
-        "Vanish": "*",
+    "configuration": true,
+    "require": {
+        "AdminRadar": "*",
+        "EnhancedBanSystem": "*",
         "Godmode": "*",
         "NTeleportation": "*",
-        "AdminRadar": "*",
-        "UpdateChecker": "*"
+        "Vanish": "*"
     },
     "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/adminpanel.2034",
+    "url": "https:\/\/umod.org\/plugins\/adminpanel",
     "games": [
         "rust"
     ],
     "keywords": [
+        "rust",
+        "gui",
+        "administration",
         "oxide",
-        "rust"
+        "moderation"
     ]
 }
