@@ -214,7 +214,7 @@ namespace Oxide.Plugins
                                    CuiRect anchor,
                                    bool cursorEnabled,
                                    CuiColor color = null,
-                                   string name = "",
+                                   string name = null,
                                    string png = null) => AddPanel(parent, anchor, new CuiRect(), cursorEnabled, color, name, png);
 
             /// <summary>
@@ -233,7 +233,7 @@ namespace Oxide.Plugins
                                    CuiRect offset,
                                    bool cursorEnabled,
                                    CuiColor color = null,
-                                   string name = "",
+                                   string name = null,
                                    string png = null)
             {
                 CuiPanel panel = new CuiPanel() {
@@ -246,15 +246,14 @@ namespace Oxide.Plugins
                     CursorEnabled = cursorEnabled
                 };
 
-                if (!string.IsNullOrEmpty(png) ||
-                    (color != null)) {
+                if (!string.IsNullOrEmpty(png) || (color != null)) {
                     panel.Image = new CuiImageComponent() {
                         Color = color.ToString(),
                         Png = png
                     };
                 }
 
-                return container.Add(panel, parent, name ?? "");
+                return container.Add(panel, parent, name);
             }
 
             /// <summary>
@@ -272,7 +271,7 @@ namespace Oxide.Plugins
                                    CuiRect anchor,
                                    CuiColor color,
                                    string text,
-                                   string name = "",
+                                   string name = null,
                                    int fontSize = 14,
                                    TextAnchor align = TextAnchor.UpperLeft) => AddLabel(parent, anchor, new CuiRect(), color, text, name, fontSize, align);
 
@@ -293,7 +292,7 @@ namespace Oxide.Plugins
                                    CuiRect offset,
                                    CuiColor color,
                                    string text,
-                                   string name = "",
+                                   string name = null,
                                    int fontSize = 14,
                                    TextAnchor align = TextAnchor.UpperLeft)
             {
@@ -310,7 +309,7 @@ namespace Oxide.Plugins
                         OffsetMin = offset.GetPosMin(),
                         OffsetMax = offset.GetPosMax()
                     }
-                }, parent, name ?? "");
+                }, parent, name);
             }
 
             /// <summary>
@@ -334,7 +333,7 @@ namespace Oxide.Plugins
                                     string text,
                                     string command = "",
                                     string close = "",
-                                    string name = "",
+                                    string name = null,
                                     int fontSize = 14,
                                     TextAnchor align = TextAnchor.MiddleCenter) => AddButton(parent, anchor, new CuiRect(), buttonColor, textColor, text, command, close, name, fontSize, align);
 
@@ -361,7 +360,7 @@ namespace Oxide.Plugins
                                     string text,
                                     string command = "",
                                     string close = "",
-                                    string name = "",
+                                    string name = null,
                                     int fontSize = 14,
                                     TextAnchor align = TextAnchor.MiddleCenter)
             {
@@ -383,7 +382,7 @@ namespace Oxide.Plugins
                         Align = align,
                         Color = textColor.ToString()
                     }
-                }, parent, name ?? "");
+                }, parent, name);
             }
 
             /// <summary>
@@ -407,7 +406,7 @@ namespace Oxide.Plugins
                                         int charsLimit = 100,
                                         string command = "",
                                         bool isPassword = false,
-                                        string name = "",
+                                        string name = null,
                                         int fontSize = 14,
                                         TextAnchor align = TextAnchor.MiddleLeft) => AddInputField(parent, anchor, new CuiRect(), color, text, charsLimit, command, isPassword, name, fontSize, align);
 
@@ -434,7 +433,7 @@ namespace Oxide.Plugins
                                         int charsLimit = 100,
                                         string command = "",
                                         bool isPassword = false,
-                                        string name = "",
+                                        string name = null,
                                         int fontSize = 14,
                                         TextAnchor align = TextAnchor.MiddleLeft)
             {
@@ -454,7 +453,7 @@ namespace Oxide.Plugins
                         OffsetMin = offset.GetPosMin(),
                         OffsetMax = offset.GetPosMax()
                     }
-                }, parent, name ?? "");
+                }, parent, name);
             }
 
             /// <summary>
