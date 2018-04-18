@@ -1,16 +1,19 @@
 {
-    "name": "Oxide",
-    "description": "Customize chat colors, formatting, prefix and more",
-    "author": "",
-    "version": null,
-    "configuration": false,
+    "name": "BetterChat",
+    "description": "Manage Chat Groups, Customize Colors And Add Titles.",
+    "author": "LaserHydra",
+    "version": "5.0.16",
+    "configuration": true,
+    "require": [],
     "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/betterchat.979",
+    "url": "https:\/\/umod.org\/plugins\/betterchat",
     "games": [
-        "rust"
+        "universal"
     ],
     "keywords": [
         "oxide",
-        "rust"
+        "universal",
+        "chat",
+        "api"
     ]
 }
