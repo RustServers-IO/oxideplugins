@@ -2,7 +2,7 @@
     "name": "BetterChat",
     "description": "Manage Chat Groups, Customize Colors And Add Titles.",
     "author": "LaserHydra",
-    "version": "5.0.16",
+    "version": "5.0.17",
     "configuration": true,
     "require": [],
     "language": "cs",

@@ -14,7 +14,7 @@ using Facepunch.Math;
 
 namespace Oxide.Plugins
 {
-    [Info("Better Chat", "LaserHydra", "5.0.16", ResourceId = 979)]
+    [Info("Better Chat", "LaserHydra", "5.0.17", ResourceId = 979)]
     [Description("Manage Chat Groups, Customize Colors And Add Titles.")]
     internal class BetterChat : CovalencePlugin
     {
@@ -62,7 +62,7 @@ namespace Oxide.Plugins
                     ["Title"] = string.Join(" ", Titles.ToArray()),
                     ["Username"] = $"[#{Username.GetUniversalColor()}][+{Username.Size}]{StripRichText(Player.Name)}[/+][/#]",
                     ["Group"] = PrimaryGroup,
-                    ["Message"] = $"[#{Message.GetUniversalColor()}][+{Message.Size}]{StripRichText(Text)}[/+][/#]",
+                    ["Message"] = $"[#{Message.GetUniversalColor()}][+{Message.Size}]{Text}[/+][/#]",
                     ["ID"] = Player.Id,
                     ["Time"] = DateTime.Now.TimeOfDay.ToString(),
                     ["Date"] = DateTime.Now.ToString()
@@ -239,7 +239,7 @@ namespace Oxide.Plugins
                 return new BetterChatMessage
                 {
                     Player = player,
-                    Text = message,
+                    Text = StripRichText(message),
                     Titles = titles,
                     PrimaryGroup = primary.GroupName,
                     Username = primary.Username,
@@ -484,7 +484,9 @@ namespace Oxide.Plugins
             return true;
         }
 
-        private List<object> API_GetUserGroups(IPlayer player) => ChatGroup.GetUserGroups(player).ConvertAll(group => (object) group);
+	    private List<object> API_GetAllGroups() => ChatGroups.ConvertAll(group => (object) group);
+
+		private List<object> API_GetUserGroups(IPlayer player) => ChatGroup.GetUserGroups(player).ConvertAll(group => (object) group);
 
         private bool API_GroupExists(string group) => ChatGroup.Find(group) != null;
 
@@ -492,7 +494,9 @@ namespace Oxide.Plugins
 
         private Dictionary<string, object> API_GetGroupFields(string group) => ChatGroup.Find(group)?.GetFields() ?? new Dictionary<string, object>();
 
-        private string API_GetFormattedUsername(IPlayer player)
+		private Dictionary<string, object> API_GetMessageData(IPlayer player, string message) => ChatGroup.FormatMessage(player, message)?.ToDictionary();
+
+		private string API_GetFormattedUsername(IPlayer player)
         {
             var primary = ChatGroup.GetUserPrimaryGroup(player);
 
