@@ -99,13 +99,15 @@ namespace Oxide.Plugins
                 if (!hurtFriends)
                 {
                     if (friendsEnabled)
-                        if (Friends?.Call<bool>("AreFriends", target.userID, player.userID))
-                            if (permission.UserHasPermission(player.UserIDString, permissionNameFRIENDS))
-                                return false;
+                        if (Friends)
+                            if (Friends.Call<bool>("AreFriends", target.userID, player.userID))
+                                if (permission.UserHasPermission(player.UserIDString, permissionNameFRIENDS))
+                                    return false;
                     if (rustIOEnabled)
-                        if (RustIO?.Call<bool>("HasFriend", target.UserIDString, player.UserIDString))
-                            if (permission.UserHasPermission(player.UserIDString, permissionNameFRIENDS))
-                                return false;
+                        if (RustIO)
+                            if (RustIO.Call<bool>("HasFriend", target.UserIDString, player.UserIDString))
+                                if (permission.UserHasPermission(player.UserIDString, permissionNameFRIENDS))
+                                    return false;
                 }
 
                 // Clanmates protection
@@ -131,7 +133,7 @@ namespace Oxide.Plugins
                 timer.Once(resetTime, () =>
                 {
                     if (trap != null)
-                        ((BearTrap) trap).Arm();
+                        ((BearTrap)trap).Arm();
                 });
             return null;
         }
