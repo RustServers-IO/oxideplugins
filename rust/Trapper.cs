@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Trapper", "redBDGR", "1.0.11")]
+    [Info("Trapper", "redBDGR", "1.0.12")]
     [Description("Adds a few new features to traps")]
     class Trapper : RustPlugin
     {

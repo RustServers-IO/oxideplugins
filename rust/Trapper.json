@@ -2,7 +2,7 @@
     "name": "Trapper",
     "description": "Adds a few new features to traps",
     "author": "redBDGR",
-    "version": "1.0.11",
+    "version": "1.0.12",
     "configuration": true,
     "require": {
         "Friends": "*",
