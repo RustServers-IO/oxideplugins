@@ -1,1 +1,21 @@
-{"name":"DiscordMessages","description":"","author":"Slut","version":"1.8.2","configuration":true,"require":{"BetterChatMute":"*"},"language":"cs","url":"https:\/\/umod.org\/plugins\/discordmessages","games":["universal"],"keywords":["oxide","discord","universal","betterchat"]}
+{
+    "name": "DiscordMessages",
+    "description": "",
+    "author": "Slut",
+    "version": "1.8.2",
+    "configuration": true,
+    "require": {
+        "BetterChatMute": "*"
+    },
+    "language": "cs",
+    "url": "https:\/\/umod.org\/plugins\/discordmessages",
+    "games": [
+        "universal"
+    ],
+    "keywords": [
+        "oxide",
+        "discord",
+        "universal",
+        "betterchat"
+    ]
+}
