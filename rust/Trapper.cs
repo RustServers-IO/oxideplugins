@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Trapper", "redBDGR", "1.0.11", ResourceId = 2417)]
+    [Info("Trapper", "redBDGR", "1.0.11")]
     [Description("Adds a few new features to traps")]
     class Trapper : RustPlugin
     {
@@ -99,11 +99,11 @@ namespace Oxide.Plugins
                 if (!hurtFriends)
                 {
                     if (friendsEnabled)
-                        if ((bool) Friends?.CallHook("AreFriends", target.userID, player.userID))
+                        if (Friends?.Call<bool>("AreFriends", target.userID, player.userID))
                             if (permission.UserHasPermission(player.UserIDString, permissionNameFRIENDS))
                                 return false;
                     if (rustIOEnabled)
-                        if ((bool)RustIO?.Call("HasFriend", target.UserIDString, player.UserIDString))
+                        if (RustIO?.Call<bool>("HasFriend", target.UserIDString, player.UserIDString))
                             if (permission.UserHasPermission(player.UserIDString, permissionNameFRIENDS))
                                 return false;
                 }
@@ -113,12 +113,12 @@ namespace Oxide.Plugins
                 {
                     if (clansEnabled)
                     {
-                        if ((string) Clans?.Call("GetClanTag", target.UserIDString) == (string) Clans?.Call("GetClanTag", player.UserIDString))
+                        if (Clans?.Call<string>("GetClanTag", target.UserIDString) == Clans?.Call<string>("GetClanTag", player.UserIDString))
                         {
                             if (permission.UserHasPermission(player.UserIDString, permissionNameCLAN))
                                 return false;
                         }
-                        else if ((string) Clans?.Call("GetClanOf", target.UserIDString) == (string) Clans?.Call("GetClanOf", player.UserIDString))
+                        else if (Clans?.Call<string>("GetClanOf", target.UserIDString) == Clans?.Call<string>("GetClanOf", player.UserIDString))
                             if (permission.UserHasPermission(player.UserIDString, permissionNameCLAN))
                                 return false;
                     }

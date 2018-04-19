@@ -3,17 +3,21 @@
     "description": "Adds a few new features to traps",
     "author": "redBDGR",
     "version": "1.0.11",
-    "configuration": false,
-    "suggest": {
-        "Friends": "*"
+    "configuration": true,
+    "require": {
+        "Friends": "*",
+        "RustIO": "*",
+        "ClansReborn": "*",
+        "Clans": "*"
     },
     "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/trapper.2417",
+    "url": "https:\/\/umod.org\/plugins\/trapper",
     "games": [
         "rust"
     ],
     "keywords": [
         "oxide",
-        "rust"
+        "rust",
+        "mechanics"
     ]
 }
