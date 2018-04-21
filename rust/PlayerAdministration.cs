@@ -6,7 +6,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerAdministration", "ThibmoRozier", "1.0.1", ResourceId = 0)]
+    [Info("PlayerAdministration", "ThibmoRozier", "1.0.2", ResourceId = 0)]
     [Description("Allows server admins to moderate users using a GUI from within the game.")]
     public class PlayerAdministration : RustPlugin
     {
@@ -489,6 +489,15 @@ namespace Oxide.Plugins
         }
 
         /// <summary>
+        /// Get a "page" of BasePlayer entities from a specified list
+        /// </summary>
+        /// <param name="aList">List of players</param>
+        /// <param name="aPage">Page number (Starting from 0)</param>
+        /// <param name="aPageSize">Page size</param>
+        /// <returns>List of BasePlayer entities</returns>
+        List<BasePlayer> GetPage(IList<BasePlayer> aList, int aPage, int aPageSize) => aList.Skip(aPage * aPageSize).Take(aPageSize).ToList();
+
+        /// <summary>
         /// Get a "page" of ServerUsers.User entities from a specified list
         /// </summary>
         /// <param name="aList">List of players</param>
@@ -521,6 +530,44 @@ namespace Oxide.Plugins
             };
 
             aUIObj.AddButton(aParent, anchor, btnColor, CuiDefaultColors.TextAlt, aCaption, (aIndActive ? "" : aCommand));
+        }
+
+        /// <summary>
+        /// Add a set of user buttons to the parent object
+        /// </summary>
+        /// <param name="aUIObj">Cui object</param>
+        /// <param name="aParent">Name of the parent object</param>
+        /// <param name="aUserList">List of BasePlayer entities</param>
+        /// <param name="aCommandFmt">Base format of the command to execute (Will be completed with the user ID</param>
+        /// <param name="aPage">User list page</param>
+        private void AddPlayerButtons(ref Cui aUIObj, string aParent, ref List<BasePlayer> aUserList, string aCommandFmt, int aPage)
+        {
+            List<BasePlayer> userRange = GetPage(aUserList, aPage, MAX_PLAYER_BUTTONS);
+            Vector2 dimensions = new Vector2(0.194f, 0.09f);
+            Vector2 offset = new Vector2(0.005f, 0.01f);
+            int col = -1;
+            int row = 0;
+            float margin = 0.12f;
+
+            for (int i = 0; i < userRange.Count; i++) {
+                if (++col >= MAX_PLAYER_COLS) {
+                    row++;
+                    col = 0;
+                };
+
+                BasePlayer user = userRange[i];
+                float calcTop = (1f - margin) - (((dimensions.y + offset.y) * row) + offset.y);
+                float calcLeft = ((dimensions.x + offset.x) * col) + offset.x;
+                CuiRect anchor = new CuiRect() {
+                    Left = calcLeft,
+                    Bottom = calcTop - dimensions.y,
+                    Right = calcLeft + dimensions.x,
+                    Top = calcTop
+                };
+                string btnText = user.displayName;
+
+                aUIObj.AddButton(aParent, anchor, CuiDefaultColors.Button, CuiDefaultColors.TextAlt, btnText, string.Format(aCommandFmt, user.UserIDString), "", "", 16);
+            };
         }
 
         /// <summary>
@@ -630,33 +677,29 @@ namespace Oxide.Plugins
         /// <param name="aPage">User list page</param>
         private void BuildUserBtnPage(ref Cui aUIObj, UiPage aPageType, int aPage)
         {
-            string commandFmt = "padm_switchui PlayerPage {0}";
             string pageLabel = _("User Button Page Title Text", aUIObj.GetPlayerId());
-            string npBtnCommandFmt = "";
-            List<ServerUsers.User> userList = GetServerUserList(aPageType == UiPage.PlayersBanned);
-
+            string npBtnCommandFmt;
+            int userCount;
             CuiRect panelAnchor = new CuiRect() { Left = 0.005f, Bottom = 0.01f, Right = 0.995f, Top = 0.817f };
             CuiRect lblAnchor = new CuiRect() { Left = 0.005f, Bottom = 0.88f, Right = 0.995f, Top = 0.99f };
             CuiRect previousBtnAnchor = new CuiRect() { Left = 0.005f, Bottom = 0.01f, Right = 0.035f, Top = 0.061875f };
             CuiRect nextBtnAnchor = new CuiRect() { Left = 0.96f, Bottom = 0.01f, Right = 0.995f, Top = 0.061875f };
-
-            if ((aPage != 0) && (userList.Count <= MAX_PLAYER_BUTTONS))
-                aPage = 0; // Reset page to 0 if user count is lower or equal to max button count
 
             switch (aPageType) {
                 case UiPage.Players: {
                     npBtnCommandFmt = "padm_switchui Players {0}";
                     break;
                 }
-                case UiPage.PlayersBanned: {
-                    npBtnCommandFmt = "padm_switchui PlayersBanned {0}";
-                    break;
-                }
             };
 
             string panel = aUIObj.AddPanel(aUIObj.MainPanelName, panelAnchor, false, CuiDefaultColors.Background);
             aUIObj.AddLabel(panel, lblAnchor, CuiDefaultColors.TextAlt, pageLabel, "", 18, TextAnchor.MiddleLeft);
-            AddPlayerButtons(ref aUIObj, panel, ref userList, commandFmt, aPage);
+
+            if (aPageType == UiPage.PlayersBanned) {
+                BuildBannedButtons(ref aUIObj, panel, ref aPage, out npBtnCommandFmt, out userCount);
+            } else {
+                BuildUserButtons(ref aUIObj, panel, ref aPage, out npBtnCommandFmt, out userCount);
+            }
 
             // Decide whether or not to activate the "previous" button
             if (aPage == 0) {
@@ -667,12 +710,54 @@ namespace Oxide.Plugins
             };
 
             // Decide whether or not to activate the "next" button
-            if (userList.Count > MAX_PLAYER_BUTTONS * (aPage + 1)) {
+            if (userCount > MAX_PLAYER_BUTTONS * (aPage + 1)) {
                 aUIObj.AddButton(panel, nextBtnAnchor, CuiDefaultColors.Button, CuiDefaultColors.TextAlt,
                                  ">>", string.Format(npBtnCommandFmt, aPage + 1), "", "", 18);
             } else {
                 aUIObj.AddButton(panel, nextBtnAnchor, CuiDefaultColors.ButtonInactive, CuiDefaultColors.TextAlt, ">>", "", "", "", 18);
             };
+        }
+
+        /// <summary>
+        /// Build the current user buttons
+        /// </summary>
+        /// <param name="aUIObj">Cui object</param>
+        /// <param name="aParent">The active page type</param>
+        /// <param name="aPage">User list page</param>
+        /// <param name="aBtnCommandFmt">Command format for the buttons</param>
+        /// <param name="aUserCount">Total user count</param>
+        private void BuildUserButtons(ref Cui aUIObj, string aParent, ref int aPage, out string aBtnCommandFmt, out int aUserCount)
+        {
+            string commandFmt = "padm_switchui PlayerPage {0}";
+            List<BasePlayer> userList = GetServerUserList();
+            aBtnCommandFmt = "padm_switchui PlayersBanned {0}";
+            aUserCount = userList.Count;
+
+            if ((aPage != 0) && (userList.Count <= MAX_PLAYER_BUTTONS))
+                aPage = 0; // Reset page to 0 if user count is lower or equal to max button count
+
+            AddPlayerButtons(ref aUIObj, aParent, ref userList, commandFmt, aPage);
+        }
+
+        /// <summary>
+        /// Build the banned user buttons
+        /// </summary>
+        /// <param name="aUIObj">Cui object</param>
+        /// <param name="aParent">The active page type</param>
+        /// <param name="aPage">User list page</param>
+        /// <param name="aBtnCommandFmt">Command format for the buttons</param>
+        /// <param name="aUserCount">Total user count</param>
+        private void BuildBannedButtons(ref Cui aUIObj, string aParent, ref int aPage, out string aBtnCommandFmt, out int aUserCount)
+        {
+            string commandFmt = "padm_switchui PlayerPage {0}";
+            List<ServerUsers.User> userList = GetBannedUserList();
+            aBtnCommandFmt = "padm_switchui PlayersBanned {0}";
+            aUserCount = userList.Count;
+
+            if ((aPage != 0) && (userList.Count <= MAX_PLAYER_BUTTONS))
+                aPage = 0; // Reset page to 0 if user count is lower or equal to max button count
+
+            AddPlayerButtons(ref aUIObj, aParent, ref userList, commandFmt, aPage);
         }
 
         /// <summary>
@@ -685,13 +770,16 @@ namespace Oxide.Plugins
             // Retrieve the serveruser (This also contains user IDs that haven't joined after the wipe, like banned users)
             ServerUsers.User serverUser = ServerUsers.Get(aPlayerId);
             string uiUserId = aUIObj.GetPlayerId();
+            bool playerBanned;
 
-            if (serverUser == null)
-                return;
+            if (serverUser == null) {
+                playerBanned = false;
+            } else {
+                playerBanned = (serverUser.group == ServerUsers.UserGroup.Banned);
+            }
 
             BasePlayer player = BasePlayer.FindByID(aPlayerId) ?? BasePlayer.FindSleeping(aPlayerId);
             bool playerConnected = player?.IsConnected ?? false;
-            bool playerBanned = (serverUser.group == ServerUsers.UserGroup.Banned);
 
             /* Build Main layout */
             CuiRect panelAnchor = new CuiRect() { Left = 0.005f, Bottom = 0.01f, Right = 0.995f, Top = 0.817f };
@@ -708,7 +796,7 @@ namespace Oxide.Plugins
 
             // Add title labels
             aUIObj.AddLabel(panel, lblAnchor, CuiDefaultColors.TextAlt,
-                            _("User Page Title Format", uiUserId, serverUser.username, (playerBanned ? _("Banned Label Text", uiUserId) : "")),
+                            _("User Page Title Format", uiUserId, player.displayName, (playerBanned ? _("Banned Label Text", uiUserId) : "")),
                             "", 18, TextAnchor.MiddleLeft);
             aUIObj.AddLabel(infoPanel, lblinfoTitleAnchor, CuiDefaultColors.TextTitle,
                             _("Player Info Label Text", uiUserId), "", 14, TextAnchor.MiddleLeft);
@@ -1017,20 +1105,19 @@ namespace Oxide.Plugins
         /// <summary>
         /// Retrieve server users
         /// </summary>
-        /// <param name="aIndBanned">Whether or not to retrieve the banned user list</param>
         /// <returns></returns>
-        private List<ServerUsers.User> GetServerUserList(bool aIndBanned)
+        private List<BasePlayer> GetServerUserList()
         {
-            if (aIndBanned) {
-                return ServerUsers.GetAll(ServerUsers.UserGroup.Banned).ToList();
-            } else {
-                List<ServerUsers.User> result = ServerUsers.GetAll(ServerUsers.UserGroup.Owner).ToList();
-                result.AddRange(ServerUsers.GetAll(ServerUsers.UserGroup.Moderator));
-                result.AddRange(ServerUsers.GetAll(ServerUsers.UserGroup.None));
-
+                List<BasePlayer> result = Player.Players;
+                result.AddRange(Player.Sleepers);
                 return result;
-            };
         }
+
+        /// <summary>
+        /// Retrieve server users
+        /// </summary>
+        /// <returns></returns>
+        private List<ServerUsers.User> GetBannedUserList() => ServerUsers.GetAll(ServerUsers.UserGroup.Banned).ToList();
 
         /// <summary>
         /// Retrieve the target player ID from the arguments and report success
