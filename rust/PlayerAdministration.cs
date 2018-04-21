@@ -6,7 +6,7 @@ using Oxide.Game.Rust.Cui;
 
 namespace Oxide.Plugins
 {
-    [Info("PlayerAdministration", "ThibmoRozier", "1.0.2", ResourceId = 0)]
+    [Info("PlayerAdministration", "ThibmoRozier", "1.0.3", ResourceId = 0)]
     [Description("Allows server admins to moderate users using a GUI from within the game.")]
     public class PlayerAdministration : RustPlugin
     {
@@ -796,7 +796,7 @@ namespace Oxide.Plugins
 
             // Add title labels
             aUIObj.AddLabel(panel, lblAnchor, CuiDefaultColors.TextAlt,
-                            _("User Page Title Format", uiUserId, player.displayName, (playerBanned ? _("Banned Label Text", uiUserId) : "")),
+                            _("User Page Title Format", uiUserId, player?.displayName ?? serverUser.username, (playerBanned ? _("Banned Label Text", uiUserId) : "")),
                             "", 18, TextAnchor.MiddleLeft);
             aUIObj.AddLabel(infoPanel, lblinfoTitleAnchor, CuiDefaultColors.TextTitle,
                             _("Player Info Label Text", uiUserId), "", 14, TextAnchor.MiddleLeft);
@@ -1108,9 +1108,10 @@ namespace Oxide.Plugins
         /// <returns></returns>
         private List<BasePlayer> GetServerUserList()
         {
-                List<BasePlayer> result = Player.Players;
-                result.AddRange(Player.Sleepers);
-                return result;
+            List<BasePlayer> result = new List<BasePlayer>(Player.Players.Count + Player.Sleepers.Count);
+            result.AddRange(Player.Players);
+            result.AddRange(Player.Sleepers);
+            return result;
         }
 
         /// <summary>

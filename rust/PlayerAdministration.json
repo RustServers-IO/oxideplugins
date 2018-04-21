@@ -2,7 +2,7 @@
     "name": "PlayerAdministration",
     "description": "Allows server admins to moderate users using a GUI from within the game.",
     "author": "ThibmoRozier",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "configuration": false,
     "require": [],
     "language": "cs",
