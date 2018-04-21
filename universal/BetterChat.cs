@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.Linq;
 using System;
+using Newtonsoft.Json.Linq;
 
 #if RUST
 using ConVar;
@@ -14,7 +15,7 @@ using Facepunch.Math;
 
 namespace Oxide.Plugins
 {
-    [Info("Better Chat", "LaserHydra", "5.0.17", ResourceId = 979)]
+    [Info("Better Chat", "LaserHydra", "5.0.18", ResourceId = 979)]
     [Description("Manage Chat Groups, Customize Colors And Add Titles.")]
     internal class BetterChat : CovalencePlugin
     {
@@ -484,9 +485,9 @@ namespace Oxide.Plugins
             return true;
         }
 
-	    private List<object> API_GetAllGroups() => ChatGroups.ConvertAll(group => (object) group);
+	    private List<JObject> API_GetAllGroups() => ChatGroups.ConvertAll(JObject.FromObject);
 
-		private List<object> API_GetUserGroups(IPlayer player) => ChatGroup.GetUserGroups(player).ConvertAll(group => (object) group);
+		private List<JObject> API_GetUserGroups(IPlayer player) => ChatGroup.GetUserGroups(player).ConvertAll(JObject.FromObject);
 
         private bool API_GroupExists(string group) => ChatGroup.Find(group) != null;
 
