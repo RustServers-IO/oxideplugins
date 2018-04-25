@@ -2,7 +2,7 @@
     "name": "UpdateChecker",
     "description": "Checks for and notifies of any outdated plugins",
     "author": "LaserHydra",
-    "version": "2.2.1",
+    "version": "2.3.0",
     "configuration": true,
     "require": {
         "EmailAPI": "*",

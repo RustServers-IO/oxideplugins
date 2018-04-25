@@ -9,13 +9,15 @@ using Version = Oxide.Core.VersionNumber;
 
 namespace Oxide.Plugins
 {
-    [Info("Update Checker", "LaserHydra", "2.2.1")]
+    [Info("Update Checker", "LaserHydra", "2.3.0")]
     [Description("Checks for and notifies of any outdated plugins")]
     public sealed class UpdateChecker : CovalencePlugin
     {
         #region Fields
 
-        private const string PluginInformationUrl = "http://oxide.laserhydra.com/plugins/{resourceId}/";
+        private const string PluginInformationUrl = "http://oxide.laserhydra.com/plugins/{identifier}/";
+
+	    private List<string> _ignoredPlugins;
 
         [PluginReference]
         private Plugin EmailAPI, PushAPI;
@@ -28,6 +30,11 @@ namespace Oxide.Plugins
         {
             LoadConfig();
 
+	        _ignoredPlugins = GetConfig(
+				new List<object>(), 
+				"Ignored Plugins (Filenames of plugins which to ignore in version check)"
+			).Cast<string>().ToList();
+
             timer.Repeat(GetConfig(60f, "Settings", "Auto Check Interval (in Minutes)") * 60, 0, () => CheckForUpdates(null));
             CheckForUpdates(null);
         }
@@ -38,7 +45,8 @@ namespace Oxide.Plugins
 
         private new void LoadConfig()
         {
-            SetConfig("Settings", "Auto Check Interval (in Minutes)", 60f);
+	        SetConfig("Ignored Plugins (Filenames of plugins which to ignore in version check)", new List<object>());
+			SetConfig("Settings", "Auto Check Interval (in Minutes)", 60f);
             SetConfig("Settings", "Use PushAPI", false);
             SetConfig("Settings", "Use EmailAPI", false);
 
@@ -52,9 +60,9 @@ namespace Oxide.Plugins
                 {"Checking", "Checking for updates... This may take a few seconds. Please be patient."},
                 {"Outdated Plugin List", "Following plugins are outdated:\n{plugins}"},
                 {"Outdated Plugin Info", "# {title} | Installed: {installed} - Latest: {latest} | {url}"},
-                {"Missing ResourceId", "Following plugins are missing their resourceId, and therefor cannot be checked for updates: {plugins}"},
                 {"Resource Unavailable", "Following plugins are not accessible online at the moment, and therefore cannot be checked for updates: {plugins}"},
-                {"Resource Details Unavailable", "Following plugins have an improper version number else may not have a release version available, and therefore cannot be checked for updates: {plugins}"},
+	            {"Resource Release Unavailable", "Following plugins do not have a release version, and therefore cannot be checked for updates: {plugins}"},
+				{"Resource Details Unavailable", "Following plugins have an improper version number else may not have a release version available, and therefore cannot be checked for updates: {plugins}"}
             }, this);
         }
 
@@ -99,13 +107,17 @@ namespace Oxide.Plugins
         #region Update Checks
 
         public void CheckForUpdates(IPlayer requestor)
-        {
-            var outdatedPlugins = new Dictionary<Plugin, ApiResponse.Data>();
+		{
+			bool pluginListUnavailable = false;
+			bool failedApiAccess = false;
+	        bool apiMaintenance = false;
+
+			var outdatedPlugins = new Dictionary<Plugin, ApiResponse.Data>();
             var failures = new Dictionary<string, List<Plugin>>
             {
-                ["Missing ResourceId"] = new List<Plugin>(),
                 ["Resource Unavailable"] = new List<Plugin>(),
-                ["Resource Details Unavailable"] = new List<Plugin>()
+	            ["Resource Release Unavailable"] = new List<Plugin>(),
+				["Resource Details Unavailable"] = new List<Plugin>()
             };
 
             var totalPlugins = plugins.GetAll().Length;
@@ -113,36 +125,48 @@ namespace Oxide.Plugins
 
             foreach (var plugin in plugins.GetAll())
             {
-                if (plugin.IsCorePlugin)
+                if (plugin.IsCorePlugin || _ignoredPlugins.Contains(plugin.Name))
                 {
                     currentPlugin++;
                     continue;
                 }
 
-                if (plugin.ResourceId == 0)
-                {
-                    failures["Missing ResourceId"].Add(plugin);
-                    currentPlugin++;
-                    continue;
-                }
+	            string pluginIdentifier = plugin.ResourceId == 0 ? plugin.Name : plugin.ResourceId.ToString();
 
-                webrequest.Enqueue(PluginInformationUrl.Replace("{resourceId}", plugin.ResourceId.ToString()), null,
+                webrequest.Enqueue(PluginInformationUrl.Replace("{identifier}", pluginIdentifier), null,
                     (code, response) =>
                     {
                         if (code != 200)
                         {
-                            PrintWarning($"Failed to access plugin information API at {PluginInformationUrl.Replace("{resourceId}", plugin.ResourceId.ToString())}\nIf this keeps happening, please contact the developer.");
+	                        failedApiAccess = true;
                         }
                         else
                         {
                             var apiResponse = JsonConvert.DeserializeObject<ApiResponse>(response);
 
-                            if (!apiResponse.HasSucceeded && apiResponse.Error == "RESOURCE_NOT_AVAILABLE")
+                            if (!apiResponse.HasSucceeded)
                             {
-                                failures["Resource Unavailable"].Add(plugin);
+	                            switch (apiResponse.Error)
+	                            {
+									case "RESOURCE_NOT_AVAILABLE":
+										failures["Resource Unavailable"].Add(plugin);
+										break;
+
+		                            case "RELEASE_NOT_AVAILABLE":
+			                            failures["Resource Release Unavailable"].Add(plugin);
+			                            break;
+
+									case "API_UNDER_MAINTENANCE":
+										apiMaintenance = true;
+										break;
+
+									case "PLUGIN_LIST_NOT_AVAILABLE":
+										pluginListUnavailable = true;
+										break;
+								}
                             }
-                            // Version is null or empty; Unable to read version
-                            else if (string.IsNullOrEmpty(apiResponse.PluginData.Version))
+							// Version is null or empty; Unable to read version
+							else if (string.IsNullOrEmpty(apiResponse.PluginData.Version))
                             {
                                 failures["Resource Details Unavailable"].Add(plugin);
                             }
@@ -167,7 +191,20 @@ namespace Oxide.Plugins
                                 );
                             }
 
-                            var outdatedPluginText = GetMsg("Outdated Plugin Info");
+	                        if (failedApiAccess)
+	                        {
+								PrintWarning("Failed to access plugin information API.\nIf this keeps happening, please contact the developer.");
+							}
+	                        else if (apiMaintenance)
+	                        {
+		                        PrintWarning("The plugin information API is currently under maintenance, if this is the case for multiple hours, please contact the developer.");
+	                        }
+	                        else if (pluginListUnavailable)
+	                        {
+		                        PrintWarning("The plugin list for the API is unavailable, please contact the developer.");
+	                        }
+
+							var outdatedPluginText = GetMsg("Outdated Plugin Info");
 
                             var outdatedPluginLines = outdatedPlugins.Select(kvp =>
                                 outdatedPluginText
