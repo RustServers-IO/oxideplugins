@@ -9,7 +9,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Oxide.Plugins
 {
-    [Info ("VPN Block", "Calytic/Wulf", "0.0.5")]
+    [Info ("VPN Block", "Calytic", "0.0.5")]
     class VPNBlock : CovalencePlugin
     {
         List<string> allowedISPs = new List<string> ();
@@ -97,7 +97,7 @@ namespace Oxide.Plugins
                 return;
             }
 
-            string ip = IpAddress (player.Address);
+            string ip = player.Address;
             string url = string.Empty;
             if (!string.IsNullOrEmpty (IPHUB_API_KEY)) {
                 url = string.Format ("http://v2.api.iphub.info/ip/{0}", ip);
@@ -191,11 +191,6 @@ namespace Oxide.Plugins
                 return defaultValue;
 
             return (T)Convert.ChangeType (Config [name], typeof (T));
-        }
-
-        string IpAddress (string ip)
-        {
-            return Regex.Replace (ip, @":{1}[0-9]{1}\d*", "");
         }
 
         string GetMsg (string key, object userID = null)
