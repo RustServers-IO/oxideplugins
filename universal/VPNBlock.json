@@ -1,16 +1,19 @@
 {
     "name": "VPNBlock",
-    "description": "Automatically kick players using VPN",
-    "author": "Calytic",
-    "version": "0.0.3",
-    "configuration": false,
+    "description": "",
+    "author": "Unknown",
+    "version": "0.0.0",
+    "configuration": true,
+    "require": [],
     "language": "cs",
-    "url": "https:\/\/oxidemod.org\/plugins\/vpnblock.2115",
+    "url": "https:\/\/umod.org\/plugins\/vpnblock",
     "games": [
         "universal"
     ],
     "keywords": [
         "oxide",
-        "universal"
+        "universal",
+        "moderation",
+        "restrictions"
     ]
 }
